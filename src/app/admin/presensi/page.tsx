@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Users, CheckCircle2, Activity, Calendar, CalendarDays, Search, Clock, User, Settings, ChevronDown, Play, Pencil, Download, X, ScanLine, Camera } from "lucide-react";
+import { Users, CheckCircle2, Activity, Calendar, CalendarDays, Search, Clock, User, Settings, ChevronDown, Play, Pencil, Eye, Download, X, ScanLine, Camera } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import FormCatatKehadiran, {
     PresensiManualInitialValues,
@@ -32,11 +32,13 @@ interface RescheduleData {
     id: string;
     pasienName: string;
     waliName: string;
+    terapis: string;
     jadwalSemulaTanggal: string;
     jadwalSemulaWaktu: string;
     jadwalBaruTanggal: string;
     jadwalBaruWaktu: string;
     alasan: string;
+    status: Exclude<PresensiData["status"], "Belum Presensi">;
 }
 
 // ── Dummy Data ─────────────────────────────────────────────────────────────────
@@ -118,11 +120,37 @@ const dummyReschedule: RescheduleData[] = [
         id: "1",
         pasienName: "Lutfy",
         waliName: "Zaini",
+        terapis: "Alief Arifun",
         jadwalSemulaTanggal: "30/08/2026",
         jadwalSemulaWaktu: "Pukul 16.51 - 17.04",
-        jadwalBaruTanggal: "05 Sep 2026",
+        jadwalBaruTanggal: "05/09/2026",
         jadwalBaruWaktu: "Pukul 16.30 - 17.00",
         alasan: "Demam tinggi, sudah izin dari orang tua",
+        status: "Sakit",
+    },
+    {
+        id: "2",
+        pasienName: "Zefanya Lidia",
+        waliName: "Alief Arifin M.",
+        terapis: "Alief Arifun",
+        jadwalSemulaTanggal: "28/05/2026",
+        jadwalSemulaWaktu: "Pukul 09.35 - 10.35",
+        jadwalBaruTanggal: "04/06/2026",
+        jadwalBaruWaktu: "Pukul 10.00 - 11.00",
+        alasan: "Orang tua berhalangan hadir, sudah konfirmasi",
+        status: "Izin",
+    },
+    {
+        id: "3",
+        pasienName: "Alya",
+        waliName: "Rina Maulida",
+        terapis: "Nindya Zahri",
+        jadwalSemulaTanggal: "02/06/2026",
+        jadwalSemulaWaktu: "Pukul 09.00 - 10.00",
+        jadwalBaruTanggal: "09/06/2026",
+        jadwalBaruWaktu: "Pukul 09.00 - 10.00",
+        alasan: "Ada keperluan keluarga",
+        status: "Tidak Hadir",
     },
 ];
 
@@ -160,6 +188,29 @@ function formatTanggalDisplay(tanggal: string) {
 function formatTanggalInput(tanggal: string) {
     const [hari, bulan, tahun] = tanggal.split("/");
     return `${tahun}-${bulan}-${hari}`;
+}
+
+function tanggalRescheduleToIso(tanggal: string) {
+    const [hari, bulan, tahun] = tanggal.split("/");
+    return tahun && bulan && hari ? `${tahun}-${bulan}-${hari}` : "";
+}
+
+function hitungHariPergeseran(tanggalSemula: string, tanggalBaru: string) {
+    const bulan: Record<string, number> = {
+        Jan: 0, Feb: 1, Mar: 2, Apr: 3, Mei: 4, Jun: 5,
+        Jul: 6, Agu: 7, Sep: 8, Okt: 9, Nov: 10, Des: 11,
+    };
+    const [hariSemula, bulanSemula, tahunSemula] = tanggalSemula.split("/").map(Number);
+    const tanggalBaruParts = tanggalBaru.includes("/")
+        ? tanggalBaru.split("/")
+        : tanggalBaru.split(" ");
+    const [hariBaru, bulanBaru, tahunBaru] = tanggalBaruParts;
+    const tanggalAwal = Date.UTC(tahunSemula, bulanSemula - 1, hariSemula);
+    const bulanBaruIndex = tanggalBaru.includes("/")
+        ? Number(bulanBaru) - 1
+        : bulan[bulanBaru];
+    const tanggalAkhir = Date.UTC(Number(tahunBaru), bulanBaruIndex, Number(hariBaru));
+    return Math.round((tanggalAkhir - tanggalAwal) / 86400000);
 }
 
 function formatWaktuDisplay(jamMulai: string, jamSelesai: string) {
@@ -367,7 +418,7 @@ function ActionDropdown({
                                             }}
                                             className="cursor-pointer flex items-center w-full px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-teal-50/30 hover:text-[#1E5C58] transition-colors"
                                         >
-                                            <Clock size={16} className="mr-2 text-[#81B7A9]" />
+                                            <Eye size={16} className="mr-2 text-[#81B7A9]" />
                                             Detail
                                         </button>
                                     </>
@@ -390,7 +441,7 @@ function ActionDropdown({
                                             }}
                                             className="cursor-pointer flex items-center w-full px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-teal-50/30 hover:text-[#1E5C58] transition-colors"
                                         >
-                                            <Clock size={16} className="mr-2 text-[#81B7A9]" />
+                                            <Eye size={16} className="mr-2 text-[#81B7A9]" />
                                             Detail
                                         </button>
                                     </>
@@ -600,6 +651,8 @@ function FilterSelect({
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
 
     useEffect(() => {
         const handleOutsideClick = (event: MouseEvent) => {
@@ -612,6 +665,13 @@ function FilterSelect({
         return () => document.removeEventListener("mousedown", handleOutsideClick);
     }, []);
 
+    useEffect(() => {
+        if (isOpen) {
+            setHighlightedIndex(0);
+            requestAnimationFrame(() => inputRef.current?.focus());
+        }
+    }, [isOpen]);
+
     const filteredOptions = options.filter((option) =>
         option.toLowerCase().includes(search.toLowerCase()),
     );
@@ -619,34 +679,67 @@ function FilterSelect({
     return (
         <div ref={dropdownRef} className="relative">
             <FieldLabel>{label}</FieldLabel>
-            <button
-                type="button"
-                onClick={() => setIsOpen((open) => !open)}
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
-                className={`${rekapInputClass} relative flex items-center justify-between gap-3 pr-11 text-left cursor-pointer`}
+            <div
+                className={`${rekapInputClass} relative flex items-center pr-11 cursor-text`}
+                onClick={() => setIsOpen(true)}
             >
-                <span className={value ? "text-gray-700" : "text-gray-500"}>{value || allLabel}</span>
-                <ChevronDown
-                    className={`absolute right-4 top-1/2 w-4 h-4 text-gray-700 -translate-y-1/2 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={isOpen ? search : value}
+                    onFocus={() => {
+                        setIsOpen(true);
+                        setSearch("");
+                    }}
+                    onChange={(event) => {
+                        setSearch(event.target.value);
+                        setIsOpen(true);
+                        setHighlightedIndex(0);
+                    }}
+                    onKeyDown={(event) => {
+                        const optionCount = filteredOptions.length + 1;
+
+                        if (event.key === "ArrowDown") {
+                            event.preventDefault();
+                            setIsOpen(true);
+                            setHighlightedIndex((index) => Math.min(index + 1, optionCount - 1));
+                        }
+                        if (event.key === "ArrowUp") {
+                            event.preventDefault();
+                            setHighlightedIndex((index) => Math.max(index - 1, 0));
+                        }
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            const selectedOption = highlightedIndex === 0
+                                ? ""
+                                : filteredOptions[highlightedIndex - 1];
+                            if (selectedOption !== undefined || highlightedIndex === 0) {
+                                onChange(selectedOption);
+                                setSearch("");
+                                setIsOpen(false);
+                            }
+                        }
+                        if (event.key === "Escape") setIsOpen(false);
+                    }}
+                    placeholder={allLabel}
+                    aria-label={`Cari ${label.toLowerCase()}`}
+                    className="w-full p-0 text-base text-gray-700 bg-transparent border-0 outline-none placeholder:text-gray-500"
                 />
-            </button>
+                <button
+                    type="button"
+                    onClick={() => setIsOpen((open) => !open)}
+                    aria-label={`Buka pilihan ${label.toLowerCase()}`}
+                    tabIndex={-1}
+                    className="absolute right-0 flex items-center justify-center w-11 h-full cursor-pointer"
+                >
+                    <ChevronDown
+                        className={`w-4 h-4 text-gray-700 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    />
+                </button>
+            </div>
 
             {isOpen && (
                 <div className="absolute left-0 right-0 z-30 mt-2 overflow-hidden bg-white border border-gray-100 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.12)]">
-                    <div className="p-2 border-b border-gray-100">
-                        <div className="relative">
-                            <Search className="absolute w-4 h-4 text-gray-400 -translate-y-1/2 left-3 top-1/2" />
-                            <input
-                                type="text"
-                                value={search}
-                                onChange={(event) => setSearch(event.target.value)}
-                                placeholder="Cari kategori..."
-                                autoFocus
-                                className="w-full py-2 pr-3 text-sm text-gray-700 border border-gray-200 rounded-lg outline-none pl-9 bg-gray-50 focus:border-teal-300 focus:ring-2 focus:ring-teal-100"
-                            />
-                        </div>
-                    </div>
                     <div className="max-h-56 overflow-y-auto p-1.5" role="listbox">
                         <button
                             type="button"
@@ -655,11 +748,11 @@ function FilterSelect({
                                 setSearch("");
                                 setIsOpen(false);
                             }}
-                            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${!value ? "bg-teal-50 font-semibold text-[#1E5C58]" : "text-gray-700 hover:bg-gray-50"}`}
+                            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${highlightedIndex === 0 ? "bg-teal-50" : "hover:bg-gray-50"} ${!value ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
                         >
                             {allLabel}
                         </button>
-                        {filteredOptions.map((option) => (
+                        {filteredOptions.map((option, index) => (
                             <button
                                 key={option}
                                 type="button"
@@ -670,7 +763,7 @@ function FilterSelect({
                                     setSearch("");
                                     setIsOpen(false);
                                 }}
-                                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${value === option ? "bg-teal-50 font-semibold text-[#1E5C58]" : "text-gray-700 hover:bg-gray-50"}`}
+                                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${highlightedIndex === index + 1 ? "bg-teal-50" : "hover:bg-gray-50"} ${value === option ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
                             >
                                 {option}
                             </button>
@@ -958,6 +1051,9 @@ export default function PresensiPage() {
     );
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedDate, setSelectedDate] = useState("");
+    const [rescheduleDateFrom, setRescheduleDateFrom] = useState("");
+    const [rescheduleDateTo, setRescheduleDateTo] = useState("");
+    const [rescheduleStatus, setRescheduleStatus] = useState<"Semua" | RescheduleData["status"]>("Semua");
     const [scanHistory, setScanHistory] = useState<{ code: string; time: string }[]>([]);
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [cameraError, setCameraError] = useState("");
@@ -977,7 +1073,7 @@ export default function PresensiPage() {
         setPresensiPage(1);
         setPresensiReschedulePage(1);
         setReschedulePage(1);
-    }, [searchTerm, selectedDate, pageSize]);
+    }, [searchTerm, selectedDate, pageSize, rescheduleDateFrom, rescheduleDateTo, rescheduleStatus]);
 
     const query = searchTerm.trim().toLowerCase();
     const dateLabel = selectedDate ? formatTanggalDisplay(selectedDate) : "";
@@ -992,20 +1088,19 @@ export default function PresensiPage() {
         const matchesDate = !dateLabel || item.tanggal === dateLabel;
         return matchesQuery && matchesDate;
     };
-    const matchesRescheduleFilter = (item: RescheduleData) => {
-        const matchesQuery = !query || [item.pasienName, item.waliName, item.alasan]
-            .some((value) => value.toLowerCase().includes(query));
-        const matchesDate = !dateLabel ||
-            item.jadwalSemulaTanggal === dateLabel ||
-            item.jadwalBaruTanggal === dateLabel;
-        return matchesQuery && matchesDate;
-    };
-
     const filteredPresensi = sortPresensiData(presensiData.filter(matchesPresensiFilter));
     const filteredPresensiReschedule = sortPresensiData(
         presensiRescheduleData.filter(matchesPresensiFilter),
     );
-    const filteredReschedule = dummyReschedule.filter(matchesRescheduleFilter);
+    const filteredReschedule = dummyReschedule.filter((item) => {
+        const matchesQuery = !query || [item.pasienName, item.waliName, item.terapis, item.alasan]
+            .some((value) => value.toLowerCase().includes(query));
+        const tanggalSemula = tanggalRescheduleToIso(item.jadwalSemulaTanggal);
+        const matchesDate = (!rescheduleDateFrom || tanggalSemula >= rescheduleDateFrom) &&
+            (!rescheduleDateTo || tanggalSemula <= rescheduleDateTo);
+        const matchesStatus = rescheduleStatus === "Semua" || item.status === rescheduleStatus;
+        return matchesQuery && matchesDate && matchesStatus;
+    });
     const visiblePresensi = filteredPresensi.slice(
         (presensiPage - 1) * pageSize,
         presensiPage * pageSize,
@@ -1018,6 +1113,7 @@ export default function PresensiPage() {
         (reschedulePage - 1) * pageSize,
         reschedulePage * pageSize,
     );
+    const rescheduleStatusOptions: ("Semua" | RescheduleData["status"])[] = ["Semua", "Hadir", "Sakit", "Izin", "Tidak Hadir"];
 
     const tabs = [
         { id: "Presensi", label: "Presensi", icon: CheckCircle2 },
@@ -1213,7 +1309,7 @@ export default function PresensiPage() {
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
-                                    className={`relative flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 sm:px-6 py-3 rounded-lg text-sm transition-all duration-300 ${isActive ? "text-white font-bold" : "text-gray-400 hover:text-[#2B7A75] font-semibold hover:bg-white/50"
+                                    className={`relative flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 sm:px-6 py-3 rounded-lg text-sm cursor-pointer transition-all duration-300 ${isActive ? "text-white font-bold" : "text-gray-400 hover:text-[#2B7A75] font-semibold hover:bg-white/50"
                                         }`}
                                 >
                                     {isActive && (
@@ -1250,7 +1346,7 @@ export default function PresensiPage() {
                                         type="date"
                                         value={selectedDate}
                                         onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="w-full sm:w-auto px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
+                                        className="w-full sm:w-auto px-4 py-2.5 bg-white border border-teal-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
                                     />
                                     <div className="relative w-full sm:w-72">
                                         <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
@@ -1276,13 +1372,13 @@ export default function PresensiPage() {
                                         <table className="w-full text-left border-collapse min-w-[900px]">
                                             <thead>
                                                 <tr className="bg-[#F4F9F8] border-b border-teal-50">
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Informasi Pasien</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Jadwal Terapi</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Terapis</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Tipe Terapi</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Status</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Keterangan</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider text-center">Aksi</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Informasi Pasien</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Jadwal Terapi</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Terapis</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Tipe Terapi</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Status</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Keterangan</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider text-center">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
@@ -1356,13 +1452,13 @@ export default function PresensiPage() {
                                         <table className="w-full text-left border-collapse min-w-[900px]">
                                             <thead>
                                                 <tr className="bg-[#F4F9F8] border-b border-teal-50">
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Informasi Pasien</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Jadwal Terapi</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Terapis</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Tipe Terapi</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Status</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Keterangan</th>
-                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider text-center">Aksi</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Informasi Pasien</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Jadwal Terapi</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Terapis</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Tipe Terapi</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Status</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Keterangan</th>
+                                                    <th className="py-3 px-6 text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider text-center">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
@@ -1432,13 +1528,28 @@ export default function PresensiPage() {
                         {activeTab === "Reschedule" && (
                             <>
                                 {/* Toolbar */}
-                                <div className="flex flex-col justify-between gap-4 sm:flex-row">
-                                    <input
-                                        type="date"
-                                        value={selectedDate}
-                                        onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="w-full sm:w-auto px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
-                                    />
+                                <div className="flex flex-col gap-4 p-4 bg-white border border-teal-50 rounded-2xl sm:flex-row sm:items-end">
+                                    <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <label className="text-xs font-bold text-gray-500">
+                                            Tanggal
+                                            <input
+                                                type="date"
+                                                value={rescheduleDateFrom}
+                                                onChange={(e) => setRescheduleDateFrom(e.target.value)}
+                                                className="w-full px-4 py-2.5 mt-1.5 text-sm font-medium text-gray-700 transition-all bg-white border border-teal-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer"
+                                            />
+                                        </label>
+                                        <label className="text-xs font-bold text-gray-500">
+                                            Sampai dengan
+                                            <input
+                                                type="date"
+                                                value={rescheduleDateTo}
+                                                min={rescheduleDateFrom || undefined}
+                                                onChange={(e) => setRescheduleDateTo(e.target.value)}
+                                                className="w-full px-4 py-2.5 mt-1.5 text-sm font-medium text-gray-700 transition-all bg-white border border-teal-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer"
+                                            />
+                                        </label>
+                                    </div>
                                     <div className="relative w-full sm:w-72">
                                         <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
                                             <Search className="w-4 h-4 text-gray-400" />
@@ -1448,22 +1559,44 @@ export default function PresensiPage() {
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                             placeholder="Cari anak atau terapis..."
-                                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700"
+                                            className="w-full py-2.5 pl-10 pr-4 text-sm text-gray-700 transition-all bg-white border border-teal-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]"
                                         />
                                     </div>
                                 </div>
 
                                 {/* Tabel Reschedule */}
                                 <div className="bg-white rounded-2xl border border-teal-50 overflow-hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
-                                    <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
-                                        <div className="w-2 h-2 rounded-full bg-[#2B7A75]" />
-                                        <h3 className="text-sm font-extrabold text-[#1E5C58]">Jadwal yang Dialihkan (Reschedule)</h3>
+                                    <div className="flex flex-col gap-4 px-6 py-4 border-b border-gray-100 xl:flex-row xl:items-center xl:justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-[#2B7A75]" />
+                                            <h3 className="text-sm font-extrabold text-[#1E5C58]">Jadwal yang Dialihkan (Reschedule)</h3>
+                                            <span className="px-2 py-1 text-[10px] font-bold text-[#1E5C58] bg-teal-50 rounded-full">{filteredReschedule.length} jadwal</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {rescheduleStatusOptions.map((status) => {
+                                                const count = status === "Semua"
+                                                    ? dummyReschedule.length
+                                                    : dummyReschedule.filter((item) => item.status === status).length;
+                                                const active = rescheduleStatus === status;
+                                                return (
+                                                    <button
+                                                        key={status}
+                                                        type="button"
+                                                        onClick={() => setRescheduleStatus(status)}
+                                                        className={`px-3 py-1.5 text-xs font-bold rounded-full border transition-colors cursor-pointer ${active ? "text-white bg-[#2B7A75] border-[#2B7A75]" : "text-gray-600 bg-white border-gray-200 hover:border-teal-200 hover:text-[#1E5C58]"}`}
+                                                    >
+                                                        {status} ({count})
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                     <div className="hidden overflow-x-auto md:block">
-                                        <table className="w-full text-left border-collapse min-w-[700px]">
+                                        <table className="w-full text-left border-collapse min-w-[900px]">
                                             <thead>
                                                 <tr className="bg-[#F4F9F8] border-b border-teal-50">
                                                     <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Pasien</th>
+                                                    <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Terapis</th>
                                                     <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Jadwal Semula</th>
                                                     <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Jadwal Baru</th>
                                                     <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">Alasan</th>
@@ -1478,6 +1611,7 @@ export default function PresensiPage() {
                                                                 Wali: {item.waliName}
                                                             </div>
                                                         </td>
+                                                        <td className="px-6 py-4 text-sm font-bold text-[#1E5C58]">{item.terapis}</td>
                                                         <td className="px-6 py-4 text-sm">
                                                             <div className="flex items-center gap-1.5 text-gray-800 font-bold mb-1">
                                                                 <Calendar className="w-4 h-4 text-[#A2E4D3]" strokeWidth={2.5} /> {item.jadwalSemulaTanggal}
@@ -1487,15 +1621,21 @@ export default function PresensiPage() {
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 text-sm">
-                                                            <div className="flex items-center gap-1.5 text-[#1E5C58] font-bold mb-1">
-                                                                <Calendar className="w-4 h-4 text-[#2B7A75]" strokeWidth={2.5} /> {item.jadwalBaruTanggal}
+                                                            <div className="inline-block px-3 py-2 bg-emerald-50 rounded-xl">
+                                                                <div className="flex items-center gap-1.5 text-[#1E5C58] font-bold mb-1">
+                                                                    <Calendar className="w-3.5 h-3.5 text-[#2B7A75]" strokeWidth={2.5} /> {item.jadwalBaruTanggal}
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 text-gray-400 font-medium text-xs">
+                                                                    <Clock className="w-3.5 h-3.5" /> {item.jadwalBaruWaktu}
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-gray-400 font-medium text-xs">
-                                                                <Clock className="w-3.5 h-3.5" /> {item.jadwalBaruWaktu}
+                                                            <div className="mt-1 text-[10px] font-bold text-[#2B7A75]">
+                                                                Bergeser {hitungHariPergeseran(item.jadwalSemulaTanggal, item.jadwalBaruTanggal)} hari
                                                             </div>
                                                         </td>
-                                                        <td className="py-4 px-6 text-xs font-medium text-gray-500 max-w-[220px] leading-relaxed">
-                                                            {item.alasan}
+                                                        <td className="py-4 px-6 text-xs font-medium text-gray-500 max-w-[240px] leading-relaxed">
+                                                            <StatusBadge status={item.status} />
+                                                            <div>{item.alasan}</div>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -1541,44 +1681,44 @@ export default function PresensiPage() {
 
                                     <div className="relative m-6 flex min-h-[250px] flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#2B7A75] bg-[#F4F9F8]/60 px-5 py-6 text-center">
                                         <div className={`relative z-10 flex flex-col items-center ${isCameraActive ? "px-6 py-5 bg-white/85 rounded-2xl backdrop-blur-sm" : ""}`}>
-                                        {isCameraActive ? (
-                                            <Camera className="w-9 h-9 mb-5 text-[#1E5C58]" strokeWidth={1.8} />
-                                        ) : (
-                                            <ScanLine className="w-9 h-9 mb-5 text-[#1E5C58]" strokeWidth={1.8} />
-                                        )}
-                                        <h3 className="text-base font-extrabold text-[#1E5C58]">
-                                            {isCameraActive ? "Arahkan barcode ke kamera" : "Scan barcode kartu pasien"}
-                                        </h3>
-                                        <p className="max-w-sm mt-2 text-sm font-medium leading-relaxed text-gray-400">
-                                            {isCameraActive ? "Pastikan barcode terlihat jelas di dalam kamera." : "Klik tombol Scan Barcode untuk mulai."}
-                                        </p>
+                                            {isCameraActive ? (
+                                                <Camera className="w-9 h-9 mb-5 text-[#1E5C58]" strokeWidth={1.8} />
+                                            ) : (
+                                                <ScanLine className="w-9 h-9 mb-5 text-[#1E5C58]" strokeWidth={1.8} />
+                                            )}
+                                            <h3 className="text-base font-extrabold text-[#1E5C58]">
+                                                {isCameraActive ? "Arahkan barcode ke kamera" : "Scan barcode kartu pasien"}
+                                            </h3>
+                                            <p className="max-w-sm mt-2 text-sm font-medium leading-relaxed text-gray-400">
+                                                {isCameraActive ? "Pastikan barcode terlihat jelas di dalam kamera." : "Klik tombol Scan Barcode untuk mulai."}
+                                            </p>
 
-                                        {isCameraActive && (
-                                            <button
-                                                type="button"
-                                                onClick={stopCamera}
-                                                aria-label="Batal scan"
-                                                title="Batal scan"
-                                                className="inline-flex items-center justify-center w-11 h-11 mt-5 text-white bg-red-500 rounded-full shadow-sm hover:bg-red-600 transition-colors"
-                                            >
-                                                <X className="w-5 h-5" strokeWidth={2.5} />
-                                            </button>
-                                        )}
+                                            {isCameraActive && (
+                                                <button
+                                                    type="button"
+                                                    onClick={stopCamera}
+                                                    aria-label="Batal scan"
+                                                    title="Batal scan"
+                                                    className="inline-flex items-center justify-center mt-5 text-white transition-colors bg-red-500 rounded-full shadow-sm w-11 h-11 hover:bg-red-600"
+                                                >
+                                                    <X className="w-5 h-5" strokeWidth={2.5} />
+                                                </button>
+                                            )}
 
-                                        {!isCameraActive && (
-                                            <button
-                                                type="button"
-                                                onClick={startCamera}
-                                                className="inline-flex items-center gap-2 px-4 py-2.5 mt-5 text-sm font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] transition-colors"
-                                            >
-                                                <Camera className="w-4 h-4" />
-                                                Scan Barcode
-                                            </button>
-                                        )}
+                                            {!isCameraActive && (
+                                                <button
+                                                    type="button"
+                                                    onClick={startCamera}
+                                                    className="inline-flex items-center gap-2 px-4 py-2.5 mt-5 text-sm font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] transition-colors"
+                                                >
+                                                    <Camera className="w-4 h-4" />
+                                                    Scan Barcode
+                                                </button>
+                                            )}
 
-                                        {cameraError && (
-                                            <p className="max-w-sm mt-3 text-xs font-semibold text-red-500">{cameraError}</p>
-                                        )}
+                                            {cameraError && (
+                                                <p className="max-w-sm mt-3 text-xs font-semibold text-red-500">{cameraError}</p>
+                                            )}
 
                                         </div>
                                     </div>
@@ -1648,10 +1788,10 @@ export default function PresensiPage() {
                                                     />
                                                     <div className="absolute inset-0 bg-black/25" />
                                                     <div className="absolute top-1/2 left-1/2 w-[48%] max-w-[250px] aspect-square -translate-x-1/2 -translate-y-1/2 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]">
-                                                        <span className="absolute top-0 left-0 w-14 h-12 border-t-4 border-l-4 border-white rounded-tl-md" />
-                                                        <span className="absolute top-0 right-0 w-14 h-12 border-t-4 border-r-4 border-white rounded-tr-md" />
-                                                        <span className="absolute bottom-0 left-0 w-14 h-12 border-b-4 border-l-4 border-white rounded-bl-md" />
-                                                        <span className="absolute right-0 bottom-0 w-14 h-12 border-b-4 border-r-4 border-white rounded-br-md" />
+                                                        <span className="absolute top-0 left-0 h-12 border-t-4 border-l-4 border-white w-14 rounded-tl-md" />
+                                                        <span className="absolute top-0 right-0 h-12 border-t-4 border-r-4 border-white w-14 rounded-tr-md" />
+                                                        <span className="absolute bottom-0 left-0 h-12 border-b-4 border-l-4 border-white w-14 rounded-bl-md" />
+                                                        <span className="absolute bottom-0 right-0 h-12 border-b-4 border-r-4 border-white w-14 rounded-br-md" />
                                                     </div>
                                                 </div>
                                                 <p className="mt-5 text-sm font-medium leading-relaxed text-center text-[#7184A0]">
