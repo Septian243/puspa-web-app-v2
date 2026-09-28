@@ -1333,13 +1333,11 @@ export default function JadwalTerapiPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               {/* Kiri: Date picker */}
               <div className="relative">
-                <CalendarDays className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
                 <input
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  onClick={(e) => e.currentTarget.showPicker()}
-                  className="cursor-pointer pl-10 pr-4 py-2.5 border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-[0_2px_8px_rgba(30,92,88,0.02)] hover:border-teal-200 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"
+                  className="cursor-pointer px-4 py-2.5 border border-teal-100 rounded-2xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-[0_2px_8px_rgba(30,92,88,0.02)] hover:border-teal-200 transition-colors"
                 />
               </div>
 
