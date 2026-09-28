@@ -167,7 +167,7 @@ const initialDummyPresensiReschedule: PresensiData[] = [
         status: "Sakit",
         keterangan: "Demam tinggi, sudah izin dari orang tua",
         reschedule: {
-            tanggal: "05/09/2026",
+            tanggal: "28/09/2026",
             waktu: "Pukul 16.30 - 17.00",
         },
     },
@@ -276,7 +276,7 @@ function PaginationFooter({
                 <select
                     value={pageSize}
                     onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                    className="px-2 py-1 text-gray-700 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 cursor-pointer"
+                    className="px-2 py-1 text-gray-700 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 cursor-pointer"
                 >
                     <option value="10">10</option>
                     <option value="25">25</option>
@@ -730,7 +730,7 @@ function FilterSelect({
                     onClick={() => setIsOpen((open) => !open)}
                     aria-label={`Buka pilihan ${label.toLowerCase()}`}
                     tabIndex={-1}
-                    className="absolute right-0 flex items-center justify-center w-11 h-full cursor-pointer"
+                    className="absolute right-0 flex items-center justify-center h-full cursor-pointer w-11"
                 >
                     <ChevronDown
                         className={`w-4 h-4 text-gray-700 transition-transform ${isOpen ? "rotate-180" : ""}`}
@@ -1077,6 +1077,7 @@ export default function PresensiPage() {
 
     const query = searchTerm.trim().toLowerCase();
     const dateLabel = selectedDate ? formatTanggalDisplay(selectedDate) : "";
+    const todayLabel = formatTanggalDisplay(new Date().toISOString().slice(0, 10));
     const matchesPresensiFilter = (item: PresensiData) => {
         const matchesQuery = !query || [
             item.pasienName,
@@ -1090,7 +1091,17 @@ export default function PresensiPage() {
     };
     const filteredPresensi = sortPresensiData(presensiData.filter(matchesPresensiFilter));
     const filteredPresensiReschedule = sortPresensiData(
-        presensiRescheduleData.filter(matchesPresensiFilter),
+        presensiRescheduleData.filter((item) => {
+            const matchesQuery = !query || [
+                item.pasienName,
+                item.waliName,
+                item.terapisName,
+                item.tipeTermi,
+                item.status,
+            ].some((value) => value.toLowerCase().includes(query));
+            const matchesRescheduleDate = item.reschedule?.tanggal === (dateLabel || todayLabel);
+            return Boolean(item.reschedule) && matchesQuery && matchesRescheduleDate;
+        }),
     );
     const filteredReschedule = dummyReschedule.filter((item) => {
         const matchesQuery = !query || [item.pasienName, item.waliName, item.terapis, item.alasan]
@@ -1346,7 +1357,7 @@ export default function PresensiPage() {
                                         type="date"
                                         value={selectedDate}
                                         onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="w-full sm:w-auto px-4 py-2.5 bg-white border border-teal-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
+                                        className="w-full sm:w-auto px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
                                     />
                                     <div className="relative w-full sm:w-72">
                                         <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
@@ -1446,7 +1457,7 @@ export default function PresensiPage() {
                                 <div className="bg-white rounded-2xl border border-teal-50 overflow-hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
                                     <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
                                         <div className="w-2 h-2 rounded-full bg-[#2B7A75]" />
-                                        <h3 className="text-sm font-extrabold text-[#1E5C58]">Jadwal Reschedule Hari Ini</h3>
+                                        <h3 className="text-sm font-extrabold text-[#1E5C58]">Jadwal Hasil Reschedule Hari Ini</h3>
                                     </div>
                                     <div className="hidden overflow-x-auto md:block">
                                         <table className="w-full text-left border-collapse min-w-[900px]">
