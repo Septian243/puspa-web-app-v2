@@ -223,6 +223,7 @@ interface TambahJadwalModalProps {
   onClose: () => void;
   terapiType: TerapiType;
   onSubmit: (data: Omit<JadwalTerapi, "id" | "terapiType">) => void;
+  allData: JadwalTerapi[];
 }
 
 const TERAPI_TAMBAHAN_OPTIONS = [
@@ -232,11 +233,14 @@ const TERAPI_TAMBAHAN_OPTIONS = [
   "Fisioterapi",
 ];
 
-function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwalModalProps) {
+function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: TambahJadwalModalProps) {
   const [noRekam, setNoRekam] = useState("");
   const [namaAnak, setNamaAnak] = useState("");
   const [periodeAwal, setPeriodeAwal] = useState("");
   const [periodeAkhir, setPeriodeAkhir] = useState("");
+  const [showAnakDropdown, setShowAnakDropdown] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   // Checklist: set of selected therapy names
   const [selectedTerapi, setSelectedTerapi] = useState<string[]>([]);
@@ -305,6 +309,28 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setHasSubmitted(true);
+    setWarningMessage("");
+
+    if (!noRekam || !namaAnak || !periodeAwal || !periodeAkhir || selectedTerapi.length === 0) {
+      setWarningMessage("Silakan lengkapi semua data utama!");
+      return;
+    }
+
+    for (const terapi of selectedTerapi) {
+      const rows = scheduleMap[terapi] || [];
+      if (rows.length === 0) {
+        setWarningMessage(`Silakan tambahkan jadwal untuk terapi ${terapi}!`);
+        return;
+      }
+      for (const r of rows) {
+        if (!r.terapis || !r.hari || !r.jamMulai || !r.jamSelesai || !r.pertemuan) {
+          setWarningMessage(`Silakan lengkapi semua kolom jadwal (Terapis, Hari, Jam, Pertemuan) untuk terapi ${terapi}!`);
+          return;
+        }
+      }
+    }
+
     const firstTerapi = selectedTerapi[0];
     const firstRow = scheduleMap[firstTerapi]?.[0];
     if (firstRow) {
@@ -328,12 +354,12 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
 
   const handleClose = () => {
     setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
-    setSelectedTerapi([]); setScheduleMap({});
+    setSelectedTerapi([]); setScheduleMap({}); setHasSubmitted(false); setWarningMessage("");
     onClose();
   };
 
-  const inputCls = "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] focus:border-teal-300 text-gray-700 placeholder-gray-300 transition-colors";
-  const selectCls = "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] focus:border-teal-300 text-gray-700 bg-white transition-colors appearance-none";
+  const getInputCls = (isError: boolean) => `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] focus:border-teal-300 text-gray-700 placeholder-gray-300 transition-colors ${isError ? "border-red-500 bg-red-50" : "border-gray-200"}`;
+  const getSelectCls = (isError: boolean) => `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] focus:border-teal-300 text-gray-700 bg-white transition-colors appearance-none ${isError ? "border-red-500 bg-red-50" : "border-gray-200"}`;
   const labelCls = "block text-xs font-semibold text-gray-500 mb-1";
 
   return (
@@ -372,13 +398,38 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                     <label className={labelCls}>No. Rekam Medis</label>
                     <input type="text" value={noRekam}
                       onChange={(e) => setNoRekam(e.target.value)}
-                      placeholder="RM-000123" className={inputCls} />
+                      placeholder="RM-000123" className={getInputCls(hasSubmitted && !noRekam)} />
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className={labelCls}>Nama Anak</label>
                     <input type="text" required value={namaAnak}
-                      onChange={(e) => setNamaAnak(e.target.value)}
-                      placeholder="Nama lengkap anak" className={inputCls} />
+                      onChange={(e) => {
+                        setNamaAnak(e.target.value);
+                        setShowAnakDropdown(true);
+                      }}
+                      onFocus={() => setShowAnakDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowAnakDropdown(false), 200)}
+                      placeholder="Nama lengkap anak" className={getInputCls(hasSubmitted && !namaAnak)} />
+                    
+                    {showAnakDropdown && (
+                      <ul className="absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
+                        {Array.from(new Set(allData.map(d => d.namaAnak)))
+                          .filter(name => name.toLowerCase().includes(namaAnak.toLowerCase()))
+                          .map(name => (
+                          <li
+                            key={name}
+                            onMouseDown={(e) => {
+                              e.preventDefault(); // Mencegah onBlur terpicu sebelum diklik
+                              setNamaAnak(name);
+                              setShowAnakDropdown(false);
+                            }}
+                            className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
+                          >
+                            {name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
 
@@ -386,7 +437,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                 <div className="grid grid-cols-2 gap-3 items-start">
                   <div>
                     <label className={labelCls}>Terapi</label>
-                    <div className="border border-gray-200 rounded-lg p-2.5 space-y-2 bg-gray-50/50">
+                    <div className={`border rounded-lg p-2.5 space-y-2 transition-colors ${hasSubmitted && selectedTerapi.length === 0 ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-gray-50/50"}`}>
                       {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
                         const checked = selectedTerapi.includes(name);
                         const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
@@ -422,11 +473,11 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                     <div className="flex items-center gap-1.5">
                       <input type="date" value={periodeAwal}
                         onChange={(e) => setPeriodeAwal(e.target.value)}
-                        className="flex-1 px-2 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors" />
+                        className={`flex-1 px-2 py-2.5 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors ${hasSubmitted && !periodeAwal ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
                       <span className="text-gray-400 text-sm">–</span>
                       <input type="date" value={periodeAkhir}
                         onChange={(e) => setPeriodeAkhir(e.target.value)}
-                        className="flex-1 px-2 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors" />
+                        className={`flex-1 px-2 py-2.5 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors ${hasSubmitted && !periodeAkhir ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
                     </div>
                   </div>
                 </div>
@@ -466,7 +517,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                                     <select
                                       value={row.terapis}
                                       onChange={(e) => updateRow(terapiName, idx, "terapis", e.target.value)}
-                                      className={selectCls + " pr-7"}
+                                      className={getSelectCls(hasSubmitted && !row.terapis) + " pr-7"}
                                     >
                                       <option value="">Pilih...</option>
                                       <option>Alief Arifun</option>
@@ -480,7 +531,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                                   <label className={labelCls}>Pertemuan</label>
                                   <input type="number" min={0} value={row.pertemuan}
                                     onChange={(e) => updateRow(terapiName, idx, "pertemuan", parseInt(e.target.value) || 0)}
-                                    className="w-full px-2 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 text-center" />
+                                    className={`w-full px-2 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 text-center ${hasSubmitted && (!row.pertemuan || row.pertemuan <= 0) ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
                                 </div>
                               </div>
                               {/* Baris bawah: Hari | Jam */}
@@ -491,7 +542,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                                     <select
                                       value={row.hari}
                                       onChange={(e) => updateRow(terapiName, idx, "hari", e.target.value)}
-                                      className={selectCls + " pr-7"}
+                                      className={getSelectCls(hasSubmitted && !row.hari) + " pr-7"}
                                     >
                                       {HARI_ORDER.map((h) => <option key={h}>{h}</option>)}
                                     </select>
@@ -503,11 +554,11 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                                   <div className="flex items-center gap-1.5">
                                     <input type="time" value={row.jamMulai}
                                       onChange={(e) => updateRow(terapiName, idx, "jamMulai", e.target.value)}
-                                      className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700" />
+                                      className={`flex-1 px-2 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 ${hasSubmitted && !row.jamMulai ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
                                     <span className="text-gray-300 text-xs shrink-0">–</span>
                                     <input type="time" value={row.jamSelesai}
                                       onChange={(e) => updateRow(terapiName, idx, "jamSelesai", e.target.value)}
-                                      className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700" />
+                                      className={`flex-1 px-2 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 ${hasSubmitted && !row.jamSelesai ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
                                   </div>
                                 </div>
                               </div>
@@ -557,6 +608,11 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit }: TambahJadwal
                     {totalPertemuan} <span className="text-sm font-medium text-white/80">kali pertemuan</span>
                   </p>
                 </div>
+                {warningMessage && (
+                  <p className="text-red-500 text-xs font-semibold text-left mt-3 ml-2">
+                    * {warningMessage}
+                  </p>
+                )}
               </div>
 
               {/* Action buttons */}
@@ -1338,14 +1394,15 @@ export default function JadwalTerapiPage() {
             </div>
 
             {/* Table Card */}
-
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-              className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden"
-            >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${activeTab}|${filterStatus}|${filterDate}|${search}|${currentPage}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden"
+              >
               {filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-20 text-center">
                   <div className="w-20 h-20 bg-teal-50 rounded-full flex items-center justify-center mb-4">
@@ -1381,14 +1438,9 @@ export default function JadwalTerapiPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        <AnimatePresence>
                           {paginatedData.map((item, idx) => (
-                            <motion.tr
+                            <tr
                               key={item.id}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 10 }}
-                              transition={{ duration: 0.15, delay: idx * 0.04 }}
                               className="border-b border-gray-50 last:border-0 hover:bg-[#F4F9F8]/50 transition-colors group"
                             >
                               {/* Informasi Pasien */}
@@ -1455,20 +1507,19 @@ export default function JadwalTerapiPage() {
                                   </button>
                                 </div>
                               </td>
-                            </motion.tr>
+                            </tr>
                           ))}
-                        </AnimatePresence>
                       </tbody>
                     </table>
                   </div>
 
                   {/* Mobile Card View */}
                   <div className="md:hidden p-4 space-y-3">
-                    {paginatedData.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-[#F4F9F8]/40 border border-teal-50 rounded-2xl p-4 shadow-xs"
-                      >
+                      {paginatedData.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className="bg-[#F4F9F8]/40 border border-teal-50 rounded-2xl p-4 shadow-xs"
+                        >
                         <div className="flex justify-between items-start mb-3">
                           <div>
                             <p className="text-sm font-bold text-gray-800">{item.namaAnak}</p>
@@ -1524,7 +1575,7 @@ export default function JadwalTerapiPage() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                      ))}
                   </div>
 
                   {/* Footer info */}
@@ -1574,6 +1625,7 @@ export default function JadwalTerapiPage() {
                 </>
               )}
             </motion.div>
+            </AnimatePresence>
           </main>
         </div>
       </div>
@@ -1584,6 +1636,7 @@ export default function JadwalTerapiPage() {
         onClose={() => setShowTambah(false)}
         terapiType={activeTab}
         onSubmit={handleTambah}
+        allData={data}
       />
       <DetailModal
         open={!!detailItem}
