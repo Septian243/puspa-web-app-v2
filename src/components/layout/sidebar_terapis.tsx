@@ -19,6 +19,7 @@ import {
   User,
   Key,
   AlertTriangle,
+  CalendarDays,
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
 
@@ -61,6 +62,12 @@ export const baseMenu: MenuGroup[] = [
     ],
   },
   {
+    section: "JADWAL",
+    items: [
+      { name: "Terapi", href: "/terapis/terapi", icon: CalendarDays },
+    ],
+  },
+  {
     section: "KELOLA AKUN",
     items: [
       {
@@ -77,7 +84,7 @@ export const baseMenu: MenuGroup[] = [
   },
 ];
 
-export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: SidebarTerapisProps) {
+export default function SidebarTerapis({ isOpen = false, onClose = () => { } }: SidebarTerapisProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -115,9 +122,9 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
     role === "asesor"
       ? baseMenu
       : baseMenu.map((group) => ({
-          ...group,
-          items: group.items.filter((item) => item.name !== "Assessment"),
-        }));
+        ...group,
+        items: group.items.filter((item) => item.name !== "Assessment"),
+      }));
 
   return (
     <>
@@ -154,11 +161,11 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
         />
 
         {/* Header / Logo */}
-        <div className="flex justify-between items-center h-24 shrink-0 px-6 border-b border-gray-100 relative">
+        <div className="relative flex items-center justify-between h-24 px-6 border-b border-gray-100 shrink-0">
           <div className="sidebar-logo-wide">
             <Link
               href="/terapis/dashboard"
-              className="hover:scale-105 transition-transform duration-300"
+              className="transition-transform duration-300 hover:scale-105"
             >
               <Image
                 src="/logo.png"
@@ -170,7 +177,7 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
               />
             </Link>
           </div>
-          <div className="sidebar-logo-mini hidden w-full justify-center">
+          <div className="justify-center hidden w-full sidebar-logo-mini">
             <Image
               src="/favicon.ico"
               alt="Logo"
@@ -182,9 +189,8 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
           </div>
           <button
             onClick={toggleSidebar}
-            className={`text-[#2B7A75] hover:bg-[#2B7A75]/10 p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isCollapsed ? "mx-auto" : ""
-            }`}
+            className={`text-[#2B7A75] hover:bg-[#2B7A75]/10 p-1.5 rounded-lg transition-colors cursor-pointer ${isCollapsed ? "mx-auto" : ""
+              }`}
             title={isCollapsed ? "Tampilkan Menu" : "Sembunyikan Menu"}
           >
             {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -192,7 +198,7 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex-1 space-y-7 sidebar-scroll overflow-y-auto px-4 py-8">
+        <nav className="flex-1 px-4 py-8 overflow-y-auto space-y-7 sidebar-scroll">
           {menu.map((group, idx) => (
             <div key={idx} className="flex flex-col gap-1.5">
               {group.section && (
@@ -220,7 +226,7 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                     isParentActive;
 
                   return (
-                    <div key={i} className="flex flex-col relative group/menu">
+                    <div key={i} className="relative flex flex-col group/menu">
                       <button
                         onClick={() => {
                           if (!isCollapsed) {
@@ -228,42 +234,39 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                           }
                         }}
                         className={`w-full flex justify-between items-center px-3.5 py-3 rounded-xl transition-all duration-300 group
-                        ${
-                          isCollapsed
+                        ${isCollapsed
                             ? (isChildActive
-                                ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                                : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]")
+                              ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
+                              : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]")
                             : ((isOpenDropdown || isChildActive)
-                                ? "bg-[#F4F9F8] text-[#1E5C58]"
-                                : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]")
-                        }`}
+                              ? "bg-[#F4F9F8] text-[#1E5C58]"
+                              : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]")
+                          }`}
                       >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`p-1.5 rounded-lg transition-colors duration-300 ${
-                              isCollapsed
-                                ? (isChildActive
-                                    ? "text-white bg-transparent"
-                                    : "text-gray-400 group-hover:text-[#2B7A75] bg-transparent")
-                                : ((isOpenDropdown || isChildActive)
-                                    ? "bg-[#2B7A75]/10 text-[#2B7A75]"
-                                    : "text-gray-400 group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]")
-                            }`}
+                            className={`p-1.5 rounded-lg transition-colors duration-300 ${isCollapsed
+                              ? (isChildActive
+                                ? "text-white bg-transparent"
+                                : "text-gray-400 group-hover:text-[#2B7A75] bg-transparent")
+                              : ((isOpenDropdown || isChildActive)
+                                ? "bg-[#2B7A75]/10 text-[#2B7A75]"
+                                : "text-gray-400 group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]")
+                              }`}
                           >
                             {item.icon && (
                               <item.icon size={18} strokeWidth={2.5} />
                             )}
                           </div>
-                          <span className="sidebar-text text-sm font-semibold">
+                          <span className="text-sm font-semibold sidebar-text">
                             {item.name}
                           </span>
                         </div>
                         <ChevronDown
                           size={16}
                           strokeWidth={3}
-                          className={`sidebar-chevron transition-transform duration-300 text-gray-400 group-hover:text-[#2B7A75] ${
-                            isOpenDropdown ? "rotate-180 text-[#2B7A75]" : ""
-                          }`}
+                          className={`sidebar-chevron transition-transform duration-300 text-gray-400 group-hover:text-[#2B7A75] ${isOpenDropdown ? "rotate-180 text-[#2B7A75]" : ""
+                            }`}
                         />
                       </button>
 
@@ -274,7 +277,7 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                             animate={{ opacity: 1, height: "auto" }}
                             exit={{ opacity: 0, height: 0 }}
                             transition={{ duration: 0.2, ease: "easeInOut" }}
-                            className="sidebar-text overflow-hidden"
+                            className="overflow-hidden sidebar-text"
                           >
                             <div className="ml-10 mt-1 space-y-1 relative before:absolute before:inset-y-0 before:left-[-14px] before:w-px before:bg-gray-200">
                               {item.dropdown.map((sub, j) => {
@@ -287,11 +290,10 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                                     key={j}
                                     href={sub.href}
                                     className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13.5px] transition-all duration-300
-                                    ${
-                                      isSubActive
+                                    ${isSubActive
                                         ? "text-[#1E5C58] bg-[#F4F9F8] font-bold before:absolute before:left-[-15px] before:w-[3px] before:h-5 before:bg-[#2B7A75] before:rounded-r-full"
                                         : "text-gray-500 hover:text-[#2B7A75] hover:bg-gray-50 font-medium"
-                                    }`}
+                                      }`}
                                   >
                                     {sub.icon && (
                                       <sub.icon
@@ -327,11 +329,10 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                             <Link
                               key={j}
                               href={sub.href}
-                              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13.5px] transition-all duration-300 ${
-                                isSubActive
-                                  ? "text-[#1E5C58] bg-[#F4F9F8] font-bold"
-                                  : "text-gray-500 hover:text-[#2B7A75] hover:bg-gray-50 font-medium"
-                              }`}
+                              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13.5px] transition-all duration-300 ${isSubActive
+                                ? "text-[#1E5C58] bg-[#F4F9F8] font-bold"
+                                : "text-gray-500 hover:text-[#2B7A75] hover:bg-gray-50 font-medium"
+                                }`}
                             >
                               {sub.icon && (
                                 <sub.icon
@@ -360,15 +361,14 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                       className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group text-red-500 hover:bg-red-50 hover:text-red-600 mt-4 cursor-pointer`}
                     >
                       <div
-                        className={`p-1.5 rounded-lg transition-colors duration-300 ${
-                          isCollapsed
-                            ? "text-gray-400 group-hover:text-red-600 bg-transparent"
-                            : "group-hover:bg-red-100/50 text-gray-400"
-                        }`}
+                        className={`p-1.5 rounded-lg transition-colors duration-300 ${isCollapsed
+                          ? "text-gray-400 group-hover:text-red-600 bg-transparent"
+                          : "group-hover:bg-red-100/50 text-gray-400"
+                          }`}
                       >
                         {item.icon && <item.icon size={18} strokeWidth={2.5} />}
                       </div>
-                      <span className="sidebar-text text-sm font-semibold">
+                      <span className="text-sm font-semibold sidebar-text">
                         {item.name}
                       </span>
                     </button>
@@ -380,23 +380,21 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                     key={i}
                     href={item.href}
                     className={`flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group
-                    ${
-                      isParentActive
+                    ${isParentActive
                         ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
                         : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
-                    }`}
+                      }`}
                   >
                     <div
                       className={`p-1.5 rounded-lg transition-colors duration-300 
-                    ${
-                      isParentActive
-                        ? (isCollapsed ? "text-white bg-transparent" : "bg-white/20 text-white")
-                        : `text-gray-400 ${isCollapsed ? "group-hover:text-[#2B7A75]" : "group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]"}`
-                    }`}
+                    ${isParentActive
+                          ? (isCollapsed ? "text-white bg-transparent" : "bg-white/20 text-white")
+                          : `text-gray-400 ${isCollapsed ? "group-hover:text-[#2B7A75]" : "group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]"}`
+                        }`}
                     >
                       {item.icon && <item.icon size={18} strokeWidth={2.5} />}
                     </div>
-                    <span className="sidebar-text text-sm font-semibold">
+                    <span className="text-sm font-semibold sidebar-text">
                       {item.name}
                     </span>
                   </Link>
@@ -407,7 +405,7 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
         </nav>
 
         {/* Small footer branding in sidebar */}
-        <div className="p-4 border-t border-gray-100 flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 p-4 border-t border-gray-100">
           <div className="w-1.5 h-1.5 rounded-full bg-[#1E5C58]"></div>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
             Puspa Terapis v1.0
@@ -424,14 +422,14 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-3xl shadow-2xl shadow-teal-900/10 w-full max-w-sm overflow-hidden"
+              className="w-full max-w-sm overflow-hidden bg-white shadow-2xl rounded-3xl shadow-teal-900/10"
             >
               <div className="p-8 text-center">
-                <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 relative">
+                <div className="relative flex items-center justify-center w-20 h-20 mx-auto mb-6 rounded-full bg-red-50">
                   <motion.div
                     animate={{ scale: [1, 1.1, 1] }}
                     transition={{ repeat: Infinity, duration: 2 }}
-                    className="absolute inset-0 bg-red-100/50 rounded-full scale-125 opacity-20"
+                    className="absolute inset-0 scale-125 rounded-full bg-red-100/50 opacity-20"
                   />
                   <AlertTriangle className="w-10 h-10 text-red-500" />
                 </div>
@@ -439,7 +437,7 @@ export default function SidebarTerapis({ isOpen = false, onClose = () => {} }: S
                 <h3 className="text-xl font-extrabold text-[#1E5C58] mb-2 tracking-tight">
                   Konfirmasi Logout
                 </h3>
-                <p className="text-sm text-gray-505 font-medium leading-relaxed mb-8 px-4">
+                <p className="px-4 mb-8 text-sm font-medium leading-relaxed text-gray-505">
                   Apakah Anda yakin ingin keluar dari sistem? Anda harus login
                   kembali untuk mengakses data.
                 </p>
