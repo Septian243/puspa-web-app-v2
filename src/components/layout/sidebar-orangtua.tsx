@@ -15,6 +15,7 @@ import {
   Lock,
   LogOut,
   AlertTriangle,
+  CalendarCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSidebar } from "@/context/SidebarContext";
@@ -35,6 +36,11 @@ export const menuOrangtua = [
     name: "Assessment",
     icon: UserSquare2,
     path: "/orangtua/assessment",
+  },
+  {
+    name: "Terapi",
+    icon: CalendarCheck,
+    path: "/orangtua/terapi",
   },
   {
     name: "Help",
