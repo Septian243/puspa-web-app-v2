@@ -390,7 +390,8 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
 
             {/* Scrollable body */}
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              <div className="overflow-y-auto flex-1 p-5">
+                <div className="flex flex-col gap-4">
 
                 {/* Row 1: No Rekam Medis + Nama Anak */}
                 <div className="grid grid-cols-2 gap-3">
@@ -481,21 +482,24 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
                     </div>
                   </div>
                 </div>
+                </div>
 
                 {/* Dynamic sections per selected terapi */}
-                <AnimatePresence mode="popLayout">
-                  {selectedTerapi.map((terapiName) => {
-                    const rows = scheduleMap[terapiName] || [];
-                    const label = terapiName.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
-                    return (
-                      <motion.div
-                        key={terapiName}
-                        initial={{ opacity: 0, y: 10, height: 0 }}
-                        animate={{ opacity: 1, y: 0, height: "auto" }}
-                        exit={{ opacity: 0, y: -10, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="border border-gray-200 rounded-xl overflow-hidden"
-                      >
+                <div className="mt-4 flex flex-col">
+                  <AnimatePresence>
+                    {selectedTerapi.map((terapiName) => {
+                      const rows = scheduleMap[terapiName] || [];
+                      const label = terapiName.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
+                      return (
+                        <motion.div
+                          key={terapiName}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3, ease: "easeInOut" }}
+                          className="overflow-hidden"
+                        >
+                          <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
                         {/* Section header */}
                         <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
                           <div className="flex items-center gap-2">
@@ -587,18 +591,30 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
                             Tambah Jadwal
                           </button>
                         </div>
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
 
-                {/* Empty state hint */}
-                {selectedTerapi.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                    <CalendarCheck className="w-8 h-8 mb-2 opacity-30" />
-                    <p className="text-sm font-medium">Pilih terapi di atas untuk menampilkan form jadwal</p>
-                  </div>
-                )}
+                  {/* Empty state hint */}
+                  <AnimatePresence>
+                    {selectedTerapi.length === 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl mb-4">
+                          <CalendarCheck className="w-8 h-8 mb-2 opacity-30" />
+                          <p className="text-sm font-medium">Pilih terapi di atas untuk menampilkan form jadwal</p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
               <div className="px-5 pb-2">
@@ -944,7 +960,8 @@ function EditModal({
 
             {/* Scrollable body */}
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              <div className="overflow-y-auto flex-1 p-5">
+                <div className="flex flex-col gap-4">
                 {/* Row 1: No Rekam Medis + Nama Anak + Status */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -1004,21 +1021,24 @@ function EditModal({
                     </div>
                   </div>
                 </div>
+                </div>
 
                 {/* Dynamic sections per selected terapi */}
-                <AnimatePresence mode="popLayout">
-                  {selectedTerapi.map((terapiName) => {
-                    const rows = scheduleMap[terapiName] || [];
-                    const label = terapiName.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
-                    return (
-                      <motion.div
-                        key={terapiName}
-                        initial={{ opacity: 0, y: 10, height: 0 }}
-                        animate={{ opacity: 1, y: 0, height: "auto" }}
-                        exit={{ opacity: 0, y: -10, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="border border-gray-200 rounded-xl overflow-hidden"
-                      >
+                <div className="mt-4 flex flex-col">
+                  <AnimatePresence>
+                    {selectedTerapi.map((terapiName) => {
+                      const rows = scheduleMap[terapiName] || [];
+                      const label = terapiName.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
+                      return (
+                        <motion.div
+                          key={terapiName}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3, ease: "easeInOut" }}
+                          className="overflow-hidden"
+                        >
+                          <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
                         <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
                           <div className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-[#2B7A75]" />
@@ -1107,18 +1127,30 @@ function EditModal({
                             Tambah Jadwal
                           </button>
                         </div>
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
 
-                {/* Empty state hint */}
-                {selectedTerapi.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                    <CalendarCheck className="w-8 h-8 mb-2 opacity-30" />
-                    <p className="text-sm font-medium">Pilih terapi di atas untuk menampilkan form jadwal</p>
-                  </div>
-                )}
+                  {/* Empty state hint */}
+                  <AnimatePresence>
+                    {selectedTerapi.length === 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl mb-4">
+                          <CalendarCheck className="w-8 h-8 mb-2 opacity-30" />
+                          <p className="text-sm font-medium">Pilih terapi di atas untuk menampilkan form jadwal</p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
               <div className="px-5 pb-2">
