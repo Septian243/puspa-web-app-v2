@@ -686,7 +686,7 @@ function JadwalContent() {
   };
 
   const handleUnduh = () => {
-    console.log("Unduh Hasil");
+    router.push("/terapis/terapi/unduh");
   };
 
   const STATUS_TABS: { label: StatusFilter; icon: React.ElementType }[] = [
@@ -725,33 +725,60 @@ function JadwalContent() {
 
       {/* ── Tab Tipe Terapi + Filter Tanggal + Unduh ── */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        {/* Tipe Terapi Tabs */}
-        <div className="grid grid-cols-2 lg:flex lg:flex-wrap gap-2 p-1.5 bg-[#EAF4F2]/50 border border-teal-50/50 rounded-2xl w-full lg:w-fit">
-          {(["PLB (Paedagog)", "Terapi Okupasi", "Terapi Wicara", "Fisioterapi"] as TerapiTab[]).map(
-            (tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    setActiveTab(tab);
-                    setActiveFilter("Terjadwal");
-                    setSearchName("");
-                  }}
-                  className={`cursor-pointer px-3 py-2.5 lg:px-4 text-[11px] lg:text-sm font-semibold rounded-xl text-center transition-all duration-300 w-full lg:w-auto ${isActive
-                    ? "bg-[#1E5C58] text-white shadow-sm"
-                    : "text-[#1E5C58]/80 hover:bg-white/60 hover:text-[#1E5C58]"
-                    }`}
-                >
-                  {tab}
-                </button>
-              );
-            }
-          )}
+        {/* Tipe Terapi Dropdown */}
+        <div className="relative z-30">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenDropdownId(openDropdownId === "specialty" ? null : "specialty");
+            }}
+            className="flex items-center justify-between gap-3 px-4 py-2.5 bg-white border border-teal-100 rounded-xl shadow-sm text-[#1E5C58] font-bold text-sm hover:bg-teal-50 transition-all w-full lg:w-64"
+          >
+            <div className="flex flex-col items-start">
+              <span className="text-[10px] text-[#1E5C58]/60 font-medium uppercase tracking-wider -mb-0.5">Melihat Jadwal</span>
+              <span>{activeTab}</span>
+            </div>
+            <ChevronDown size={16} className={`transition-transform duration-300 ${openDropdownId === "specialty" ? "rotate-180" : ""}`} />
+          </button>
+
+          <AnimatePresence>
+            {openDropdownId === "specialty" && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+                className="absolute left-0 w-full py-1 mt-2 overflow-hidden origin-top bg-white border border-teal-100 shadow-lg rounded-xl"
+              >
+                {(["PLB (Paedagog)", "Terapi Okupasi", "Terapi Wicara", "Fisioterapi"] as TerapiTab[]).map(
+                  (tab) => {
+                    const isActive = activeTab === tab;
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => {
+                          setActiveTab(tab);
+                          setActiveFilter("Terjadwal");
+                          setSearchName("");
+                          setOpenDropdownId(null);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors flex items-center justify-between ${isActive ? "bg-teal-50/50 text-[#1E5C58]" : "text-gray-600 hover:bg-gray-50 hover:text-[#1E5C58]"
+                          }`}
+                      >
+                        {tab}
+                        {isActive && <CheckCircle2 size={16} className="text-[#1E5C58]" />}
+                      </button>
+                    );
+                  }
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Filter Tanggal Cepat & Custom */}
-        <div className="flex flex-col items-stretch w-full gap-3 sm:flex-row sm:items-center shrink-0 lg:w-auto">
+        {/* Filter Tanggal Cepat & Custom */}
+        <div className="flex flex-col sm:flex-row sm:items-center w-full lg:w-auto bg-white border border-teal-100 rounded-xl shadow-[0_2px_8px_rgba(30,92,88,0.02)] p-1 shrink-0 gap-1 sm:gap-0">
           <AnimatePresence>
             {activeFilter === "Terjadwal" && (
               <motion.div
@@ -762,8 +789,6 @@ function JadwalContent() {
                   hidden: {
                     opacity: 0,
                     width: 0,
-                    paddingLeft: 0,
-                    paddingRight: 0,
                     transition: {
                       duration: 0.3,
                       ease: "easeInOut"
@@ -772,8 +797,6 @@ function JadwalContent() {
                   visible: {
                     opacity: 1,
                     width: "auto",
-                    paddingLeft: 4,
-                    paddingRight: 4,
                     transition: {
                       duration: 0.3,
                       ease: "easeInOut"
@@ -782,15 +805,13 @@ function JadwalContent() {
                   exit: {
                     opacity: 0,
                     width: 0,
-                    paddingLeft: 0,
-                    paddingRight: 0,
                     transition: {
                       duration: 0.4,
-                      ease: "easeInOut",
-                    },
-                  },
+                      ease: "easeInOut"
+                    }
+                  }
                 }}
-                className="flex bg-white border border-teal-100 rounded-xl shadow-[0_2px_8px_rgba(30,92,88,0.02)] overflow-hidden shrink-0 py-1"
+                className="flex overflow-hidden shrink-0"
               >
                 {(["hari-ini", "besok", "minggu-ini", "bulan-ini"] as DateRangeFilter[]).map((mode, index) => (
                   <motion.button
@@ -829,7 +850,7 @@ function JadwalContent() {
                       setDateRangeMode(mode);
                       setDateFilter("");
                     }}
-                    className={`cursor-pointer whitespace-nowrap px-4 py-2 text-sm font-bold rounded-lg capitalize transition-colors flex-1 text-center ${dateRangeMode === mode
+                    className={`cursor-pointer whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-bold rounded-lg capitalize transition-colors flex-1 text-center mr-1 ${dateRangeMode === mode
                       ? "bg-[#1E5C58] text-white shadow-sm"
                       : "text-gray-500 hover:text-[#1E5C58] hover:bg-teal-50/50"
                       }`}
@@ -841,8 +862,8 @@ function JadwalContent() {
             )}
           </AnimatePresence>
 
-          <div className="relative w-full sm:w-auto">
-            <Calendar className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${dateRangeMode === "custom" ? "text-[#1E5C58]" : "text-[#81B7A9]"}`} />
+          <div className="relative w-full sm:w-auto shrink-0">
+            <Calendar className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none z-10 ${dateRangeMode === "custom" ? "text-white" : "text-[#81B7A9]"}`} />
             <input
               type="date"
               value={dateFilter}
@@ -855,7 +876,10 @@ function JadwalContent() {
                   setDateRangeMode("hari-ini");
                 }
               }}
-              className={`w-full sm:w-auto pl-9 pr-3 py-2.5 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#81B7A9] transition-colors bg-white shadow-[0_2px_8px_rgba(30,92,88,0.02)] ${dateRangeMode === "custom" ? "border-[#1E5C58] text-[#1E5C58]" : "border-teal-100 text-gray-600 hover:border-teal-200"}`}
+              className={`w-full sm:w-[170px] pl-9 pr-4 py-2 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#81B7A9] transition-colors cursor-pointer relative ${dateRangeMode === "custom"
+                ? "bg-[#1E5C58] text-white shadow-sm [&::-webkit-calendar-picker-indicator]:invert"
+                : "bg-transparent text-gray-500 hover:text-[#1E5C58] hover:bg-teal-50/50"
+                }`}
             />
           </div>
         </div>
@@ -912,15 +936,17 @@ function JadwalContent() {
               className="w-full h-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all font-medium text-gray-700"
             />
           </div>
-          <div className="flex p-1 bg-gray-50/50 rounded-xl shrink-0">
-            <button
-              onClick={handleUnduh}
-              className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-teal-50 hover:bg-teal-50/50 text-[#1E5C58] rounded-lg text-sm font-bold transition-all shadow-sm"
-            >
-              <Download size={16} />
-              <span className="hidden sm:inline">Unduh Hasil</span>
-            </button>
-          </div>
+          {isMySpecialtyTab && (
+            <div className="flex p-1 bg-gray-50/50 rounded-xl shrink-0">
+              <button
+                onClick={handleUnduh}
+                className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-teal-50 hover:bg-teal-50/50 text-[#1E5C58] rounded-lg text-sm font-bold transition-all shadow-sm"
+              >
+                <Download size={16} />
+                <span className="hidden sm:inline">Unduh Hasil</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
