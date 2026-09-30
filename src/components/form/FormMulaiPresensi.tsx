@@ -16,6 +16,7 @@ export type StatusKehadiran = "Hadir" | "Tidak Hadir" | "Izin" | "Sakit";
 export interface PresensiManualTarget {
     id: string;
     pasienName: string;
+    terapisName: string;
     tanggal: string; // "25/09/2026"
     waktu: string; // "Pukul 15.41 - 15.42" atau "15.41 - 15.42"
 }
@@ -158,10 +159,14 @@ function TerapisSelect({
                         if (event.key === "ArrowDown") {
                             event.preventDefault();
                             setOpen(true);
-                            setHighlightedIndex((index) => Math.min(index + 1, filteredOptions.length - 1));
+                            if (filteredOptions.length > 0) {
+                                setHighlightedIndex((index) => (index + 1) % filteredOptions.length);
+                            }
                         } else if (event.key === "ArrowUp") {
                             event.preventDefault();
-                            setHighlightedIndex((index) => Math.max(index - 1, 0));
+                            if (filteredOptions.length > 0) {
+                                setHighlightedIndex((index) => (index - 1 + filteredOptions.length) % filteredOptions.length);
+                            }
                         } else if (event.key === "Enter" && filteredOptions[highlightedIndex]) {
                             event.preventDefault();
                             selectOption(filteredOptions[highlightedIndex]);
@@ -246,13 +251,13 @@ export default function FormCatatKehadiran({
             setStatus(initialValues?.status ?? null);
             setKeterangan(initialValues?.keterangan ?? "");
             setReschedule(initialValues?.reschedule ?? false);
-            setTerapisBaru(initialValues?.terapisBaru ?? "");
+            setTerapisBaru(initialValues?.terapisBaru ?? target?.terapisName ?? "");
             setTanggalBaru(initialValues?.tanggalBaru ?? "");
             setJamMulaiBaru(initialValues?.jamMulaiBaru ?? "");
             setJamSelesaiBaru(initialValues?.jamSelesaiBaru ?? "");
             setErrors({});
         }
-    }, [open, target?.id, initialValues]);
+    }, [open, target?.id, target?.terapisName, initialValues]);
 
     if (!open || !target) return null;
 

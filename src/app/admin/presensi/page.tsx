@@ -703,11 +703,11 @@ function FilterSelect({
                         if (event.key === "ArrowDown") {
                             event.preventDefault();
                             setIsOpen(true);
-                            setHighlightedIndex((index) => Math.min(index + 1, optionCount - 1));
+                            setHighlightedIndex((index) => (index + 1) % optionCount);
                         }
                         if (event.key === "ArrowUp") {
                             event.preventDefault();
-                            setHighlightedIndex((index) => Math.max(index - 1, 0));
+                            setHighlightedIndex((index) => (index - 1 + optionCount) % optionCount);
                         }
                         if (event.key === "Enter") {
                             event.preventDefault();
@@ -1079,6 +1079,7 @@ export default function PresensiPage() {
 
     const query = searchTerm.trim().toLowerCase();
     const todayLabel = formatTanggalDisplay(new Date().toISOString().slice(0, 10));
+    const activeDateLabel = selectedDate ? formatTanggalDisplay(selectedDate) : "Hari Ini";
     const matchesPresensiFilter = (item: PresensiData) => {
         const matchesQuery = !query || [
             item.pasienName,
@@ -1157,6 +1158,7 @@ export default function PresensiPage() {
         setPresensiTarget({
             id: item.id,
             pasienName: item.pasienName,
+            terapisName: item.terapisName,
             tanggal: item.tanggal,
             waktu: item.waktu,
         });
@@ -1182,6 +1184,7 @@ export default function PresensiPage() {
         setPresensiTarget({
             id: item.id,
             pasienName: item.pasienName,
+            terapisName: item.terapisName,
             tanggal: item.tanggal,
             waktu: item.waktu,
         });
@@ -1413,11 +1416,11 @@ export default function PresensiPage() {
                                     </div>
                                 </div>
 
-                                {/* Tabel Presensi Hari Ini */}
+                                {/* Tabel Presensi berdasarkan tanggal aktif */}
                                 <div className="bg-white rounded-2xl border border-teal-50 overflow-hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
                                     <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
                                         <div className="w-2 h-2 rounded-full bg-[#1E5C58]" />
-                                        <h3 className="text-sm font-extrabold text-[#1E5C58]">Presensi Hari Ini</h3>
+                                        <h3 className="text-sm font-extrabold text-[#1E5C58]">Presensi {activeDateLabel}</h3>
                                     </div>
                                     <div className="hidden overflow-x-auto md:block">
                                         <table className="w-full text-left border-collapse min-w-[900px]">
@@ -1502,7 +1505,7 @@ export default function PresensiPage() {
                                 <div className="bg-white rounded-2xl border border-teal-50 overflow-hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
                                     <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
                                         <div className="w-2 h-2 rounded-full bg-[#2B7A75]" />
-                                        <h3 className="text-sm font-extrabold text-[#1E5C58]">Jadwal Hasil Reschedule Hari Ini</h3>
+                                        <h3 className="text-sm font-extrabold text-[#1E5C58]">Jadwal Hasil Reschedule {activeDateLabel}</h3>
                                     </div>
                                     <div className="hidden overflow-x-auto md:block">
                                         <table className="w-full text-left border-collapse min-w-[900px]">
@@ -1562,7 +1565,7 @@ export default function PresensiPage() {
                                                 ))}
                                                 {visiblePresensiReschedule.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={7} className="px-6 py-10 text-sm text-center text-gray-400">Tidak ada data hasil reschedule hari ini.</td>
+                                                        <td colSpan={7} className="px-6 py-10 text-sm text-center text-gray-400">Tidak ada data hasil reschedule.</td>
                                                     </tr>
                                                 )}
                                             </tbody>

@@ -44,6 +44,14 @@ function DetailJadwalContent() {
   const nomorRM = params.get("nomorRM") ?? "—";
   const hubunganWali = params.get("hubunganWali") ?? "—";
 
+  // Field Reschedule
+  const tanggalLama = params.get("tanggal_lama");
+  const waktuLama = params.get("waktu_lama");
+  const kategoriAlasan = params.get("kategori_alasan");
+  const alasan = params.get("alasan");
+
+  const isRescheduled = tanggalLama || waktuLama || kategoriAlasan || alasan;
+
   return (
     <div className="p-6 md:p-8 space-y-6 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">
 
@@ -103,6 +111,23 @@ function DetailJadwalContent() {
           <InfoItem label="NAMA TERAPIS" value={terapis} />
         </div>
       </div>
+
+      {/* ── Informasi Reschedule ── */}
+      {isRescheduled && (
+        <div className="bg-amber-50/50 rounded-2xl p-6 md:p-8 shadow-sm border border-amber-100 relative overflow-hidden">
+          <Badge title="INFORMASI RESCHEDULE" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8 mt-6">
+            <div className="space-y-6">
+              <InfoItem label="JADWAL SEMULA" value={`${tanggalLama || tanggalTerapi}, ${waktuLama || waktu}`} />
+              <InfoItem label="KATEGORI ALASAN" value={kategoriAlasan || "—"} />
+            </div>
+            <div className="space-y-6">
+              <InfoItem label="JADWAL BARU" value={`${tanggalTerapi}, ${waktu}`} />
+              <InfoItem label="DETAIL ALASAN" value={alasan || "—"} />
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
