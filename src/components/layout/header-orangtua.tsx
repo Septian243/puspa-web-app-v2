@@ -19,6 +19,9 @@ const HeaderOrangtua: React.FC<HeaderOrangtuaProps> = ({ onOpenSidebar }) => {
 
   const pageTitles: Record<string, string> = {
     "/orangtua/dashboard": "Dashboard",
+    "/orangtua/terapi": "Terapi",
+    "/orangtua/terapi/riwayat": "Riwayat Terapi",
+    "/orangtua/terapi/detail": "Detail Terapi",
     "/orangtua/anak": "Data Anak",
     "/orangtua/assessment": "Assessment",
     "/orangtua/assessment/kategori": "Formulir Assessment Orangtua",

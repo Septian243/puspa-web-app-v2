@@ -260,7 +260,7 @@ function SesiCard({ sesi, defaultOpen = false }: { sesi: RiwayatSesi; defaultOpe
                 : "border-gray-200 bg-gray-50 text-gray-400 hover:border-teal-300"
             }`}
           >
-            {open ? <Minus size={13} strokeWidth={2.5} /> : <Plus size={13} strokeWidth={2.5} />}
+            {open ? <ChevronUp size={16} strokeWidth={2.5} /> : <ChevronDown size={16} strokeWidth={2.5} />}
           </div>
         </div>
       </button>
@@ -338,7 +338,7 @@ export default function RiwayatTerapiPage() {
   }).sort((a, b) => b.tanggalRaw.localeCompare(a.tanggalRaw));
 
   return (
-    <ResponsiveOrangtuaLayout maxWidth="max-w-5xl">
+    <ResponsiveOrangtuaLayout maxWidth="max-w-full">
       {/* Page Header */}
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>

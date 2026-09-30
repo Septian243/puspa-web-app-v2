@@ -49,7 +49,7 @@ const DUMMY_JADWAL: JadwalTerapi[] = [
   {
     id: 1,
     namaAnak: "Rayhan",
-    avatarEmoji: "🐵",
+    avatarEmoji: "👶",
     noRekam: "RM-000124",
     jenisTerapi: "PLB (Paedagog)",
     terapis: "Alief Arifun",
@@ -68,7 +68,7 @@ const DUMMY_JADWAL: JadwalTerapi[] = [
   {
     id: 2,
     namaAnak: "Rayhan",
-    avatarEmoji: "🐵",
+    avatarEmoji: "👶",
     noRekam: "RM-000124",
     jenisTerapi: "Terapi Wicara",
     terapis: "Rina Wulandari",
@@ -87,7 +87,7 @@ const DUMMY_JADWAL: JadwalTerapi[] = [
   {
     id: 3,
     namaAnak: "Rayhan",
-    avatarEmoji: "🐵",
+    avatarEmoji: "👶",
     noRekam: "RM-000124",
     jenisTerapi: "Fisioterapi",
     terapis: "Budi Setiawan",
@@ -130,7 +130,15 @@ export default function TerapiOrangtuaPage() {
   const filtered = DUMMY_JADWAL.filter((item) => {
     const matchTab = item.status === activeTab;
     const matchSearch = item.namaAnak.toLowerCase().includes(search.toLowerCase());
-    return matchTab && matchSearch;
+    
+    let matchDate = true;
+    if (filterDate) {
+      const [year, month, day] = filterDate.split("-");
+      const formattedDate = `${day}/${month}/${year}`;
+      matchDate = item.tanggal === formattedDate;
+    }
+    
+    return matchTab && matchSearch && matchDate;
   });
 
   const handleLihatDetail = (item: JadwalTerapi) => {
@@ -156,21 +164,21 @@ export default function TerapiOrangtuaPage() {
   };
 
   return (
-    <ResponsiveOrangtuaLayout maxWidth="max-w-7xl">
+    <ResponsiveOrangtuaLayout maxWidth="max-w-full">
       {/* Page header */}
-      <div className="mb-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight flex items-center gap-2">
-              <CalendarCheck className="w-7 h-7 text-[#2B7A75]" />
-              Jadwal Terapi Anak
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Pantau jadwal, perubahan jadwal, dan hasil terapi anak Anda
-            </p>
-          </div>
+      <div className="mb-6 flex flex-col gap-5">
+        <div>
+          <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight flex items-center gap-2">
+            <CalendarCheck className="w-7 h-7 text-[#2B7A75]" />
+            Jadwal Terapi Anak
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Pantau jadwal, perubahan jadwal, dan hasil terapi anak Anda
+          </p>
+        </div>
 
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 items-start">
             {/* Date filter */}
             <div className="relative">
               <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -179,6 +187,50 @@ export default function TerapiOrangtuaPage() {
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
                 className="pl-9 pr-3 py-2.5 border border-teal-100 rounded-xl text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-sm hover:border-teal-200 transition-colors cursor-pointer"
+              />
+            </div>
+
+            {/* Tabs */}
+            <div className="flex items-center gap-1 p-1 bg-gray-100/70 rounded-xl">
+              {TABS.map((tab) => {
+                const isActive = activeTab === tab.value;
+                return (
+                  <button
+                    key={tab.value}
+                    onClick={() => setActiveTab(tab.value as StatusTerapi)}
+                    className={`relative cursor-pointer flex items-center px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                      isActive ? "text-[#1E5C58]" : "text-gray-500 hover:text-[#2B7A75]"
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeTabTerapi"
+                        className="absolute inset-0 bg-white rounded-lg shadow-sm"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-1.5">
+                      {tab.value === "Terjadwal" && <CalendarCheck size={14} />}
+                      {tab.value === "Reschedule" && <RefreshCw size={14} />}
+                      {tab.value === "Selesai" && <CheckCircle2 size={14} />}
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Cari pasien / orangtua..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 pr-4 py-2.5 border border-teal-100 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-sm w-60 hover:border-teal-200 transition-colors"
               />
             </div>
 
@@ -192,59 +244,33 @@ export default function TerapiOrangtuaPage() {
             </button>
           </div>
         </div>
-
-        {/* Tabs + Search */}
-        <div className="flex items-center justify-between gap-4 mt-5 flex-wrap">
-          <div className="flex items-center gap-1 p-1 bg-gray-100/70 rounded-xl">
-            {TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => setActiveTab(tab.value as StatusTerapi)}
-                className={`cursor-pointer flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                  activeTab === tab.value
-                    ? "bg-white text-[#1E5C58] shadow-sm"
-                    : "text-gray-500 hover:text-[#2B7A75]"
-                }`}
-              >
-                {tab.value === "Terjadwal" && <CalendarCheck size={14} />}
-                {tab.value === "Reschedule" && <RefreshCw size={14} />}
-                {tab.value === "Selesai" && <CheckCircle2 size={14} />}
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Cari pasien / orangtua..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2.5 border border-teal-100 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-sm w-60 hover:border-teal-200 transition-colors"
-            />
-          </div>
-        </div>
       </div>
 
       {/* Table Card */}
-      <div className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden">
-        {/* Desktop Table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">NO</th>
-                <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">INFO ANAK</th>
-                <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">JENIS TERAPI</th>
-                <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">TERAPIS</th>
-                <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">TANGGAL & JAM</th>
-                <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">STATUS</th>
-                <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">AKSI</th>
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${activeTab}|${search}|${filterDate}`}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden"
+        >
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+                  <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">NO</th>
+                  <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">INFO ANAK</th>
+                  <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">JENIS TERAPI</th>
+                  <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">TERAPIS</th>
+                  <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">TANGGAL & JAM</th>
+                  <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider">STATUS</th>
+                  <th className="py-4 px-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">AKSI</th>
+                </tr>
+              </thead>
+              <tbody>
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-16 text-center text-gray-400">
@@ -258,17 +284,14 @@ export default function TerapiOrangtuaPage() {
                   filtered.map((item, index) => {
                     const sc = STATUS_CONFIG[item.status];
                     return (
-                      <motion.tr
+                      <tr
                         key={item.id}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
                         className="border-b border-gray-50 last:border-0 hover:bg-[#F4F9F8]/50 transition-colors group"
                       >
                         <td className="py-4 px-5 text-sm font-bold text-gray-400">{index + 1}</td>
                         <td className="py-4 px-5">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-amber-50 border-2 border-amber-100 flex items-center justify-center text-xl shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-xl shrink-0">
                               {item.avatarEmoji}
                             </div>
                             <div>
@@ -305,34 +328,31 @@ export default function TerapiOrangtuaPage() {
                             Lihat Detail
                           </button>
                         </td>
-                      </motion.tr>
+                      </tr>
                     );
                   })
                 )}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
 
-        {/* Mobile Card View */}
-        <div className="md:hidden p-4 space-y-3">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400 gap-3">
-              <CalendarCheck className="w-10 h-10 text-gray-200" />
-              <p className="text-sm font-medium">Tidak ada jadwal {activeTab.toLowerCase()}</p>
-            </div>
-          ) : (
-            filtered.map((item) => {
-              const sc = STATUS_CONFIG[item.status];
-              return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="border border-teal-50 rounded-2xl p-4 bg-[#F4F9F8]/30"
-                >
+          {/* Mobile Card View */}
+          <div className="md:hidden p-4 space-y-3">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400 gap-3">
+                <CalendarCheck className="w-10 h-10 text-gray-200" />
+                <p className="text-sm font-medium">Tidak ada jadwal {activeTab.toLowerCase()}</p>
+              </div>
+            ) : (
+              filtered.map((item) => {
+                const sc = STATUS_CONFIG[item.status];
+                return (
+                  <div
+                    key={item.id}
+                    className="border border-teal-50 rounded-2xl p-4 bg-[#F4F9F8]/30"
+                  >
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-50 border-2 border-amber-100 flex items-center justify-center text-xl shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-xl shrink-0">
                       {item.avatarEmoji}
                     </div>
                     <div className="flex-1">
@@ -368,12 +388,13 @@ export default function TerapiOrangtuaPage() {
                     <ChevronRight size={13} strokeWidth={2.5} />
                     Lihat Detail
                   </button>
-                </motion.div>
+                </div>
               );
             })
           )}
-        </div>
-      </div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
 
     </ResponsiveOrangtuaLayout>
   );

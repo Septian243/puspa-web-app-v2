@@ -11,7 +11,7 @@ import {
   Tooltip as ReTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Search, Calendar, Clock, Activity, User, Baby, Eye, Brain, ChevronRight, AlertTriangle } from "lucide-react";
+import { Search, Calendar, Clock, Activity, User, Baby, Eye, Brain, ChevronRight, AlertTriangle, Smile } from "lucide-react";
 import { motion } from "framer-motion";
 
 // Import Layout
@@ -43,6 +43,7 @@ export default function DashboardOrtuPage() {
     total_children: { count: 0 },
     total_observations: { count: 0 },
     total_assessments: { count: 0 },
+    total_terapi: { count: 0 },
   });
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
   const [activeTab, setActiveTab] = useState<"Semua" | "Observasi" | "Assessment">("Semua");
@@ -56,7 +57,7 @@ export default function DashboardOrtuPage() {
     { name: "Total Anak", value: stats.total_children.count || 0 },
     { name: "Total Observasi", value: stats.total_observations.count || 0 },
     { name: "Total Assessment", value: stats.total_assessments.count || 0 },
-    { name: "Akhir", value: stats.total_assessments.count || 0 }, 
+    { name: "Total Terapi", value: stats.total_terapi.count || 1 }, 
   ], [stats]);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function DashboardOrtuPage() {
           total_children: ST.total_children ?? { count: 0 },
           total_observations: ST.total_observations ?? { count: 0 },
           total_assessments: ST.total_assessments ?? { count: 0 },
+          total_terapi: ST.total_terapi ?? { count: 1 },
         });
 
         const SC = (await getOrtuUpcomingSchedules("all"))?.data ?? [];
@@ -136,7 +138,7 @@ export default function DashboardOrtuPage() {
         </motion.div>
 
         {/* METRIC CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard 
             title="Total Anak / Pasien" 
             count={stats.total_children.count} 
@@ -156,6 +158,13 @@ export default function DashboardOrtuPage() {
             count={stats.total_assessments.count} 
             icon={Brain} 
             colorClass="bg-amber-50 text-amber-600" 
+            shadowClass="group-hover:shadow-amber-500/10"
+          />
+          <MetricCard 
+            title="Terapi" 
+            count={stats.total_terapi.count || 1} 
+            icon={Smile} 
+            colorClass="bg-amber-100 text-amber-700" 
             shadowClass="group-hover:shadow-amber-500/10"
           />
         </div>

@@ -47,6 +47,21 @@ function SectionCard({ tag, children }: { tag: string; children: React.ReactNode
   );
 }
 
+function SoapCard({ tag, content }: { tag: string; content: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-50">
+        <span className="inline-block px-3 py-1 bg-[#EAF4F2] text-[#1E5C58] text-[10px] font-extrabold uppercase tracking-widest rounded-full">
+          {tag}
+        </span>
+      </div>
+      <div className="px-5 py-4">
+        <p className="text-sm font-semibold text-gray-700">{content}</p>
+      </div>
+    </div>
+  );
+}
+
 function DetailContent() {
   const router = useRouter();
   const params = useSearchParams();
@@ -70,7 +85,7 @@ function DetailContent() {
   const sc = STATUS_CONFIG[status] ?? STATUS_CONFIG["Terjadwal"];
 
   return (
-    <ResponsiveOrangtuaLayout maxWidth="max-w-4xl">
+    <ResponsiveOrangtuaLayout maxWidth="max-w-full">
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: -12 }}
@@ -154,6 +169,72 @@ function DetailContent() {
             </div>
           </SectionCard>
         </motion.div>
+
+        {/* Perubahan Jadwal (Only for Reschedule) */}
+        {status === "Reschedule" && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.2 }}
+          >
+            <SectionCard tag="Perubahan Jadwal">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                <InfoField
+                  label="Jadwal Sebelumnya"
+                  value="25/09/2026 pukul 15.07 - 16.00"
+                />
+                <InfoField
+                  label="Jadwal Baru"
+                  value={`${tanggal} pukul ${jamMulai} - ${jamSelesai}`}
+                />
+                <InfoField
+                  label="Alasan"
+                  value="Demam tinggi, sudah izin dari orang tua"
+                />
+              </div>
+            </SectionCard>
+          </motion.div>
+        )}
+
+        {/* Selesai: Ringkasan Hasil & SOAP */}
+        {status === "Selesai" && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.2 }}
+            className="space-y-6 pt-2"
+          >
+            <SectionCard tag="Ringkasan Hasil Terapi">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                <InfoField
+                  label="Diagnosis Terapi"
+                  value="Keterlambatan bicara dan fokus"
+                />
+                <InfoField
+                  label="Tindakan Terapi Terakhir"
+                  value="Terapi bermain terstruktur dan latihan atensi"
+                />
+                <InfoField
+                  label="Jumlah Sesi Tercatat"
+                  value="3 sesi"
+                />
+              </div>
+            </SectionCard>
+
+            <div>
+              <h3 className="text-lg font-bold text-[#1E5C58] mb-4 mt-2 px-1 tracking-tight">SOAP</h3>
+              <div className="space-y-3">
+                <SoapCard tag="S (SUBJEKTIF)" content="Ibu menyampaikan anak sulit mengikuti instruksi dua langkah." />
+                <SoapCard tag="O (OBJEKTIF)" content="Mengikuti instruksi satu langkah dengan pengingat." />
+                <SoapCard tag="A (ASSESSMENT)" content="Atensi masih pendek, sekitar 5 menit." />
+                <SoapCard tag="P (PLAN)" content="Latihan atensi bertahap dengan permainan puzzle." />
+                <SoapCard tag="I (IMPLEMENTASI)" content="Puzzle 4 keping dan permainan menyusun balok." />
+                <SoapCard tag="A (ASSESSMENT LANJUTAN)" content="Anak antusias dengan permainan visual." />
+                <SoapCard tag="P (PLAN LANJUTAN)" content="Naikkan tingkat kesulitan puzzle." />
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
     </ResponsiveOrangtuaLayout>
   );
