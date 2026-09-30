@@ -25,6 +25,7 @@ interface PresensiData {
     reschedule?: {
         tanggal: string;
         waktu: string;
+        terapisName?: string;
     };
 }
 
@@ -1051,6 +1052,7 @@ export default function PresensiPage() {
     );
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedDate, setSelectedDate] = useState("");
+    const [selectedDateTo, setSelectedDateTo] = useState("");
     const [rescheduleDateFrom, setRescheduleDateFrom] = useState("");
     const [rescheduleDateTo, setRescheduleDateTo] = useState("");
     const [rescheduleStatus, setRescheduleStatus] = useState<"Semua" | RescheduleData["status"]>("Semua");
@@ -1073,10 +1075,9 @@ export default function PresensiPage() {
         setPresensiPage(1);
         setPresensiReschedulePage(1);
         setReschedulePage(1);
-    }, [searchTerm, selectedDate, pageSize, rescheduleDateFrom, rescheduleDateTo, rescheduleStatus]);
+    }, [searchTerm, selectedDate, selectedDateTo, pageSize, rescheduleDateFrom, rescheduleDateTo, rescheduleStatus]);
 
     const query = searchTerm.trim().toLowerCase();
-    const dateLabel = selectedDate ? formatTanggalDisplay(selectedDate) : "";
     const todayLabel = formatTanggalDisplay(new Date().toISOString().slice(0, 10));
     const matchesPresensiFilter = (item: PresensiData) => {
         const matchesQuery = !query || [
@@ -1086,7 +1087,12 @@ export default function PresensiPage() {
             item.tipeTermi,
             item.status,
         ].some((value) => value.toLowerCase().includes(query));
-        const matchesDate = !dateLabel || item.tanggal === dateLabel;
+        const itemDate = formatTanggalInput(item.tanggal);
+        const matchesDate = !selectedDate
+            ? true
+            : selectedDateTo
+                ? itemDate >= selectedDate && itemDate <= selectedDateTo
+                : itemDate === selectedDate;
         return matchesQuery && matchesDate;
     };
     const filteredPresensi = sortPresensiData(presensiData.filter(matchesPresensiFilter));
@@ -1099,7 +1105,16 @@ export default function PresensiPage() {
                 item.tipeTermi,
                 item.status,
             ].some((value) => value.toLowerCase().includes(query));
-            const matchesRescheduleDate = item.reschedule?.tanggal === (dateLabel || todayLabel);
+            const rescheduleDate = item.reschedule?.tanggal
+                ? formatTanggalInput(item.reschedule.tanggal)
+                : "";
+            const matchesRescheduleDate = selectedDate || selectedDateTo
+                ? Boolean(rescheduleDate) && (
+                    selectedDateTo
+                        ? rescheduleDate >= selectedDate && rescheduleDate <= selectedDateTo
+                        : rescheduleDate === selectedDate
+                )
+                : item.reschedule?.tanggal === todayLabel;
             return Boolean(item.reschedule) && matchesQuery && matchesRescheduleDate;
         }),
     );
@@ -1107,8 +1122,11 @@ export default function PresensiPage() {
         const matchesQuery = !query || [item.pasienName, item.waliName, item.terapis, item.alasan]
             .some((value) => value.toLowerCase().includes(query));
         const tanggalSemula = tanggalRescheduleToIso(item.jadwalSemulaTanggal);
-        const matchesDate = (!rescheduleDateFrom || tanggalSemula >= rescheduleDateFrom) &&
-            (!rescheduleDateTo || tanggalSemula <= rescheduleDateTo);
+        const matchesDate = !rescheduleDateFrom
+            ? true
+            : rescheduleDateTo
+                ? tanggalSemula >= rescheduleDateFrom && tanggalSemula <= rescheduleDateTo
+                : tanggalSemula === rescheduleDateFrom;
         const matchesStatus = rescheduleStatus === "Semua" || item.status === rescheduleStatus;
         return matchesQuery && matchesDate && matchesStatus;
     });
@@ -1150,6 +1168,7 @@ export default function PresensiPage() {
             status: item.status === "Belum Presensi" ? undefined : item.status,
             keterangan: item.keterangan === "-" ? "" : item.keterangan,
             reschedule: Boolean(item.reschedule),
+            terapisBaru: item.reschedule?.terapisName,
             tanggalBaru: item.reschedule
                 ? formatTanggalInput(item.reschedule.tanggal)
                 : undefined,
@@ -1285,6 +1304,7 @@ export default function PresensiPage() {
                                     payload.jamMulaiBaru,
                                     payload.jamSelesaiBaru,
                                 ),
+                                terapisName: payload.terapisBaru,
                             }
                             : undefined,
                 };
@@ -1352,13 +1372,33 @@ export default function PresensiPage() {
                         {activeTab === "Presensi" && (
                             <>
                                 {/* Toolbar */}
-                                <div className="flex flex-col justify-between gap-4 sm:flex-row">
-                                    <input
-                                        type="date"
-                                        value={selectedDate}
-                                        onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="w-full sm:w-auto px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
-                                    />
+                                <div className="flex flex-col gap-4 p-4 bg-white border border-teal-50 rounded-2xl sm:flex-row sm:items-end">
+                                    <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <label className="text-xs font-bold text-gray-500">
+                                            Tanggal
+                                            <input
+                                                type="date"
+                                                value={selectedDate}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    setSelectedDate(value);
+                                                    if (!value) setSelectedDateTo("");
+                                                }}
+                                                className="w-full px-4 py-2.5 mt-1.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
+                                            />
+                                        </label>
+                                        <label className="text-xs font-bold text-gray-500">
+                                            Sampai dengan
+                                            <input
+                                                type="date"
+                                                value={selectedDateTo}
+                                                min={selectedDate || undefined}
+                                                disabled={!selectedDate}
+                                                onChange={(e) => setSelectedDateTo(e.target.value)}
+                                                className="w-full px-4 py-2.5 mt-1.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 disabled:opacity-70"
+                                            />
+                                        </label>
+                                    </div>
                                     <div className="relative w-full sm:w-72">
                                         <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
                                             <Search className="w-4 h-4 text-gray-400" />
@@ -1435,6 +1475,11 @@ export default function PresensiPage() {
                                                         />
                                                     </tr>
                                                 ))}
+                                                {visiblePresensi.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={7} className="px-6 py-10 text-sm text-center text-gray-400">Tidak ada data presensi.</td>
+                                                    </tr>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
@@ -1515,6 +1560,11 @@ export default function PresensiPage() {
                                                         />
                                                     </tr>
                                                 ))}
+                                                {visiblePresensiReschedule.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={7} className="px-6 py-10 text-sm text-center text-gray-400">Tidak ada data hasil reschedule hari ini.</td>
+                                                    </tr>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
@@ -1546,7 +1596,11 @@ export default function PresensiPage() {
                                             <input
                                                 type="date"
                                                 value={rescheduleDateFrom}
-                                                onChange={(e) => setRescheduleDateFrom(e.target.value)}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    setRescheduleDateFrom(value);
+                                                    if (!value) setRescheduleDateTo("");
+                                                }}
                                                 className="w-full px-4 py-2.5 mt-1.5 text-sm font-medium text-gray-700 transition-all bg-white border border-teal-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer"
                                             />
                                         </label>
@@ -1556,8 +1610,9 @@ export default function PresensiPage() {
                                                 type="date"
                                                 value={rescheduleDateTo}
                                                 min={rescheduleDateFrom || undefined}
+                                                disabled={!rescheduleDateFrom}
                                                 onChange={(e) => setRescheduleDateTo(e.target.value)}
-                                                className="w-full px-4 py-2.5 mt-1.5 text-sm font-medium text-gray-700 transition-all bg-white border border-teal-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer"
+                                                className="w-full px-4 py-2.5 mt-1.5 text-sm font-medium text-gray-700 transition-all bg-white border border-teal-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 disabled:opacity-70"
                                             />
                                         </label>
                                     </div>
@@ -1650,6 +1705,11 @@ export default function PresensiPage() {
                                                         </td>
                                                     </tr>
                                                 ))}
+                                                {visibleReschedule.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={5} className="px-6 py-10 text-sm text-center text-gray-400">Tidak ada data reschedule.</td>
+                                                    </tr>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
