@@ -17,6 +17,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getSchedules, deleteSchedule } from "@/lib/api/jadwal_terapi";
 
 // =======================
 // Types
@@ -1261,6 +1262,57 @@ export default function JadwalTerapiPage() {
   }, [activeTab, filterStatus, search, filterDate]);
 
   const [data, setData] = useState<JadwalTerapi[]>(DUMMY_DATA);
+  const [loading, setLoading] = useState(false);
+  const [apiMeta, setApiMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+
+  useEffect(() => {
+    async function loadApiData() {
+      setLoading(true);
+      const tabToType: Record<string, string> = {
+        "PLB (Paedagog)": "paedagog",
+        "Terapi Okupasi": "okupasi",
+        "Terapi Wicara": "wicara",
+        "Fisioterapi": "fisio",
+      };
+      const statusMap: Record<string, string> = {
+        "Aktif": "aktif",
+        "Non Aktif": "non_aktif",
+        "Selesai": "selesai",
+      };
+
+      const filters: any = {
+        page: currentPage,
+        per_page: ITEMS_PER_PAGE,
+        therapy_type: tabToType[activeTab],
+      };
+      if (filterStatus !== "Semua") filters.status = statusMap[filterStatus];
+      if (search) filters.search = search;
+
+      const res = await getSchedules(filters);
+      if (res.items && res.items.length > 0) {
+        const mapped = res.items.map((item: any, idx: number) => ({
+          id: item.id || idx + 1,
+          namaAnak: item.child_name || "-",
+          namaWali: item.guardian_name || "-",
+          hari: item.day_name || "Senin",
+          jamMulai: item.start_time || "15.00",
+          jamSelesai: item.end_time || "16.00",
+          terapis: item.therapist_name || "-",
+          status: (item.status === "aktif" ? "Aktif" : item.status === "selesai" ? "Selesai" : "Non Aktif") as StatusPasien,
+          terapiType: activeTab,
+          periodeAwal: item.period_start || "2026-10-01",
+          periodeAkhir: item.period_end || "2026-11-01",
+        }));
+        setData(mapped);
+      }
+      if (res.meta) {
+        setApiMeta(res.meta);
+      }
+      setLoading(false);
+    }
+
+    loadApiData();
+  }, [activeTab, filterStatus, search, currentPage]);
 
   // Modal states
   const [showTambah, setShowTambah] = useState(false);
@@ -1611,14 +1663,14 @@ export default function JadwalTerapiPage() {
                   {/* Footer info */}
                   <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between flex-wrap gap-4">
                     <p className="text-xs text-gray-400 font-medium">
-                      Menampilkan <span className="font-bold text-[#2B7A75]">{paginatedData.length}</span> dari <span className="font-bold text-[#2B7A75]">{filtered.length}</span> rekam jadwal{" "}
+                      Menampilkan <span className="font-bold text-[#2B7A75]">{data.length}</span> dari <span className="font-bold text-[#2B7A75]">{apiMeta.total || filtered.length}</span> rekam jadwal{" "}
                       <span className="font-semibold text-gray-600">{activeTab}</span>
                       {filterStatus !== "Semua" && (
                         <> &mdash; Status: <span className="font-bold text-gray-600">{filterStatus}</span></>
                       )}
                     </p>
 
-                    {totalPages > 1 && (
+                    {(apiMeta.last_page > 1 || totalPages > 1) && (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -1628,7 +1680,7 @@ export default function JadwalTerapiPage() {
                           Prev
                         </button>
                         <div className="flex items-center gap-1">
-                          {Array.from({ length: totalPages }).map((_, i) => (
+                          {Array.from({ length: apiMeta.last_page || totalPages }).map((_, i) => (
                             <button
                               key={i}
                               onClick={() => setCurrentPage(i + 1)}
@@ -1643,8 +1695,8 @@ export default function JadwalTerapiPage() {
                           ))}
                         </div>
                         <button
-                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                          disabled={currentPage === totalPages}
+                          onClick={() => setCurrentPage((p) => Math.min(apiMeta.last_page || totalPages, p + 1))}
+                          disabled={currentPage === (apiMeta.last_page || totalPages)}
                           className="cursor-pointer px-3 py-1.5 text-xs font-bold text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           Next
