@@ -17,7 +17,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getSchedules, deleteSchedule } from "@/lib/api/jadwal_terapi";
+import { getSchedules, deleteSchedule, getTherapists } from "@/lib/api/jadwal_terapi";
 
 // =======================
 // Types
@@ -43,138 +43,7 @@ interface JadwalTerapi {
 // =======================
 // Dummy data (frontend only)
 // =======================
-const DUMMY_DATA: JadwalTerapi[] = [
-  {
-    id: 1,
-    namaAnak: "Rayhan",
-    namaWali: "Devi Ema",
-    hari: "Senin",
-    jamMulai: "15.41",
-    jamSelesai: "15.42",
-    terapis: "Alief Arifun",
-    status: "Aktif",
-    terapiType: "PLB (Paedagog)",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 2,
-    namaAnak: "Shofiya",
-    namaWali: "Fiyafiya",
-    hari: "Selasa",
-    jamMulai: "15.27",
-    jamSelesai: "15.32",
-    terapis: "Alief Arifun",
-    status: "Selesai",
-    terapiType: "PLB (Paedagog)",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 3,
-    namaAnak: "Lutfy",
-    namaWali: "Zaini",
-    hari: "Selasa",
-    jamMulai: "16.51",
-    jamSelesai: "17.04",
-    terapis: "Alief Arifun",
-    status: "Non Aktif",
-    terapiType: "PLB (Paedagog)",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 4,
-    namaAnak: "Zamzam",
-    namaWali: "Annisan Nur Qoriah",
-    hari: "Rabu",
-    jamMulai: "11.36",
-    jamSelesai: "13.33",
-    terapis: "Nindya Zahri",
-    status: "Aktif",
-    terapiType: "PLB (Paedagog)",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 5,
-    namaAnak: "Aisyah",
-    namaWali: "Budi Santoso",
-    hari: "Senin",
-    jamMulai: "08.00",
-    jamSelesai: "09.00",
-    terapis: "Nindya Zahri",
-    status: "Aktif",
-    terapiType: "Terapi Okupasi",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 6,
-    namaAnak: "Fajar",
-    namaWali: "Siti Rahma",
-    hari: "Kamis",
-    jamMulai: "10.00",
-    jamSelesai: "11.00",
-    terapis: "Dewi Lestari",
-    status: "Non Aktif",
-    terapiType: "Terapi Okupasi",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 7,
-    namaAnak: "Nabila",
-    namaWali: "Ahmad Fauzi",
-    hari: "Jumat",
-    jamMulai: "13.00",
-    jamSelesai: "14.00",
-    terapis: "Dewi Lestari",
-    status: "Selesai",
-    terapiType: "Terapi Wicara",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 8,
-    namaAnak: "Ridho",
-    namaWali: "Nur Hidayah",
-    hari: "Rabu",
-    jamMulai: "09.30",
-    jamSelesai: "10.30",
-    terapis: "Rina Wulandari",
-    status: "Aktif",
-    terapiType: "Terapi Wicara",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 9,
-    namaAnak: "Zahra",
-    namaWali: "Hasan Basri",
-    hari: "Senin",
-    jamMulai: "14.00",
-    jamSelesai: "15.00",
-    terapis: "Rina Wulandari",
-    status: "Aktif",
-    terapiType: "Fisioterapi",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-  {
-    id: 10,
-    namaAnak: "Kevin",
-    namaWali: "Tri Wahyuni",
-    hari: "Kamis",
-    jamMulai: "11.00",
-    jamSelesai: "12.00",
-    terapis: "Budi Setiawan",
-    status: "Non Aktif",
-    terapiType: "Fisioterapi",
-    periodeAwal: "2025-01-01",
-    periodeAkhir: "2025-06-01",
-  },
-];
+const DUMMY_DATA: JadwalTerapi[] = [];
 
 const TERAPI_TABS: TerapiType[] = [
   "PLB (Paedagog)",
@@ -184,6 +53,14 @@ const TERAPI_TABS: TerapiType[] = [
 ];
 
 const HARI_ORDER = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+
+function mapTerapiNameToSection(name: string): string {
+  if (name.includes("Paedagog") || name.includes("PLB")) return "paedagog";
+  if (name.includes("Okupasi")) return "okupasi";
+  if (name.includes("Wicara")) return "wicara";
+  if (name.includes("Fisio")) return "fisio";
+  return "";
+}
 
 function StatusBadge({ status }: { status: StatusPasien }) {
   const colorMap: Record<StatusPasien, string> = {
@@ -241,7 +118,26 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
   const [periodeAkhir, setPeriodeAkhir] = useState("");
   const [showAnakDropdown, setShowAnakDropdown] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [therapistsBySection, setTherapistsBySection] = useState<Record<string, { id: string; name: string }[]>>({});
+
+  useEffect(() => {
+    if (open) {
+      getTherapists().then((res) => {
+        if (Array.isArray(res)) {
+          const map: Record<string, { id: string; name: string }[]> = {};
+          res.forEach((t: { therapist_id?: string; id?: string; therapist_name?: string; name?: string; therapist_section?: string }) => {
+            const sec = t.therapist_section || "";
+            if (!map[sec]) map[sec] = [];
+            map[sec].push({
+              id: t.therapist_id || t.id || "",
+              name: t.therapist_name || t.name || "",
+            });
+          });
+          setTherapistsBySection(map);
+        }
+      });
+    }
+  }, [open]);
 
   // Checklist: set of selected therapy names
   const [selectedTerapi, setSelectedTerapi] = useState<string[]>([]);
@@ -525,9 +421,11 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
                                       className={getSelectCls(hasSubmitted && !row.terapis) + " pr-7"}
                                     >
                                       <option value="">Pilih...</option>
-                                      <option>Alief Arifun</option>
-                                      <option>Siti Nurhaliza</option>
-                                      <option>Ahmad Fauzi</option>
+                                      {(therapistsBySection[mapTerapiNameToSection(terapiName)] || []).map((t) => (
+                                        <option key={t.id || t.name} value={t.name}>
+                                          {t.name}
+                                        </option>
+                                      ))}
                                     </select>
                                     <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                                   </div>
@@ -728,7 +626,9 @@ function DetailModal({
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-400 mb-2">Periode</p>
-                  <p className="text-sm font-extrabold text-gray-800">01 Jan 2025 – 01 Jun 2025</p>
+                  <p className="text-sm font-extrabold text-gray-800">
+                    {item.periodeAwal && item.periodeAkhir ? `${item.periodeAwal} – ${item.periodeAkhir}` : "Periode Aktif"}
+                  </p>
                 </div>
               </div>
 
@@ -833,6 +733,26 @@ function EditModal({
   const [noRekam, setNoRekam] = useState("RM-000123");
   const [periodeAwal, setPeriodeAwal] = useState("2025-01-01");
   const [periodeAkhir, setPeriodeAkhir] = useState("2025-06-01");
+  const [therapistsBySection, setTherapistsBySection] = useState<Record<string, { id: string; name: string }[]>>({});
+
+  useEffect(() => {
+    if (open) {
+      getTherapists().then((res) => {
+        if (Array.isArray(res)) {
+          const map: Record<string, { id: string; name: string }[]> = {};
+          res.forEach((t: { therapist_id?: string; id?: string; therapist_name?: string; name?: string; therapist_section?: string }) => {
+            const sec = t.therapist_section || "";
+            if (!map[sec]) map[sec] = [];
+            map[sec].push({
+              id: t.therapist_id || t.id || "",
+              name: t.therapist_name || t.name || "",
+            });
+          });
+          setTherapistsBySection(map);
+        }
+      });
+    }
+  }, [open]);
 
   const [selectedTerapi, setSelectedTerapi] = useState<string[]>([]);
   const [scheduleMap, setScheduleMap] = useState<Record<string, JadwalRow[]>>({});
@@ -1062,9 +982,11 @@ function EditModal({
                                       className={selectCls + " pr-7"}
                                     >
                                       <option value="">Pilih...</option>
-                                      <option>Alief Arifun</option>
-                                      <option>Siti Nurhaliza</option>
-                                      <option>Ahmad Fauzi</option>
+                                      {(therapistsBySection[mapTerapiNameToSection(terapiName)] || []).map((t) => (
+                                        <option key={t.id || t.name} value={t.name}>
+                                          {t.name}
+                                        </option>
+                                      ))}
                                     </select>
                                     <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                                   </div>

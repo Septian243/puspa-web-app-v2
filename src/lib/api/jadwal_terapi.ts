@@ -147,6 +147,8 @@ export async function updateSchedule(
   }
 }
 
+
+
 export async function deleteSchedule(id: string) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -163,3 +165,23 @@ export async function deleteSchedule(id: string) {
     throw error;
   }
 }
+
+export async function getTherapists(section?: string) {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+    const res = await api.get("/therapists", {
+      params: section ? { section } : {},
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return res.data?.data || [];
+  } catch (error) {
+    console.error("ERROR getTherapists:", error);
+    return [];
+  }
+}
+
+
