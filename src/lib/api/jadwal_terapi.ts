@@ -184,4 +184,21 @@ export async function getTherapists(section?: string) {
   }
 }
 
+export async function getChildren() {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+    const res = await api.get("/children", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return res.data?.data || [];
+  } catch (error) {
+    console.error("ERROR getChildren:", error);
+    return [];
+  }
+}
+
 

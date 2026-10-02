@@ -17,7 +17,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getSchedules, deleteSchedule, getTherapists } from "@/lib/api/jadwal_terapi";
+import { getSchedules, deleteSchedule, getTherapists, createSchedule, getChildren, updateSchedule } from "@/lib/api/jadwal_terapi";
+import { showSuccessToast, handleApiError } from "@/lib/toast.tsx";
 
 // =======================
 // Types
@@ -38,6 +39,7 @@ interface JadwalTerapi {
   terapiType: TerapiType;
   periodeAwal: string;
   periodeAkhir: string;
+  totalMeetings: number;
 }
 
 // =======================
@@ -118,10 +120,18 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
   const [periodeAkhir, setPeriodeAkhir] = useState("");
   const [showAnakDropdown, setShowAnakDropdown] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [childrenList, setChildrenList] = useState<{ id: string; name: string; rm: string }[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState("");
   const [therapistsBySection, setTherapistsBySection] = useState<Record<string, { id: string; name: string }[]>>({});
 
   useEffect(() => {
     if (open) {
+      getChildren().then((res) => {
+        if (Array.isArray(res)) {
+          setChildrenList(res.map((c: any) => ({ id: c.child_id, name: c.child_name, rm: c.child_id })));
+        }
+      });
       getTherapists().then((res) => {
         if (Array.isArray(res)) {
           const map: Record<string, { id: string; name: string }[]> = {};
@@ -204,49 +214,78 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
     setPeriodeAkhir(d.toISOString().split("T")[0]);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setHasSubmitted(true);
     setWarningMessage("");
 
-    if (!noRekam || !namaAnak || !periodeAwal || !periodeAkhir || selectedTerapi.length === 0) {
+    if (!namaAnak || !periodeAwal || !periodeAkhir || selectedTerapi.length === 0) {
       setWarningMessage("Silakan lengkapi semua data utama!");
       return;
     }
 
-    for (const terapi of selectedTerapi) {
-      const rows = scheduleMap[terapi] || [];
-      if (rows.length === 0) {
-        setWarningMessage(`Silakan tambahkan jadwal untuk terapi ${terapi}!`);
-        return;
-      }
-      for (const r of rows) {
-        if (!r.terapis || !r.hari || !r.jamMulai || !r.jamSelesai || !r.pertemuan) {
-          setWarningMessage(`Silakan lengkapi semua kolom jadwal (Terapis, Hari, Jam, Pertemuan) untuk terapi ${terapi}!`);
-          return;
-        }
-      }
+    const matchedChild = childrenList.find(
+      (c) => c.name.toLowerCase() === namaAnak.toLowerCase() || c.id === selectedChildId
+    );
+    const targetChildId = matchedChild?.id || selectedChildId || childrenList[0]?.id;
+
+    if (!targetChildId) {
+      setWarningMessage("Anak tidak ditemukan dalam sistem. Silakan pilih anak dari daftar!");
+      return;
     }
 
-    const firstTerapi = selectedTerapi[0];
-    const firstRow = scheduleMap[firstTerapi]?.[0];
-    if (firstRow) {
-      onSubmit({
-        namaAnak,
-        namaWali: "",
-        hari: firstRow.hari,
-        jamMulai: firstRow.jamMulai,
-        jamSelesai: firstRow.jamSelesai,
-        terapis: firstRow.terapis,
-        status: "Aktif",
-        periodeAwal: periodeAwal || "2025-01-01",
-        periodeAkhir: periodeAkhir || "2025-06-01",
-      });
+    const dayNumMap: Record<string, number> = {
+      Senin: 1,
+      Selasa: 2,
+      Rabu: 3,
+      Kamis: 4,
+      Jumat: 5,
+      Sabtu: 6,
+      Minggu: 7,
+    };
+
+    try {
+      for (const terapiName of selectedTerapi) {
+        const sectionKey = mapTerapiNameToSection(terapiName);
+        const rows = scheduleMap[terapiName] || [];
+        const sectionTherapists = therapistsBySection[sectionKey] || [];
+
+        for (const r of rows) {
+          if (!r.terapis || !r.hari || !r.jamMulai || !r.jamSelesai || !r.pertemuan) {
+            setWarningMessage(`Silakan lengkapi semua kolom jadwal untuk terapi ${terapiName}!`);
+            return;
+          }
+
+          const matchedTherapist = sectionTherapists.find((t) => t.name === r.terapis);
+          if (!matchedTherapist) {
+            setWarningMessage(`Terapis ${r.terapis} tidak ditemukan untuk bidang ${terapiName}!`);
+            return;
+          }
+
+          await createSchedule({
+            child_id: targetChildId,
+            therapist_id: matchedTherapist.id,
+            therapy_type: sectionKey,
+            day_of_week: dayNumMap[r.hari] || 1,
+            start_time: r.jamMulai,
+            end_time: r.jamSelesai,
+            total_meetings: Number(r.pertemuan),
+            period_start: periodeAwal,
+            period_end: periodeAkhir,
+            status: "aktif",
+          });
+        }
+      }
+
+      setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
+      setSelectedTerapi([]); setScheduleMap({}); setSelectedChildId("");
+      showSuccessToast("Jadwal terapi berhasil ditambahkan!");
+      onSubmit({ namaAnak, namaWali: "", hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir });
+      onClose();
+    } catch (err: any) {
+      console.error("CREATE SCHEDULE ERROR:", err);
+      handleApiError(err, "Gagal menambahkan jadwal. Pastikan data terapis dan tanggal valid.");
     }
-    // reset
-    setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
-    setSelectedTerapi([]); setScheduleMap({});
-    onClose();
   };
 
   const handleClose = () => {
@@ -665,7 +704,7 @@ function DetailModal({
                   <div className="col-span-1">
                     <p className="text-[11px] font-bold text-gray-500 mb-2">Pertemuan</p>
                     <div className="w-full px-4 py-3 bg-white border border-[#1E5C58]/30 rounded-xl text-sm font-bold text-gray-800">
-                      12
+                      {item.totalMeetings || 12}
                     </div>
                   </div>
                 </div>
@@ -704,7 +743,7 @@ function DetailModal({
               <div className="bg-[#1E5C58] rounded-3xl p-6 flex items-center justify-between shadow-xl shadow-[#1E5C58]/10">
                 <p className="text-sm font-semibold text-white/90">Total Pertemuan Keseluruhan</p>
                 <p className="text-2xl font-extrabold text-white">
-                  12 <span className="text-sm font-medium text-white/80">kali pertemuan</span>
+                  {item.totalMeetings || 12} <span className="text-sm font-medium text-white/80">kali pertemuan</span>
                 </p>
               </div>
             </div>
@@ -765,7 +804,7 @@ function EditModal({
       setSelectedTerapi([item.terapiType]);
       setScheduleMap({
         [item.terapiType]: [
-          { terapis: item.terapis, hari: item.hari, jamMulai: item.jamMulai, jamSelesai: item.jamSelesai, pertemuan: 12 },
+          { terapis: item.terapis, hari: item.hari, jamMulai: item.jamMulai, jamSelesai: item.jamSelesai, pertemuan: item.totalMeetings || 12 },
         ],
       });
     } else {
@@ -825,11 +864,48 @@ function EditModal({
     setForm((prev) => prev ? { ...prev, [e.target.name]: e.target.value } : prev);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form) {
-      const firstTerapi = selectedTerapi[0];
-      const firstRow = scheduleMap[firstTerapi]?.[0];
+    if (!form || !item) return;
+
+    const dayNumMap: Record<string, number> = {
+      Senin: 1,
+      Selasa: 2,
+      Rabu: 3,
+      Kamis: 4,
+      Jumat: 5,
+      Sabtu: 6,
+      Minggu: 7,
+    };
+    const statusMap: Record<string, string> = {
+      Aktif: "aktif",
+      "Non Aktif": "non_aktif",
+      Selesai: "selesai",
+    };
+
+    const firstTerapi = selectedTerapi[0] || item.terapiType;
+    const sectionKey = mapTerapiNameToSection(firstTerapi);
+    const firstRow = scheduleMap[firstTerapi]?.[0];
+
+    const sectionTherapists = therapistsBySection[sectionKey] || [];
+    const matchedTherapist = firstRow?.terapis ? sectionTherapists.find((t) => t.name === firstRow.terapis) : null;
+
+    try {
+      const payload: any = {
+        therapy_type: sectionKey,
+        status: statusMap[form.status] || "aktif",
+      };
+
+      if (matchedTherapist) payload.therapist_id = matchedTherapist.id;
+      if (firstRow?.hari) payload.day_of_week = dayNumMap[firstRow.hari] || 1;
+      if (firstRow?.jamMulai) payload.start_time = firstRow.jamMulai;
+      if (firstRow?.jamSelesai) payload.end_time = firstRow.jamSelesai;
+      if (firstRow?.pertemuan) payload.total_meetings = Number(firstRow.pertemuan);
+      if (periodeAwal) payload.period_start = periodeAwal;
+      if (periodeAkhir) payload.period_end = periodeAkhir;
+
+      await updateSchedule(String(item.id), payload);
+
       if (firstRow) {
         onSubmit({
           ...form,
@@ -842,8 +918,12 @@ function EditModal({
           periodeAkhir: periodeAkhir,
         });
       }
+      showSuccessToast("Jadwal terapi berhasil diperbarui!");
+      onClose();
+    } catch (err: any) {
+      console.error("UPDATE SCHEDULE ERROR:", err);
+      handleApiError(err, "Gagal memperbarui jadwal terapi.");
     }
-    onClose();
   };
 
   const inputCls = "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] focus:border-teal-300 text-gray-700 placeholder-gray-300 transition-colors";
@@ -1186,6 +1266,7 @@ export default function JadwalTerapiPage() {
   const [data, setData] = useState<JadwalTerapi[]>(DUMMY_DATA);
   const [loading, setLoading] = useState(false);
   const [apiMeta, setApiMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     async function loadApiData() {
@@ -1209,9 +1290,14 @@ export default function JadwalTerapiPage() {
       };
       if (filterStatus !== "Semua") filters.status = statusMap[filterStatus];
       if (search) filters.search = search;
+      if (filterDate) {
+        const d = new Date(filterDate);
+        const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+        filters.day_of_week = dayOfWeek;
+      }
 
       const res = await getSchedules(filters);
-      if (res.items && res.items.length > 0) {
+      if (res.items) {
         const mapped = res.items.map((item: any, idx: number) => ({
           id: item.id || idx + 1,
           namaAnak: item.child_name || "-",
@@ -1224,8 +1310,11 @@ export default function JadwalTerapiPage() {
           terapiType: activeTab,
           periodeAwal: item.period_start || "2026-10-01",
           periodeAkhir: item.period_end || "2026-11-01",
+          totalMeetings: Number(item.total_meetings) || 12,
         }));
         setData(mapped);
+      } else {
+        setData([]);
       }
       if (res.meta) {
         setApiMeta(res.meta);
@@ -1234,7 +1323,7 @@ export default function JadwalTerapiPage() {
     }
 
     loadApiData();
-  }, [activeTab, filterStatus, search, currentPage]);
+  }, [activeTab, filterStatus, search, filterDate, currentPage, refreshKey]);
 
   // Modal states
   const [showTambah, setShowTambah] = useState(false);
@@ -1248,50 +1337,28 @@ export default function JadwalTerapiPage() {
     { label: "Selesai", value: "Selesai" },
   ];
 
-  const filtered = data.filter((item) => {
-    const matchTerapi = item.terapiType === activeTab;
-    const matchStatus = filterStatus === "Semua" || item.status === filterStatus;
-    const q = search.toLowerCase();
-    const matchSearch =
-      item.namaAnak.toLowerCase().includes(q) ||
-      item.namaWali.toLowerCase().includes(q);
-      
-    let matchDate = true;
-    if (filterDate) {
-      const d = new Date(filterDate);
-      const hariMap = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-      const hariFromDate = hariMap[d.getDay()];
-      
-      const pAwal = new Date(item.periodeAwal || "2025-01-01");
-      const pAkhir = new Date(item.periodeAkhir || "2025-06-01");
-      
-      const isWithinPeriode = d >= pAwal && d <= pAkhir;
-      matchDate = item.hari === hariFromDate && isWithinPeriode;
-    }
+  const totalPages = apiMeta.last_page || 1;
+  const paginatedData = data;
 
-    return matchTerapi && matchStatus && matchSearch && matchDate;
-  });
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginatedData = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const handleTambah = (form: Omit<JadwalTerapi, "id" | "terapiType">) => {
-    const newItem: JadwalTerapi = {
-      ...form,
-      id: Date.now(),
-      terapiType: activeTab,
-    };
-    setData((prev) => [...prev, newItem]);
+  const handleTambah = () => {
+    setRefreshKey((prev) => prev + 1);
   };
 
-  const handleEdit = (updated: JadwalTerapi) => {
-    setData((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+  const handleEdit = () => {
+    setRefreshKey((prev) => prev + 1);
   };
 
-  const handleHapus = () => {
+  const handleHapus = async () => {
     if (!hapusItem) return;
-    setData((prev) => prev.filter((item) => item.id !== hapusItem.id));
-    setHapusItem(null);
+    try {
+      await deleteSchedule(String(hapusItem.id));
+      setHapusItem(null);
+      showSuccessToast("Jadwal terapi berhasil dihapus!");
+      setRefreshKey((prev) => prev + 1);
+    } catch (err: any) {
+      console.error("DELETE SCHEDULE ERROR:", err);
+      handleApiError(err, "Gagal menghapus jadwal terapi.");
+    }
   };
 
   return (
@@ -1320,8 +1387,6 @@ export default function JadwalTerapiPage() {
                     id={`tab-${tab.replace(/\s+/g, "-").toLowerCase()}`}
                     onClick={() => {
                       setActiveTab(tab);
-                      setFilterStatus("Semua");
-                      setSearch("");
                     }}
                     className={`cursor-pointer px-4 py-2.5 text-sm font-semibold rounded-xl text-center transition-all duration-300 ${
                       isActive
@@ -1337,14 +1402,29 @@ export default function JadwalTerapiPage() {
 
             {/* ROW 2: Date (kiri) | Search + Tambah Jadwal (kanan) */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              {/* Kiri: Date picker */}
-              <div className="relative">
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="cursor-pointer px-4 py-2.5 border border-teal-100 rounded-2xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-[0_2px_8px_rgba(30,92,88,0.02)] hover:border-teal-200 transition-colors"
-                />
+              {/* Kiri: Date picker + Reset Filter */}
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="cursor-pointer px-4 py-2.5 border border-teal-100 rounded-2xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-[0_2px_8px_rgba(30,92,88,0.02)] hover:border-teal-200 transition-colors"
+                  />
+                </div>
+                {(filterDate || filterStatus !== "Semua" || search) && (
+                  <button
+                    onClick={() => {
+                      setFilterDate("");
+                      setFilterStatus("Semua");
+                      setSearch("");
+                      setCurrentPage(1);
+                    }}
+                    className="cursor-pointer px-3 py-2.5 text-xs font-bold text-teal-800 bg-teal-50/80 hover:bg-teal-100/80 border border-teal-200/60 rounded-xl transition-colors"
+                  >
+                    Reset Filter
+                  </button>
+                )}
               </div>
 
               {/* Kanan: Search + Tambah Jadwal */}
@@ -1407,7 +1487,7 @@ export default function JadwalTerapiPage() {
                 transition={{ duration: 0.2 }}
                 className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden"
               >
-              {filtered.length === 0 ? (
+              {paginatedData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-20 text-center">
                   <div className="w-20 h-20 bg-teal-50 rounded-full flex items-center justify-center mb-4">
                     <CalendarCheck className="w-10 h-10 text-[#2B7A75] opacity-40" />
@@ -1585,7 +1665,7 @@ export default function JadwalTerapiPage() {
                   {/* Footer info */}
                   <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between flex-wrap gap-4">
                     <p className="text-xs text-gray-400 font-medium">
-                      Menampilkan <span className="font-bold text-[#2B7A75]">{data.length}</span> dari <span className="font-bold text-[#2B7A75]">{apiMeta.total || filtered.length}</span> rekam jadwal{" "}
+                      Menampilkan <span className="font-bold text-[#2B7A75]">{paginatedData.length}</span> dari <span className="font-bold text-[#2B7A75]">{apiMeta.total || paginatedData.length}</span> rekam jadwal{" "}
                       <span className="font-semibold text-gray-600">{activeTab}</span>
                       {filterStatus !== "Semua" && (
                         <> &mdash; Status: <span className="font-bold text-gray-600">{filterStatus}</span></>
