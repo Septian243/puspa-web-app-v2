@@ -222,11 +222,9 @@ export default function UnduhHasilPage() {
   }
 
   const activeChips = [];
-  
-  // Menambahkan Terapis & Jenis Terapi ke dalam list chips.
-  // Meskipun ada tombol hapus (x), kita beri empty function supaya visualnya tetap ada tanpa melanggar aturan privasi
-  activeChips.push({ key: "terapis", label: therapistName, onRemove: () => {} });
-  activeChips.push({ key: "section", label: therapistSection, onRemove: () => {} });
+
+  activeChips.push({ key: "terapis", label: therapistName, onRemove: () => { } });
+  activeChips.push({ key: "section", label: therapistSection, onRemove: () => { } });
 
   if (selectedAnak) activeChips.push({ key: "anak", label: selectedAnak, onRemove: () => setSelectedAnak("") });
 
@@ -316,8 +314,8 @@ export default function UnduhHasilPage() {
                       type="button"
                       onClick={() => setPeriode(opt)}
                       className={`cursor-pointer flex-1 whitespace-nowrap px-4 py-2 rounded-lg text-sm transition-all ${isActive
-                          ? "bg-[#1E5C58] text-white font-bold shadow-sm"
-                          : "text-gray-400 font-semibold hover:text-[#2B7A75]"
+                        ? "bg-[#1E5C58] text-white font-bold shadow-sm"
+                        : "text-gray-400 font-semibold hover:text-[#2B7A75]"
                         }`}
                     >
                       {opt}
@@ -371,7 +369,7 @@ export default function UnduhHasilPage() {
             {activeChips.map((chip) => (
               <FilterChip key={chip.key} label={chip.label} onRemove={chip.onRemove} />
             ))}
-            
+
             {activeChips.length === 0 && (
               <span className="text-sm font-medium text-gray-400">Belum ada filter</span>
             )}

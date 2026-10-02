@@ -175,7 +175,6 @@ const initialDummyPresensiReschedule: PresensiData[] = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-// Fungsi untuk memisahkan jam dari format "Pukul 15.41 - 15.42"
 function parseWaktu(waktuStr: string) {
     const match = waktuStr.match(/(\d{2}\.\d{2})/);
     return match ? match[1] : "99.99";
@@ -1143,7 +1142,7 @@ export default function PresensiPage() {
         (reschedulePage - 1) * pageSize,
         reschedulePage * pageSize,
     );
-    const rescheduleStatusOptions: ("Semua" | RescheduleData["status"])[] = ["Semua", "Hadir", "Sakit", "Izin", "Tidak Hadir"];
+    const rescheduleStatusOptions: ("Semua" | RescheduleData["status"])[] = ["Semua", "Sakit", "Izin", "Tidak Hadir"];
 
     const tabs = [
         { id: "Presensi", label: "Presensi", icon: CheckCircle2 },
