@@ -11,7 +11,7 @@ import {
   Tooltip as ReTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Search, Calendar, Clock, Activity, User, Baby, Eye, Brain, ChevronRight, AlertTriangle, Smile } from "lucide-react";
+import { Search, Calendar, Clock, Activity, User, Baby, Eye, Brain, ChevronRight, AlertTriangle, Smile, X, HeartPulse } from "lucide-react";
 import { motion } from "framer-motion";
 
 // Import Layout
@@ -26,11 +26,12 @@ import {
 /* ================= TYPES ================= */
 type ScheduleItem = {
   id: number | string;
-  jenis: "observation" | "assessment";
+  jenis: "observation" | "assessment" | "terapi";
   service_type?: string;
   nama_pasien: string;
   observer?: string;
   assessor?: string;
+  therapist?: string;
   status: string;
   tanggal: string;
   waktu: string;
@@ -46,18 +47,20 @@ export default function DashboardOrtuPage() {
     total_terapi: { count: 0 },
   });
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"Semua" | "Observasi" | "Assessment">("Semua");
+  const [activeTab, setActiveTab] = useState<"Semua" | "Observasi" | "Assessment" | "Terapi">("Semua");
   const [q, setQ] = useState("");
+  const [showTerapiModal, setShowTerapiModal] = useState(false);
+  const [terapiSearch, setTerapiSearch] = useState("");
 
   const guardianName = profile?.guardian_name || "Orang Tua";
 
   /* ================= MAPPING DATA UNTUK CHART ================= */
   const customChartData = useMemo(() => [
-    { name: "Awal", value: 0 }, 
+    { name: "Awal", value: 0 },
     { name: "Total Anak", value: stats.total_children.count || 0 },
     { name: "Total Observasi", value: stats.total_observations.count || 0 },
     { name: "Total Assessment", value: stats.total_assessments.count || 0 },
-    { name: "Total Terapi", value: stats.total_terapi.count || 1 }, 
+    { name: "Total Terapi", value: stats.total_terapi.count || 1 },
   ], [stats]);
 
   useEffect(() => {
@@ -73,14 +76,22 @@ export default function DashboardOrtuPage() {
 
         const SC = (await getOrtuUpcomingSchedules("all"))?.data ?? [];
         const mappedSchedule: ScheduleItem[] = SC.map((r: any) => {
-          const isAssessment = String(r.service_type).toLowerCase().includes("assessment");
+          const typeStr = String(r.service_type).toLowerCase();
+          const isAssessment = typeStr.includes("assessment");
+          const isTerapi = typeStr.includes("terapi");
+          
+          let jenis: "observation" | "assessment" | "terapi" = "observation";
+          if (isAssessment) jenis = "assessment";
+          else if (isTerapi) jenis = "terapi";
+
           return {
             id: r.id,
-            jenis: isAssessment ? "assessment" : "observation",
+            jenis,
             service_type: r.service_type,
             nama_pasien: r.child_name ?? "-",
-            observer: !isAssessment ? (r.therapist ?? "-") : undefined,
-            assessor: isAssessment ? (r.therapist ?? "-") : undefined,
+            observer: jenis === "observation" ? (r.therapist ?? "-") : undefined,
+            assessor: jenis === "assessment" ? (r.therapist ?? "-") : undefined,
+            therapist: jenis === "terapi" ? (r.therapist ?? "-") : undefined,
             status: r.status ?? "-",
             tanggal: r.date ?? "-",
             waktu: r.time ?? "-",
@@ -101,10 +112,22 @@ export default function DashboardOrtuPage() {
       .filter((s) => {
         if (activeTab === "Observasi") return s.jenis === "observation";
         if (activeTab === "Assessment") return s.jenis === "assessment";
+        if (activeTab === "Terapi") return s.jenis === "terapi";
         return true;
       })
       .filter((s) => s.nama_pasien.toLowerCase().includes(q.toLowerCase()));
   }, [schedule, q, activeTab]);
+
+  const terapiList = useMemo(() => {
+    const unique = new Map<string, ScheduleItem>();
+    schedule
+      .filter((s) => s.jenis === "terapi")
+      .filter((s) => s.nama_pasien.toLowerCase().includes(terapiSearch.toLowerCase()))
+      .forEach((s) => {
+        if (!unique.has(s.nama_pasien)) unique.set(s.nama_pasien, s);
+      });
+    return Array.from(unique.values());
+  }, [schedule, terapiSearch]);
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white space-y-4">
@@ -127,44 +150,160 @@ export default function DashboardOrtuPage() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2 pointer-events-none" />
           <div className="absolute bottom-0 left-10 w-40 h-40 bg-[#A2E4D3]/20 rounded-full blur-2xl transform translate-y-1/2 pointer-events-none" />
 
-          <div className="relative z-10">
-            <h1 className="text-3xl lg:text-4xl font-extrabold mb-2 tracking-tight">
-              Selamat Datang, {guardianName}!
-            </h1>
-            <p className="text-teal-50/90 text-sm lg:text-base max-w-xl leading-relaxed">
-              Pantau jadwal observasi, riwayat asesmen, dan data perkembangan anak Anda secara berkala.
-            </p>
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <h1 className="text-3xl lg:text-4xl font-extrabold mb-2 tracking-tight">
+                Selamat Datang, {guardianName}!
+              </h1>
+              <p className="text-teal-50/90 text-sm lg:text-base max-w-xl leading-relaxed">
+                Pantau jadwal observasi, riwayat asesmen, dan data perkembangan anak Anda secara berkala.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowTerapiModal(true)}
+              className="flex-shrink-0 flex items-center gap-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 text-white font-bold text-sm px-5 py-3 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 cursor-pointer"
+            >
+              <HeartPulse size={18} />
+              Terapi
+            </button>
           </div>
         </motion.div>
 
+        {/* MODAL TERAPI */}
+        {showTerapiModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowTerapiModal(false)}
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+            {/* Modal Panel */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative z-10 bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-teal-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-teal-50 flex items-center justify-center">
+                    <HeartPulse size={20} className="text-[#2B7A75]" />
+                  </div>
+                  <div>
+                    <h2 className="font-extrabold text-[#1E5C58] text-base">Daftar Anak Terapi</h2>
+                    <p className="text-xs text-gray-400 font-medium">Anak yang sedang menjalani sesi terapi</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowTerapiModal(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="px-6 py-4 border-b border-gray-50">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={terapiSearch}
+                    onChange={(e) => setTerapiSearch(e.target.value)}
+                    placeholder="Cari nama anak..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#F4F9F8] border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all text-gray-700"
+                  />
+                </div>
+              </div>
+
+              {/* List */}
+              <div className="overflow-y-auto flex-1 p-4 space-y-3">
+                {terapiList.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-400">
+                    <HeartPulse className="w-10 h-10 text-gray-200" />
+                    <p className="text-sm font-medium">
+                      {terapiSearch ? "Anak tidak ditemukan" : "Belum ada anak yang terdaftar terapi"}
+                    </p>
+                  </div>
+                ) : (
+                  terapiList.map((item, idx) => (
+                    <div
+                      key={`terapi-modal-${item.id}-${idx}`}
+                      className="flex items-center gap-4 p-4 rounded-2xl bg-[#F4F9F8]/60 border border-teal-50 hover:border-teal-200 hover:bg-teal-50/30 transition-all group"
+                    >
+                      {/* Avatar */}
+                      <div className="w-11 h-11 rounded-2xl bg-[#2B7A75]/10 flex items-center justify-center flex-shrink-0">
+                        <User size={20} className="text-[#2B7A75]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[#1E5C58] text-sm truncate group-hover:text-[#2B7A75] transition-colors">
+                          {item.nama_pasien}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[11px] text-gray-400 font-medium">{item.service_type || "Terapi"}</span>
+                          {item.therapist && (
+                            <>
+                              <span className="text-gray-300">·</span>
+                              <span className="text-[11px] text-[#2B7A75] font-semibold">{item.therapist}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                        <span className="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-green-100 text-green-700">
+                          {item.status}
+                        </span>
+                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium">
+                          <Calendar size={10} className="text-[#2B7A75]" />
+                          {item.tanggal}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-gray-50 bg-[#F4F9F8]/50">
+                <p className="text-xs text-gray-400 font-medium text-center">
+                  Total: <span className="font-bold text-[#2B7A75]">{terapiList.length}</span> anak terapi
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* METRIC CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard 
-            title="Total Anak / Pasien" 
-            count={stats.total_children.count} 
-            icon={Baby} 
-            colorClass="bg-teal-50 text-[#2B7A75]" 
+          <MetricCard
+            title="Total Anak / Pasien"
+            count={stats.total_children.count}
+            icon={Baby}
+            colorClass="bg-teal-50 text-[#2B7A75]"
             shadowClass="group-hover:shadow-teal-500/10"
           />
-          <MetricCard 
-            title="Total Observasi" 
-            count={stats.total_observations.count} 
-            icon={Eye} 
-            colorClass="bg-blue-50 text-blue-600" 
+          <MetricCard
+            title="Total Observasi"
+            count={stats.total_observations.count}
+            icon={Eye}
+            colorClass="bg-blue-50 text-blue-600"
             shadowClass="group-hover:shadow-blue-500/10"
           />
-          <MetricCard 
-            title="Total Assessment" 
-            count={stats.total_assessments.count} 
-            icon={Brain} 
-            colorClass="bg-amber-50 text-amber-600" 
+          <MetricCard
+            title="Total Assessment"
+            count={stats.total_assessments.count}
+            icon={Brain}
+            colorClass="bg-amber-50 text-amber-600"
             shadowClass="group-hover:shadow-amber-500/10"
           />
-          <MetricCard 
-            title="Terapi" 
-            count={stats.total_terapi.count || 1} 
-            icon={Smile} 
-            colorClass="bg-amber-100 text-amber-700" 
+          <MetricCard
+            title="Terapi"
+            count={stats.total_terapi.count || 1}
+            icon={Smile}
+            colorClass="bg-amber-100 text-amber-700"
             shadowClass="group-hover:shadow-amber-500/10"
           />
         </div>
@@ -180,7 +319,7 @@ export default function DashboardOrtuPage() {
 
           <div className="h-70 sm:h-80 md:h-87.5 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={customChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart data={customChartData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#2B7A75" stopOpacity={0.2} />
@@ -190,21 +329,21 @@ export default function DashboardOrtuPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E6F3F0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B', fontWeight: 500 }} dy={15} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94A3B8', fontWeight: 500 }} />
-                <ReTooltip 
-                  contentStyle={{ 
-                    borderRadius: '16px', 
-                    border: '1px solid #E6F3F0', 
+                <ReTooltip
+                  contentStyle={{
+                    borderRadius: '16px',
+                    border: '1px solid #E6F3F0',
                     boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)',
                     backgroundColor: '#ffffff'
-                  }} 
+                  }}
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#2B7A75" 
-                  strokeWidth={3} 
-                  fill="url(#colorValue)" 
-                  dot={{ r: 5, fill: '#ffffff', stroke: '#2B7A75', strokeWidth: 2 }} 
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#2B7A75"
+                  strokeWidth={3}
+                  fill="url(#colorValue)"
+                  dot={{ r: 5, fill: '#ffffff', stroke: '#2B7A75', strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -231,7 +370,7 @@ export default function DashboardOrtuPage() {
               </div>
 
               <div className="flex bg-[#F4F9F8] p-1 rounded-xl">
-                {["Semua", "Observasi", "Assessment"].map((t) => (
+                {["Semua", "Observasi", "Assessment", "Terapi"].map((t) => (
                   <button
                     key={t}
                     onClick={() => setActiveTab(t as any)}
@@ -273,7 +412,7 @@ export default function DashboardOrtuPage() {
                       <td className="py-4 px-6 font-bold text-gray-700 group-hover:text-[#2B7A75]">{r.nama_pasien}</td>
                       <td className="py-4 px-6 text-sm text-gray-600 font-semibold">{r.service_type || "-"}</td>
                       <td className="py-4 px-6 text-sm text-[#1E5C58] font-bold">
-                        {r.observer || r.assessor || "-"}
+                        {r.observer || r.assessor || r.therapist || "-"}
                       </td>
                       <td className="py-4 px-6">
                         <span className="inline-flex px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-green-150 text-green-700">{r.status}</span>
@@ -303,10 +442,10 @@ export default function DashboardOrtuPage() {
                     <span className="px-2.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-green-100 text-green-700">{r.status}</span>
                   </div>
                   <div className="text-xs text-gray-500 font-semibold">{r.service_type || "-"}</div>
-                  
+
                   <div className="flex items-center gap-2 text-[11px] text-[#2B7A75] font-bold py-1 bg-teal-50/50 rounded-lg px-2 w-fit">
                     <User size={12} />
-                    <span>{r.observer || r.assessor || "-"}</span>
+                    <span>{r.observer || r.assessor || r.therapist || "-"}</span>
                   </div>
 
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100/60">
