@@ -163,8 +163,8 @@ function ActionDropdown({
   openDropdownId: string | null;
   setOpenDropdownId: (id: string | null) => void;
   statusFilter: StatusFilter;
-  mySection: string;  // therapist_section dari profile
-  currentTab: string; // activeTab saat ini
+  mySection: string;
+  currentTab: string;
   onIsiSoap: (item: JadwalRow) => void;
   onDetail: (item: JadwalRow) => void;
   onLihatHasil: (item: JadwalRow) => void;
@@ -474,6 +474,70 @@ function MobileJadwalCard({
   );
 }
 
+// ── Pagination Footer ────────────────────────────────────────────────────────────
+function PaginationFooter({
+  totalItems,
+  currentPage,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  totalItems: number;
+  currentPage: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  // Calculate displayed range
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-col items-center justify-between gap-4 px-6 py-4 bg-white border-t border-gray-100 sm:flex-row rounded-b-2xl">
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <span>Tampilkan</span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          className="px-2 py-1 text-gray-700 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 cursor-pointer"
+        >
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span>data</span>
+      </div>
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+        <span className="text-sm text-gray-500">
+          Menampilkan <span className="font-bold text-[#1E5C58]">{startItem}</span> - <span className="font-bold text-[#1E5C58]">{endItem}</span> dari <span className="font-bold text-[#1E5C58]">{totalItems}</span> data
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+            className="px-3 py-1.5 text-xs font-semibold text-gray-400 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
+            disabled={currentPage <= 1}
+          >
+            Prev
+          </button>
+          <button className="px-3 py-1.5 text-xs font-bold text-white bg-[#2B7A75] border border-[#2B7A75] rounded-lg">
+            {currentPage} / {totalPages}
+          </button>
+          <button
+            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+            className="px-3 py-1.5 text-xs font-semibold text-gray-400 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
+            disabled={currentPage >= totalPages}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Konten Utama ──────────────────────────────────────────────────────────────
 function JadwalContent() {
   const router = useRouter();
@@ -529,8 +593,10 @@ function JadwalContent() {
   const [dateFilter, setDateFilter] = useState("");
   const [searchName, setSearchName] = useState("");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Pagination states
   const [page, setPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   const getType = () => {
     switch (activeTab) {
@@ -635,10 +701,9 @@ function JadwalContent() {
     );
   }, [jadwalData, activeTab]);
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = useMemo(
-    () => filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE),
-    [filtered, page]
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize]
   );
 
   const handleIsiSoap = (item: JadwalRow) => {
@@ -1182,34 +1247,16 @@ function JadwalContent() {
                 )}
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-3 px-6 py-4 border-t border-gray-100">
-                  <button
-                    disabled={page === 1}
-                    onClick={() => setPage(page - 1)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${page === 1
-                      ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
-                      : "bg-white border-teal-100 hover:bg-teal-50/20 text-[#1E5C58] cursor-pointer"
-                      }`}
-                  >
-                    Sebelumnya
-                  </button>
-                  <span className="text-xs font-bold text-gray-500">
-                    Halaman {page} / {totalPages}
-                  </span>
-                  <button
-                    disabled={page === totalPages}
-                    onClick={() => setPage(page + 1)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${page === totalPages
-                      ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
-                      : "bg-white border-teal-100 hover:bg-teal-50/20 text-[#1E5C58] cursor-pointer"
-                      }`}
-                  >
-                    Selanjutnya
-                  </button>
-                </div>
-              )}
+              <PaginationFooter
+                totalItems={filtered.length}
+                currentPage={page}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+              />
             </motion.div>
           </AnimatePresence>
         </div>
