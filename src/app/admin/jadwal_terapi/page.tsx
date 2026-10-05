@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSchedules, deleteSchedule, getTherapists, createSchedule, getChildren, updateSchedule } from "@/lib/api/jadwal_terapi";
-import { showSuccessToast, handleApiError } from "@/lib/toast.tsx";
+import { showSuccessToast, handleApiError } from "@/lib/toast";
 
 // =======================
 // Types
@@ -280,7 +280,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
       setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
       setSelectedTerapi([]); setScheduleMap({}); setSelectedChildId("");
       showSuccessToast("Jadwal terapi berhasil ditambahkan!");
-      onSubmit({ namaAnak, namaWali: "", hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir });
+      onSubmit({ namaAnak, namaWali: "", hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir, totalMeetings: 4 });
       onClose();
     } catch (err: any) {
       console.error("CREATE SCHEDULE ERROR:", err);

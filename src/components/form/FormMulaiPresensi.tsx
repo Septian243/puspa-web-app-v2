@@ -9,6 +9,7 @@ import {
     CalendarClock,
     ChevronDown,
 } from "lucide-react";
+import { getTherapists } from "@/lib/api/jadwal_terapi";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type StatusKehadiran = "Hadir" | "Tidak Hadir" | "Izin" | "Sakit";
@@ -19,6 +20,7 @@ export interface PresensiManualTarget {
     terapisName: string;
     tanggal: string; // "25/09/2026"
     waktu: string; // "Pukul 15.41 - 15.42" atau "15.41 - 15.42"
+    therapyType?: string;
 }
 
 export interface PresensiManualPayload {
@@ -27,6 +29,7 @@ export interface PresensiManualPayload {
     keterangan: string;
     reschedule: boolean;
     terapisBaru?: string;
+    terapisBaruId?: string;
     tanggalBaru?: string;
     jamMulaiBaru?: string;
     jamSelesaiBaru?: string;
@@ -69,11 +72,13 @@ function TerapisSelect({
     onChange,
     hasError,
     modalRef,
+    options = [],
 }: {
     value: string;
-    onChange: (value: string) => void;
+    onChange: (value: string, id?: string) => void;
     hasError: boolean;
     modalRef: { current: HTMLDivElement | null };
+    options?: { id: string; name: string }[];
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -82,8 +87,8 @@ function TerapisSelect({
     const inputRef = useRef<HTMLInputElement>(null);
     const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
 
-    const filteredOptions = terapisOptions.filter((option) =>
-        option.toLowerCase().includes(search.toLowerCase()),
+    const filteredOptions = options.filter((option) =>
+        option.name.toLowerCase().includes(search.toLowerCase()),
     );
 
     useEffect(() => {
@@ -129,8 +134,8 @@ function TerapisSelect({
         };
     }, [open, modalRef]);
 
-    const selectOption = (option: string) => {
-        onChange(option);
+    const selectOption = (option: { id: string; name: string }) => {
+        onChange(option.name, option.id);
         setSearch("");
         setOpen(false);
     };
@@ -195,14 +200,18 @@ function TerapisSelect({
                     <div className="p-1.5" role="listbox">
                         {filteredOptions.map((option, index) => (
                             <button
-                                key={option}
+                                key={option.id}
                                 type="button"
                                 role="option"
-                                aria-selected={value === option}
-                                onClick={() => selectOption(option)}
-                                className={`w-full rounded-lg px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${highlightedIndex === index ? "bg-teal-50" : "hover:bg-gray-50"} ${value === option ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
+                                aria-selected={value === option.name}
+                                onClick={() => {
+                                    onChange(option.name, option.id);
+                                    setSearch("");
+                                    setOpen(false);
+                                }}
+                                className={`w-full rounded-lg px-3 py-2.5 text-left text-xs transition-colors cursor-pointer ${highlightedIndex === index ? "bg-teal-50" : "hover:bg-gray-50"} ${value === option.name ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
                             >
-                                {option}
+                                {option.name}
                             </button>
                         ))}
                         {filteredOptions.length === 0 && (
@@ -227,6 +236,7 @@ export default function FormCatatKehadiran({
     onSaveAction,
     initialValues,
     mode = "create",
+    therapistsList = [],
 }: {
     open: boolean;
     onCloseAction: () => void;
@@ -234,16 +244,39 @@ export default function FormCatatKehadiran({
     onSaveAction: (payload: PresensiManualPayload) => void;
     initialValues?: PresensiManualInitialValues;
     mode?: "create" | "edit";
+    therapistsList?: { id: string; name: string }[];
 }) {
     const [status, setStatus] = useState<StatusKehadiran | null>(null);
     const [keterangan, setKeterangan] = useState("");
     const [reschedule, setReschedule] = useState(false);
     const [terapisBaru, setTerapisBaru] = useState("");
+    const [terapisBaruId, setTerapisBaruId] = useState("");
     const [tanggalBaru, setTanggalBaru] = useState("");
     const [jamMulaiBaru, setJamMulaiBaru] = useState("");
     const [jamSelesaiBaru, setJamSelesaiBaru] = useState("");
     const [errors, setErrors] = useState<FormErrors>({});
+    const [sectionTherapists, setSectionTherapists] = useState<{ id: string; name: string }[]>([]);
     const modalRef = useRef<HTMLDivElement>(null);
+
+    // Fetch therapists filtered by patient therapy type when modal opens
+    useEffect(() => {
+        if (open && target?.therapyType) {
+            getTherapists(target.therapyType).then((res) => {
+                if (Array.isArray(res) && res.length > 0) {
+                    setSectionTherapists(
+                        res.map((t: any) => ({
+                            id: t.id,
+                            name: t.therapist_name,
+                        }))
+                    );
+                } else {
+                    setSectionTherapists(therapistsList);
+                }
+            });
+        } else {
+            setSectionTherapists(therapistsList);
+        }
+    }, [open, target?.therapyType, therapistsList]);
 
     // Reset form setiap kali modal dibuka untuk target baru
     useEffect(() => {
@@ -321,7 +354,7 @@ export default function FormCatatKehadiran({
             keterangan: keterangan.trim(),
             reschedule,
             ...(reschedule
-                ? { terapisBaru, tanggalBaru, jamMulaiBaru, jamSelesaiBaru }
+                ? { terapisBaru, terapisBaruId, tanggalBaru, jamMulaiBaru, jamSelesaiBaru }
                 : {}),
         });
     };
@@ -475,8 +508,9 @@ export default function FormCatatKehadiran({
                                                             </label>
                                                             <TerapisSelect
                                                                 value={terapisBaru}
-                                                                onChange={(value) => {
-                                                                    setTerapisBaru(value);
+                                                                onChange={(name, id) => {
+                                                                    setTerapisBaru(name);
+                                                                    setTerapisBaruId(id || "");
                                                                     setErrors((prev) => ({
                                                                         ...prev,
                                                                         terapisBaru: undefined,
@@ -484,6 +518,7 @@ export default function FormCatatKehadiran({
                                                                 }}
                                                                 hasError={Boolean(errors.terapisBaru)}
                                                                 modalRef={modalRef}
+                                                                options={sectionTherapists.length > 0 ? sectionTherapists : therapistsList}
                                                             />
                                                             {errors.terapisBaru && (
                                                                 <p className="text-[10px] text-red-500 font-medium">
