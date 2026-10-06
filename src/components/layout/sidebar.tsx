@@ -23,7 +23,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarCheck,
-  ClipboardCheck
+  ClipboardCheck,
+  Wallet
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
 
@@ -64,7 +65,8 @@ export const baseMenu: MenuGroup[] = [
           { name: "Terapi", href: "/admin/jadwal_terapi", icon: CalendarCheck },
         ],
       },
-      { name: "Presensi", href: "/admin/presensi", icon: ClipboardCheck }
+      { name: "Presensi", href: "/admin/presensi", icon: ClipboardCheck },
+      { name: "Keuangan", href: "/admin/keuangan", icon: Wallet },
     ],
   },
   {

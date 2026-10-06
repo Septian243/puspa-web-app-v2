@@ -225,22 +225,33 @@ export default function TerapiOrangtuaPage() {
         </div>
 
         {/* Row 2: SATU pill — container layout-animated, chips fade in/out di dalam */}
-        <div className="flex justify-end">
-          <motion.div
-            layout
-            transition={{ type: "spring", stiffness: 420, damping: 40, mass: 0.5 }}
-            className="flex items-center px-2 py-2 bg-white border border-teal-100 rounded-2xl shadow-sm overflow-hidden"
-          >
+        <div className="flex justify-end h-11">
+          <div className="flex items-center px-2 bg-white border border-teal-100 rounded-2xl shadow-sm overflow-hidden h-full">
             {/* Chips — fade in/out, container expand/contract via layout */}
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence>
               {activeTab === "Terjadwal" && (
                 <motion.div
-                  key="chips"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18, ease: "easeInOut" }}
-                  className="flex items-center gap-0.5 shrink-0"
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  variants={{
+                    hidden: {
+                      opacity: 0,
+                      width: 0,
+                      transition: { duration: 0.3, ease: "easeInOut" }
+                    },
+                    visible: {
+                      opacity: 1,
+                      width: "auto",
+                      transition: { duration: 0.3, ease: "easeInOut" }
+                    },
+                    exit: {
+                      opacity: 0,
+                      width: 0,
+                      transition: { duration: 0.4, ease: "easeInOut" }
+                    }
+                  }}
+                  className="flex items-center justify-end gap-0.5 shrink-0 overflow-hidden"
                 >
                   {QUICK_FILTERS.map((qf) => {
                     const isActive = quickFilter === qf.value;
@@ -251,7 +262,7 @@ export default function TerapiOrangtuaPage() {
                           setQuickFilter(isActive ? null : qf.value);
                           setFilterDate("");
                         }}
-                        className={`cursor-pointer whitespace-nowrap px-4 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+                        className={`cursor-pointer whitespace-nowrap px-4 py-1.5 rounded-xl text-xs font-bold transition-colors duration-200 ${
                           isActive
                             ? "bg-[#1E5C58] text-white shadow-sm"
                             : "text-gray-500 hover:text-[#2B7A75] hover:bg-teal-50/70"
@@ -268,7 +279,7 @@ export default function TerapiOrangtuaPage() {
             </AnimatePresence>
 
             {/* Kalender — selalu ada di kanan, tidak bergerak relatif terhadap tepi kanan pill */}
-            <div className="flex items-center gap-1.5 shrink-0 px-1">
+            <div className="flex items-center gap-1.5 shrink-0 px-1 relative z-10 bg-white">
               <CalendarDays className="w-4 h-4 text-teal-400" />
               <input
                 type="date"
@@ -280,7 +291,7 @@ export default function TerapiOrangtuaPage() {
                 className="bg-transparent text-sm text-gray-500 focus:outline-none cursor-pointer w-[120px]"
               />
             </div>
-          </motion.div>
+          </div>
         </div>
 
 
@@ -346,12 +357,12 @@ export default function TerapiOrangtuaPage() {
       </div>
 
       {/* =========== TABLE CARD =========== */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
-          key={`${activeTab}|${search}|${filterDate}|${quickFilter}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
+          key={activeTab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden"
         >
