@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
 import toast from "react-hot-toast";
 
@@ -7,16 +8,16 @@ import toast from "react-hot-toast";
  */
 export function handleApiError(error: any, defaultMessage = "Terjadi kesalahan") {
   let mainMessage = defaultMessage;
-  let validationErrors: string[] = [];
+  const validationErrors: string[] = [];
 
   if (error?.response?.data) {
     const data = error.response.data;
-    
+
     // Gunakan pesan error dari API jika ada
     if (data.message) {
       mainMessage = data.message;
     }
-    
+
     // Jika ada nested errors (errors: { field: [msg1, msg2] })
     if (data.errors && typeof data.errors === "object") {
       Object.keys(data.errors).forEach((key) => {
@@ -36,9 +37,8 @@ export function handleApiError(error: any, defaultMessage = "Terjadi kesalahan")
   toast.custom(
     (t) => (
       <div
-        className={`${
-          t.visible ? "toast-slide-in" : "toast-slide-out"
-        } max-w-sm w-full bg-white border border-red-100 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] pointer-events-auto flex items-center justify-between p-3.5 relative`}
+        className={`${t.visible ? "toast-slide-in" : "toast-slide-out"
+          } max-w-sm w-full bg-white border border-red-100 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] pointer-events-auto flex items-center justify-between p-3.5 relative`}
       >
         {/* Left icon & text */}
         <div className="flex gap-2.5 items-center flex-1 pr-4">
@@ -59,7 +59,7 @@ export function handleApiError(error: any, defaultMessage = "Terjadi kesalahan")
           </div>
 
           <div className="flex flex-col text-left">
-            <span className="text-xs font-bold text-gray-800 leading-snug">{mainMessage}</span>
+            <span className="text-xs font-bold leading-snug text-gray-800">{mainMessage}</span>
             {validationErrors.length > 0 && (
               <ul className="list-disc pl-3 text-[10px] text-rose-700/80 space-y-0.5 mt-1 font-medium">
                 {validationErrors.map((err, idx) => (
@@ -73,7 +73,7 @@ export function handleApiError(error: any, defaultMessage = "Terjadi kesalahan")
         {/* Close Button */}
         <button
           onClick={() => toast.dismiss(t.id)}
-          className="text-gray-400 hover:text-gray-600 hover:bg-gray-50 p-1 rounded-lg transition-colors cursor-pointer shrink-0 focus:outline-none"
+          className="p-1 text-gray-400 transition-colors rounded-lg cursor-pointer hover:text-gray-600 hover:bg-gray-50 shrink-0 focus:outline-none"
         >
           <svg
             className="w-3.5 h-3.5 stroke-[2.5]"
@@ -107,9 +107,8 @@ export function showSuccessToast(message: string) {
   toast.custom(
     (t) => (
       <div
-        className={`${
-          t.visible ? "toast-slide-in" : "toast-slide-out"
-        } max-w-sm w-full bg-white border border-emerald-100 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] pointer-events-auto flex items-center justify-between p-3.5 relative`}
+        className={`${t.visible ? "toast-slide-in" : "toast-slide-out"
+          } max-w-sm w-full bg-white border border-emerald-100 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] pointer-events-auto flex items-center justify-between p-3.5 relative`}
       >
         {/* Left icon & text */}
         <div className="flex gap-2.5 items-center flex-1 pr-4">
@@ -130,14 +129,14 @@ export function showSuccessToast(message: string) {
           </div>
 
           <div className="flex flex-col text-left">
-            <span className="text-xs font-bold text-gray-800 leading-snug">{message}</span>
+            <span className="text-xs font-bold leading-snug text-gray-800">{message}</span>
           </div>
         </div>
 
         {/* Close Button */}
         <button
           onClick={() => toast.dismiss(t.id)}
-          className="text-gray-400 hover:text-gray-600 hover:bg-gray-50 p-1 rounded-lg transition-colors cursor-pointer shrink-0 focus:outline-none"
+          className="p-1 text-gray-400 transition-colors rounded-lg cursor-pointer hover:text-gray-600 hover:bg-gray-50 shrink-0 focus:outline-none"
         >
           <svg
             className="w-3.5 h-3.5 stroke-[2.5]"

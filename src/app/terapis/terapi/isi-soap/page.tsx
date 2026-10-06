@@ -1,9 +1,38 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useState, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { User, Users, Calendar, ArrowLeft } from "lucide-react";
+import { showSuccessToast } from "@/lib/api-error";
+
+interface JadwalDetail {
+  id: string;
+  namaPasien: string;
+  namaOrangTua: string;
+  telepon: string;
+  tipeTerapi: string;
+  terapis: string;
+  tanggal: string;
+  waktu: string;
+  status: string;
+  nomorRM?: string;
+  usia?: string;
+  jenisKelamin?: string;
+  tempatTglLahir?: string;
+  asalSekolah?: string;
+  alamat?: string;
+  hubunganWali?: string;
+}
+
+const formatTanggal = (yyyyMmDd: string) => {
+  if (!yyyyMmDd) return "";
+  const parts = yyyyMmDd.split("-");
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+  }
+  return yyyyMmDd;
+};
 
 export default function IsiSoapPage() {
   return (
@@ -23,23 +52,38 @@ export default function IsiSoapPage() {
 }
 
 function IsiSoapContent() {
+  const router = useRouter();
   const params = useSearchParams();
+  const jadwalId = params.get("jadwal_id") || params.get("id");
 
-  // Data dari query params
-  const namaPasien = params.get("namaPasien") ?? "—";
-  const namaOrangTua = params.get("namaOrangTua") ?? "—";
-  const telepon = params.get("telepon") ?? "—";
-  const tipeTerapi = params.get("tipeTerapi") ?? "—";
-  const terapis = params.get("terapis") ?? "—";
-  const tanggalTerapi = params.get("tanggalTerapi") ?? "—";
-  const waktu = params.get("waktu") ?? "—";
-  const hubunganWali = params.get("hubunganWali") ?? "—";
-  const nomorRM = params.get("nomorRM") ?? "—";
-  const usia = params.get("usia") ?? "—";
-  const jenisKelamin = params.get("jenisKelamin") ?? "—";
-  const tempatTglLahir = params.get("tempatTglLahir") ?? "—";
-  const asalSekolah = params.get("asalSekolah") ?? "—";
-  const alamat = params.get("alamat") ?? "—";
+  // Ambil detail jadwal berdasarkan ID (dari sessionStorage sebelum tersambung ke API).
+  // TODO: Saat endpoint API backend sudah tersedia, ganti baris ini dengan query/fetch API.
+  const jadwal = useMemo<JadwalDetail | null>(() => {
+    if (typeof window === "undefined" || !jadwalId) return null;
+    try {
+      const stored = sessionStorage.getItem(`terapi_selected_${jadwalId}`);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.warn("Gagal membaca jadwal dari sessionStorage:", e);
+    }
+    return null;
+  }, [jadwalId]);
+
+  // Data pasien (didapat dari jadwal by ID, atau fallback ke params jika ada)
+  const namaPasien = jadwal?.namaPasien ?? params.get("namaPasien") ?? "—";
+  const namaOrangTua = jadwal?.namaOrangTua ?? params.get("namaOrangTua") ?? "—";
+  const telepon = jadwal?.telepon ?? params.get("telepon") ?? "—";
+  const tipeTerapi = jadwal?.tipeTerapi ?? params.get("tipeTerapi") ?? "—";
+  const terapis = jadwal?.terapis ?? params.get("terapis") ?? "—";
+  const tanggalTerapi = (jadwal?.tanggal ? formatTanggal(jadwal.tanggal) : null) ?? params.get("tanggalTerapi") ?? "—";
+  const waktu = jadwal?.waktu ?? params.get("waktu") ?? "—";
+  const hubunganWali = jadwal?.hubunganWali ?? params.get("hubunganWali") ?? "—";
+  const nomorRM = jadwal?.nomorRM ?? params.get("nomorRM") ?? "—";
+  const usia = jadwal?.usia ?? params.get("usia") ?? "—";
+  const jenisKelamin = jadwal?.jenisKelamin ?? params.get("jenisKelamin") ?? "—";
+  const tempatTglLahir = jadwal?.tempatTglLahir ?? params.get("tempatTglLahir") ?? "—";
+  const asalSekolah = jadwal?.asalSekolah ?? params.get("asalSekolah") ?? "—";
+  const alamat = jadwal?.alamat ?? params.get("alamat") ?? "—";
 
   // State form
   const [formData, setFormData] = useState({
@@ -63,9 +107,17 @@ function IsiSoapContent() {
 
   const handleSimpan = () => {
     console.log("Simpan SOAP:", formData);
-    // TODO: integrasi API simpan SOAP
-    alert("SOAP berhasil disimpan (dummy)!");
-    history.back();
+
+    const getTargetType = () => {
+      const lower = tipeTerapi.toLowerCase();
+      if (lower.includes("okupasi")) return "okupasi";
+      if (lower.includes("wicara")) return "wicara";
+      if (lower.includes("fisio")) return "fisio";
+      return "paedagog";
+    };
+
+    showSuccessToast("SOAP berhasil disimpan! ✅");
+    router.push(`/terapis/terapi?type=${getTargetType()}&status=completed`);
   };
 
   return (
@@ -318,7 +370,7 @@ function TextArea({
 }: {
   name: string;
   value: string;
-  onChange: any;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder: string;
 }) {
   return (

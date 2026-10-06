@@ -1,9 +1,37 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+
+interface JadwalDetail {
+  id: string;
+  namaPasien: string;
+  namaOrangTua: string;
+  telepon: string;
+  tipeTerapi: string;
+  terapis: string;
+  tanggal: string;
+  waktu: string;
+  status: string;
+  nomorRM?: string;
+  usia?: string;
+  jenisKelamin?: string;
+  tempatTglLahir?: string;
+  asalSekolah?: string;
+  alamat?: string;
+  hubunganWali?: string;
+}
+
+const formatTanggal = (yyyyMmDd: string) => {
+  if (!yyyyMmDd) return "";
+  const parts = yyyyMmDd.split("-");
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+  }
+  return yyyyMmDd;
+};
 
 export default function HasilTerapiPage() {
   return (
@@ -24,23 +52,37 @@ export default function HasilTerapiPage() {
 
 function HasilTerapiContent() {
   const params = useSearchParams();
+  const jadwalId = params.get("jadwal_id") || params.get("id");
 
-  // Data dikirim via query params
-  const namaPasien = params.get("namaPasien") ?? "—";
-  const namaOrangTua = params.get("namaOrangTua") ?? "—";
-  const tipeTerapi = params.get("tipeTerapi") ?? "—";
-  const terapis = params.get("terapis") ?? "—";
-  const tanggalTerapi = params.get("tanggalTerapi") ?? "—";
-  const waktu = params.get("waktu") ?? "—";
+  // Ambil detail jadwal berdasarkan ID (dari sessionStorage sebelum tersambung ke API).
+  // TODO: Saat endpoint API backend sudah tersedia, ganti baris ini dengan query/fetch API.
+  const jadwal = useMemo<JadwalDetail | null>(() => {
+    if (typeof window === "undefined" || !jadwalId) return null;
+    try {
+      const stored = sessionStorage.getItem(`terapi_selected_${jadwalId}`);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.warn("Gagal membaca jadwal dari sessionStorage:", e);
+    }
+    return null;
+  }, [jadwalId]);
 
-  // Data statis/dummy untuk field yang tidak ada di params
-  const usia = "7 Tahun 4 Bulan";
-  const alamat = "Surakarta";
-  const nomorRM = "RM-000118";
-  const jenisKelamin = "Perempuan";
-  const tempatTglLahir = "Surakarta, 03 Mei 2019";
-  const sekolah = "TK Tunas Bangsa";
-  const hubunganOrangTua = "Ayah";
+  // Data pasien dari jadwal by ID (atau fallback ke params jika ada)
+  const namaPasien = jadwal?.namaPasien ?? params.get("namaPasien") ?? "—";
+  const namaOrangTua = jadwal?.namaOrangTua ?? params.get("namaOrangTua") ?? "—";
+  const tipeTerapi = jadwal?.tipeTerapi ?? params.get("tipeTerapi") ?? "—";
+  const terapis = jadwal?.terapis ?? params.get("terapis") ?? "—";
+  const tanggalTerapi = (jadwal?.tanggal ? formatTanggal(jadwal.tanggal) : null) ?? params.get("tanggalTerapi") ?? "—";
+  const waktu = jadwal?.waktu ?? params.get("waktu") ?? "—";
+
+  // Data statis / field pasien
+  const usia = jadwal?.usia ?? "7 Tahun 4 Bulan";
+  const alamat = jadwal?.alamat ?? "Surakarta";
+  const nomorRM = jadwal?.nomorRM ?? "RM-000118";
+  const jenisKelamin = jadwal?.jenisKelamin ?? "Perempuan";
+  const tempatTglLahir = jadwal?.tempatTglLahir ?? "Surakarta, 03 Mei 2019";
+  const sekolah = jadwal?.asalSekolah ?? "TK Tunas Bangsa";
+  const hubunganOrangTua = jadwal?.hubunganWali ?? "Ayah";
 
   const diagnosis = "Sensory Integration Disorder";
   const jumlahSesi = "3 sesi";

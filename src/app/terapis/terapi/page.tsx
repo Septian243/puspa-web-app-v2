@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo, useRef } from "react";
@@ -12,7 +11,6 @@ import {
   FileText,
   Eye,
   Download,
-  ClipboardList,
   RefreshCw,
   CheckCircle2,
   CalendarCheck,
@@ -31,9 +29,7 @@ type TerapiTab =
   | "Terapi Wicara"
   | "Fisioterapi";
 
-type StatusFilter = "Terjadwal" | "Selesai" | "Reschedule" | "Tertunda";
-
-interface JadwalRow {
+export interface JadwalRow {
   id: string;
   namaPasien: string;
   namaOrangTua: string;
@@ -43,13 +39,18 @@ interface JadwalRow {
   tanggal: string; // YYYY-MM-DD
   waktu: string;   // "09.35 - 10.35"
   status: "Terjadwal" | "Selesai";
-  tanggal_lama?: string | null; // YYYY-MM-DD
+  tanggal_lama?: string | null;
   waktu_lama?: string | null;
   kategori_alasan?: "Sakit" | "Izin" | "Tidak Hadir" | null;
   alasan?: string | null;
+  nomorRM?: string;
+  usia?: string;
+  jenisKelamin?: string;
+  tempatTglLahir?: string;
+  asalSekolah?: string;
+  alamat?: string;
+  hubunganWali?: string;
 }
-
-type DateRangeFilter = "hari-ini" | "besok" | "minggu-ini" | "bulan-ini" | "custom";
 
 const getTodayDateStr = () => {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
@@ -61,31 +62,32 @@ const getTomorrowDateStr = () => {
   return d.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
 };
 
+const getYesterdayDateStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+};
+
 const getWeekRangeStr = () => {
   const d = new Date();
-  const day = d.getDay() || 7; // 1 (Mon) - 7 (Sun)
-
+  const day = d.getDay() || 7;
   const start = new Date(d);
   start.setDate(d.getDate() - day + 1);
-
   const end = new Date(d);
   end.setDate(d.getDate() - day + 7);
-
   return {
     start: start.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
-    end: end.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" })
+    end: end.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
   };
 };
 
 const getMonthRangeStr = () => {
   const d = new Date();
-
   const start = new Date(d.getFullYear(), d.getMonth(), 1);
   const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-
   return {
     start: start.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
-    end: end.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" })
+    end: end.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
   };
 };
 
@@ -95,6 +97,396 @@ const formatTanggal = (yyyyMmDd: string) => {
   return `${d}/${m}/${y}`;
 };
 
+// ── Dummy data sederhana ─────────────────────────────────────────────────────
+const dummyJadwalData: JadwalRow[] = [
+  // 1. Kasus Normal Terjadwal
+  {
+    id: "1",
+    namaPasien: "Zefanya Lidia",
+    namaOrangTua: "Alief Arifin Mahardiko",
+    telepon: "085922002245",
+    tipeTerapi: "Terapi Okupasi",
+    terapis: "Alief Arifun",
+    tanggal: getTodayDateStr(),
+    waktu: "10.00 - 11.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000101",
+    usia: "6 Tahun 2 Bulan",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Surakarta, 12 Maret 2020",
+    asalSekolah: "TK Pertiwi",
+    alamat: "Jl. Slamet Riyadi No. 45, Surakarta",
+    hubunganWali: "Ayah",
+  },
+  // 2. Kasus Normal Selesai
+  {
+    id: "2",
+    namaPasien: "Kenzi",
+    namaOrangTua: "Budi Santoso",
+    telepon: "081234567890",
+    tipeTerapi: "Terapi Okupasi",
+    terapis: "Alief Arifun",
+    tanggal: getTodayDateStr(),
+    waktu: "11.00 - 12.00",
+    status: "Selesai",
+    nomorRM: "RM-000102",
+    usia: "6 Tahun 5 Bulan",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Solo, 10 Mei 2020",
+    asalSekolah: "TK Pembina",
+    alamat: "Jl. Veteran No. 23, Surakarta",
+    hubunganWali: "Ayah",
+  },
+  // 3. Kasus Reschedule (Sakit) - Diterapi Hari Ini
+  {
+    id: "3",
+    namaPasien: "Caca",
+    namaOrangTua: "Lina",
+    telepon: "085566778899",
+    tipeTerapi: "Terapi Okupasi",
+    terapis: "Dr. Tirta",
+    tanggal: getTodayDateStr(),
+    waktu: "09.00 - 10.00",
+    status: "Terjadwal",
+    tanggal_lama: getYesterdayDateStr(),
+    waktu_lama: "09.00 - 10.00",
+    kategori_alasan: "Sakit",
+    alasan: "Anak demam kemarin, dipindah ke hari ini.",
+    nomorRM: "RM-000103",
+    usia: "7 Tahun 4 Bulan",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Surakarta, 03 Mei 2019",
+    asalSekolah: "TK Tunas Bangsa",
+    alamat: "Surakarta",
+    hubunganWali: "Ibu",
+  },
+  // 4. Kasus Reschedule (Izin)
+  {
+    id: "4",
+    namaPasien: "Dian Sastro",
+    namaOrangTua: "Rina Kusuma",
+    telepon: "089876543210",
+    tipeTerapi: "Terapi Okupasi",
+    terapis: "Sus Rini",
+    tanggal: getTomorrowDateStr(),
+    waktu: "13.00 - 14.00",
+    status: "Terjadwal",
+    tanggal_lama: getTodayDateStr(),
+    waktu_lama: "13.00 - 14.00",
+    kategori_alasan: "Izin",
+    alasan: "Acara keluarga mendadak ke luar kota.",
+    nomorRM: "RM-000104",
+    usia: "5 Tahun 3 Bulan",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 22 Juni 2021",
+    asalSekolah: "TK Kemala",
+    alamat: "Jl. Monginsidi No. 7, Surakarta",
+    hubunganWali: "Ibu",
+  },
+  // 5. Kasus Tertunda (Jadwal Terlewat Hari Sebelumnya)
+  {
+    id: "5",
+    namaPasien: "Gibran",
+    namaOrangTua: "Jokowi",
+    telepon: "082233445566",
+    tipeTerapi: "Terapi Okupasi",
+    terapis: "Suster M",
+    tanggal: getYesterdayDateStr(), // Agar masuk tab Tertunda
+    waktu: "15.00 - 16.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000105",
+    usia: "4 Tahun 6 Bulan",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Surakarta, 30 Maret 2022",
+    asalSekolah: "PAUD Melati",
+    alamat: "Jl. Manahan No. 1, Solo",
+    hubunganWali: "Ayah",
+  },
+  // 6. Kasus Reschedule (Tidak Hadir)
+  {
+    id: "6",
+    namaPasien: "Rara",
+    namaOrangTua: "Siti Nurhaliza",
+    telepon: "081122334455",
+    tipeTerapi: "Terapi Okupasi",
+    terapis: "Dr. Tirta",
+    tanggal: getTomorrowDateStr(),
+    waktu: "08.00 - 09.00",
+    status: "Terjadwal",
+    tanggal_lama: getTodayDateStr(),
+    waktu_lama: "08.00 - 09.00",
+    kategori_alasan: "Tidak Hadir",
+    alasan: "Pasien tidak hadir tanpa keterangan.",
+    nomorRM: "RM-000106",
+    usia: "6 Tahun",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 14 April 2020",
+    asalSekolah: "TK Bintang",
+    alamat: "Mojosongo, Solo",
+    hubunganWali: "Ibu",
+  },
+  // 7. Kasus Normal Selesai Tambahan
+  {
+    id: "7",
+    namaPasien: "Bima",
+    namaOrangTua: "Arjuna",
+    telepon: "081999888777",
+    tipeTerapi: "Terapi Okupasi",
+    terapis: "Suster M",
+    tanggal: getTodayDateStr(),
+    waktu: "14.00 - 15.00",
+    status: "Selesai",
+    nomorRM: "RM-000107",
+    usia: "8 Tahun 1 Bulan",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Semarang, 22 Agustus 2018",
+    asalSekolah: "SD Pelita Harapan",
+    alamat: "Banjarsari, Solo",
+    hubunganWali: "Ayah",
+  },
+
+  // ==========================================
+  // TAMBAHAN DATA UNTUK TIPE TERAPI LAIN (4 kasus x 3 tipe)
+  // ==========================================
+
+  // --- PLB (Paedagog) ---
+  {
+    id: "8",
+    namaPasien: "Andi",
+    namaOrangTua: "Bapak Andi",
+    telepon: "08111222333",
+    tipeTerapi: "PLB (Paedagog)",
+    terapis: "Alief Arifun",
+    tanggal: getTodayDateStr(),
+    waktu: "09.00 - 10.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000108",
+    usia: "6 Tahun",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Solo, 10 Januari 2020",
+    asalSekolah: "TK A",
+    alamat: "Solo",
+    hubunganWali: "Ayah",
+  },
+  {
+    id: "9",
+    namaPasien: "Sita",
+    namaOrangTua: "Ibu Sita",
+    telepon: "08111222444",
+    tipeTerapi: "PLB (Paedagog)",
+    terapis: "Alief Arifun",
+    tanggal: getTodayDateStr(),
+    waktu: "10.00 - 11.00",
+    status: "Selesai",
+    nomorRM: "RM-000109",
+    usia: "5 Tahun",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 15 Februari 2021",
+    asalSekolah: "TK B",
+    alamat: "Solo",
+    hubunganWali: "Ibu",
+  },
+  {
+    id: "10",
+    namaPasien: "Rudi",
+    namaOrangTua: "Bapak Rudi",
+    telepon: "08111222555",
+    tipeTerapi: "PLB (Paedagog)",
+    terapis: "Alief Arifun",
+    tanggal: getTomorrowDateStr(),
+    waktu: "11.00 - 12.00",
+    status: "Terjadwal",
+    tanggal_lama: getTodayDateStr(),
+    waktu_lama: "11.00 - 12.00",
+    kategori_alasan: "Sakit",
+    alasan: "Anak demam",
+    nomorRM: "RM-000110",
+    usia: "7 Tahun",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Solo, 20 Maret 2019",
+    asalSekolah: "SD 1",
+    alamat: "Solo",
+    hubunganWali: "Ayah",
+  },
+  {
+    id: "11",
+    namaPasien: "Nina",
+    namaOrangTua: "Ibu Nina",
+    telepon: "08111222666",
+    tipeTerapi: "PLB (Paedagog)",
+    terapis: "Alief Arifun",
+    tanggal: getYesterdayDateStr(), // Tertunda
+    waktu: "13.00 - 14.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000111",
+    usia: "4 Tahun",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 25 April 2022",
+    asalSekolah: "PAUD",
+    alamat: "Solo",
+    hubunganWali: "Ibu",
+  },
+
+  // --- Terapi Wicara ---
+  {
+    id: "12",
+    namaPasien: "Tono",
+    namaOrangTua: "Bapak Tono",
+    telepon: "08222333444",
+    tipeTerapi: "Terapi Wicara",
+    terapis: "Sus Rini",
+    tanggal: getTodayDateStr(),
+    waktu: "09.00 - 10.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000112",
+    usia: "6 Tahun",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Solo, 05 Mei 2020",
+    asalSekolah: "TK A",
+    alamat: "Solo",
+    hubunganWali: "Ayah",
+  },
+  {
+    id: "13",
+    namaPasien: "Mila",
+    namaOrangTua: "Ibu Mila",
+    telepon: "08222333555",
+    tipeTerapi: "Terapi Wicara",
+    terapis: "Sus Rini",
+    tanggal: getTodayDateStr(),
+    waktu: "10.00 - 11.00",
+    status: "Selesai",
+    nomorRM: "RM-000113",
+    usia: "5 Tahun",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 10 Juni 2021",
+    asalSekolah: "TK B",
+    alamat: "Solo",
+    hubunganWali: "Ibu",
+  },
+  {
+    id: "14",
+    namaPasien: "Luki",
+    namaOrangTua: "Bapak Luki",
+    telepon: "08222333666",
+    tipeTerapi: "Terapi Wicara",
+    terapis: "Sus Rini",
+    tanggal: getTomorrowDateStr(),
+    waktu: "11.00 - 12.00",
+    status: "Terjadwal",
+    tanggal_lama: getTodayDateStr(),
+    waktu_lama: "11.00 - 12.00",
+    kategori_alasan: "Izin",
+    alasan: "Ke luar kota",
+    nomorRM: "RM-000114",
+    usia: "7 Tahun",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Solo, 15 Juli 2019",
+    asalSekolah: "SD 1",
+    alamat: "Solo",
+    hubunganWali: "Ayah",
+  },
+  {
+    id: "15",
+    namaPasien: "Santi",
+    namaOrangTua: "Ibu Santi",
+    telepon: "08222333777",
+    tipeTerapi: "Terapi Wicara",
+    terapis: "Sus Rini",
+    tanggal: getYesterdayDateStr(), // Tertunda
+    waktu: "13.00 - 14.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000115",
+    usia: "4 Tahun",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 20 Agustus 2022",
+    asalSekolah: "PAUD",
+    alamat: "Solo",
+    hubunganWali: "Ibu",
+  },
+
+  // --- Fisioterapi ---
+  {
+    id: "16",
+    namaPasien: "Bowo",
+    namaOrangTua: "Bapak Bowo",
+    telepon: "08333444555",
+    tipeTerapi: "Fisioterapi",
+    terapis: "Suster M",
+    tanggal: getTodayDateStr(),
+    waktu: "09.00 - 10.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000116",
+    usia: "6 Tahun",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Solo, 01 September 2020",
+    asalSekolah: "TK A",
+    alamat: "Solo",
+    hubunganWali: "Ayah",
+  },
+  {
+    id: "17",
+    namaPasien: "Rina",
+    namaOrangTua: "Ibu Rina",
+    telepon: "08333444666",
+    tipeTerapi: "Fisioterapi",
+    terapis: "Suster M",
+    tanggal: getTodayDateStr(),
+    waktu: "10.00 - 11.00",
+    status: "Selesai",
+    nomorRM: "RM-000117",
+    usia: "5 Tahun",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 05 Oktober 2021",
+    asalSekolah: "TK B",
+    alamat: "Solo",
+    hubunganWali: "Ibu",
+  },
+  {
+    id: "18",
+    namaPasien: "Doni",
+    namaOrangTua: "Bapak Doni",
+    telepon: "08333444777",
+    tipeTerapi: "Fisioterapi",
+    terapis: "Suster M",
+    tanggal: getTomorrowDateStr(),
+    waktu: "11.00 - 12.00",
+    status: "Terjadwal",
+    tanggal_lama: getTodayDateStr(),
+    waktu_lama: "11.00 - 12.00",
+    kategori_alasan: "Tidak Hadir",
+    alasan: "Tanpa keterangan",
+    nomorRM: "RM-000118",
+    usia: "7 Tahun",
+    jenisKelamin: "Laki-laki",
+    tempatTglLahir: "Solo, 10 November 2019",
+    asalSekolah: "SD 1",
+    alamat: "Solo",
+    hubunganWali: "Ayah",
+  },
+  {
+    id: "19",
+    namaPasien: "Vira",
+    namaOrangTua: "Ibu Vira",
+    telepon: "08333444888",
+    tipeTerapi: "Fisioterapi",
+    terapis: "Suster M",
+    tanggal: getYesterdayDateStr(), // Tertunda
+    waktu: "13.00 - 14.00",
+    status: "Terjadwal",
+    nomorRM: "RM-000119",
+    usia: "4 Tahun",
+    jenisKelamin: "Perempuan",
+    tempatTglLahir: "Solo, 15 Desember 2022",
+    asalSekolah: "PAUD",
+    alamat: "Solo",
+    hubunganWali: "Ibu",
+  }
+];
+
+type StatusFilter = "Terjadwal" | "Selesai" | "Reschedule" | "Tertunda";
+type DateRangeFilter = "hari-ini" | "besok" | "minggu-ini" | "bulan-ini" | "custom";
+
 const getBadgeStyles = (kategori?: "Sakit" | "Izin" | "Tidak Hadir" | null) => {
   switch (kategori) {
     case "Sakit": return "bg-blue-50 text-blue-500 border-blue-200";
@@ -103,31 +495,6 @@ const getBadgeStyles = (kategori?: "Sakit" | "Izin" | "Tidak Hadir" | null) => {
     default: return "bg-gray-50 text-gray-500 border-gray-200";
   }
 };
-
-// ── Dummy data (kosong — siap untuk API) ─────────────────────────────────────
-const dummyJadwalData: JadwalRow[] = [
-  // PLB (Paedagog)
-  { id: "1", namaPasien: "Zefanya Lidia", namaOrangTua: "Alief Arifin Mahardiko", telepon: "085922002245", tipeTerapi: "PLB (Paedagog)", terapis: "Alief Arifun", tanggal: "2026-06-04", waktu: "10.00 - 11.00", status: "Terjadwal", tanggal_lama: getTodayDateStr(), waktu_lama: "09.35 - 10.35", kategori_alasan: "Izin", alasan: "Orang tua berhalangan hadir, sudah konfirmasi" },
-  { id: "2", namaPasien: "Rayhan", namaOrangTua: "devi ema", telepon: "0983842", tipeTerapi: "PLB (Paedagog)", terapis: "Alief Arifun", tanggal: getTodayDateStr(), waktu: "08.50 - 09.50", status: "Terjadwal" },
-  { id: "3", namaPasien: "Putra Pratama", namaOrangTua: "devi ema", telepon: "0983842", tipeTerapi: "PLB (Paedagog)", terapis: "Alief Arifun", tanggal: "2026-10-02", waktu: "13.00 - 14.00", status: "Terjadwal", tanggal_lama: getTodayDateStr(), waktu_lama: "15.07 - 16.00", kategori_alasan: "Sakit", alasan: "Demam tinggi, sudah izin dari orang tua" },
-  { id: "10", namaPasien: "Kenzi", namaOrangTua: "Budi Santoso", telepon: "081234567890", tipeTerapi: "PLB (Paedagog)", terapis: "Alief Arifun", tanggal: getTodayDateStr(), waktu: "10.00 - 11.00", status: "Selesai" },
-
-  // Terapi Okupasi
-  { id: "4", namaPasien: "Aiko Putri", namaOrangTua: "Siti Rahma", telepon: "081122334455", tipeTerapi: "Terapi Okupasi", terapis: "Dr. Tirta", tanggal: getTodayDateStr(), waktu: "10.00 - 11.00", status: "Terjadwal", tanggal_lama: "2026-09-28", waktu_lama: "09.00 - 10.00" },
-  { id: "5", namaPasien: "Bima Arya", namaOrangTua: "Andi Saputra", telepon: "081298765432", tipeTerapi: "Terapi Okupasi", terapis: "Dr. Tirta", tanggal: getTodayDateStr(), waktu: "13.00 - 14.00", status: "Terjadwal" },
-  { id: "11", namaPasien: "Caca", namaOrangTua: "Lina", telepon: "085566778899", tipeTerapi: "Terapi Okupasi", terapis: "Dr. Tirta", tanggal: "2026-09-15", waktu: "09.00 - 10.00", status: "Terjadwal", tanggal_lama: getTodayDateStr(), waktu_lama: "09.00 - 10.00", kategori_alasan: "Tidak Hadir", alasan: "Ada keperluan keluarga" },
-
-  // Terapi Wicara
-  { id: "6", namaPasien: "Dian Sastro", namaOrangTua: "Rina Kusuma", telepon: "089876543210", tipeTerapi: "Terapi Wicara", terapis: "Sus Rini", tanggal: getTodayDateStr(), waktu: "09.00 - 10.00", status: "Terjadwal" },
-  { id: "7", namaPasien: "Eno Lerian", namaOrangTua: "Joko Anwar", telepon: "087766554433", tipeTerapi: "Terapi Wicara", terapis: "Sus Rini", tanggal: getTodayDateStr(), waktu: "11.00 - 12.00", status: "Terjadwal" },
-  { id: "12", namaPasien: "Fajar", namaOrangTua: "Rini", telepon: "081999888777", tipeTerapi: "Terapi Wicara", terapis: "Sus Rini", tanggal: getTodayDateStr(), waktu: "14.00 - 15.00", status: "Selesai" },
-
-  // Fisioterapi
-  { id: "8", namaPasien: "Gibran", namaOrangTua: "Jokowi", telepon: "082233445566", tipeTerapi: "Fisioterapi", terapis: "Suster M", tanggal: getTodayDateStr(), waktu: "13.00 - 14.00", status: "Terjadwal" },
-  { id: "9", namaPasien: "Hana", namaOrangTua: "Anis", telepon: "083344556677", tipeTerapi: "Fisioterapi", terapis: "Suster M", tanggal: getTomorrowDateStr(), waktu: "15.00 - 16.00", status: "Terjadwal" },
-  { id: "14", namaPasien: "Budi", namaOrangTua: "Susanto", telepon: "081122223333", tipeTerapi: "Fisioterapi", terapis: "Suster M", tanggal: getWeekRangeStr().end, waktu: "08.00 - 09.00", status: "Terjadwal" },
-  { id: "13", namaPasien: "Kaela", namaOrangTua: "Susanti", telepon: "084455667788", tipeTerapi: "Fisioterapi", terapis: "Suster M", tanggal: "2026-09-25", waktu: "09.00 - 10.00", status: "Terjadwal" },
-];
 
 // ── Wrapper dengan Suspense ───────────────────────────────────────────────────
 export default function JadwalTerapisPage() {
@@ -556,11 +923,11 @@ function JadwalContent() {
     }
   });
 
-  const initialUrlType = useRef(urlType);
   const profileApplied = useRef(false);
 
   useEffect(() => {
-    if (!initialUrlType.current && profile?.therapist_section && !profileApplied.current) {
+    // Memastikan saat halaman di-refresh (mount awal), tab kembali ke keahlian aslinya
+    if (profile?.therapist_section && !profileApplied.current) {
       const section = profile.therapist_section.toLowerCase();
       if (section.includes("okupasi")) setActiveTab("Terapi Okupasi");
       else if (section.includes("wicara")) setActiveTab("Terapi Wicara");
@@ -572,11 +939,11 @@ function JadwalContent() {
   }, [profile]);
 
   const [activeFilter, setActiveFilter] = useState<StatusFilter>(
-    urlStatus === "selesai"
+    urlStatus === "completed" || urlStatus === "selesai"
       ? "Selesai"
       : urlStatus === "reschedule"
         ? "Reschedule"
-        : urlStatus === "tertunda"
+        : urlStatus === "pending" || urlStatus === "tertunda"
           ? "Tertunda"
           : "Terjadwal"
   );
@@ -609,9 +976,10 @@ function JadwalContent() {
 
   const getMappedStatus = () => {
     switch (activeFilter) {
-      case "Selesai": return "selesai";
+      case "Selesai": return "completed";
       case "Reschedule": return "reschedule";
-      default: return "terjadwal";
+      case "Tertunda": return "pending";
+      default: return "scheduled";
     }
   };
 
@@ -693,7 +1061,7 @@ function JadwalContent() {
       }
       return a.waktu > b.waktu ? 1 : -1;
     });
-  }, [jadwalData, activeTab, activeFilter, dateFilter, searchName]);
+  }, [jadwalData, activeTab, activeFilter, dateFilter, dateRangeMode, searchName]);
 
   const pendingSessions = useMemo(() => {
     return jadwalData.filter(
@@ -707,47 +1075,30 @@ function JadwalContent() {
   );
 
   const handleIsiSoap = (item: JadwalRow) => {
-    const q = new URLSearchParams({
-      namaPasien: item.namaPasien,
-      namaOrangTua: item.namaOrangTua,
-      telepon: item.telepon,
-      tipeTerapi: item.tipeTerapi,
-      terapis: item.terapis,
-      tanggalTerapi: formatTanggal(item.tanggal),
-      waktu: item.waktu,
-    });
-    router.push(`/terapis/terapi/isi-soap?${q.toString()}`);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`terapi_selected_${item.id}`, JSON.stringify(item));
+    }
+    router.push(
+      `/terapis/terapi/isi-soap?jadwal_id=${item.id}&type=${getType()}&status=${getMappedStatus()}`
+    );
   };
 
   const handleDetail = (item: JadwalRow) => {
-    const q = new URLSearchParams({
-      namaPasien: item.namaPasien,
-      namaOrangTua: item.namaOrangTua,
-      telepon: item.telepon,
-      tipeTerapi: item.tipeTerapi,
-      terapis: item.terapis,
-      tanggalTerapi: formatTanggal(item.tanggal),
-      waktu: item.waktu,
-    });
-    if (item.tanggal_lama) q.set("tanggal_lama", formatTanggal(item.tanggal_lama));
-    if (item.waktu_lama) q.set("waktu_lama", item.waktu_lama);
-    if (item.kategori_alasan) q.set("kategori_alasan", item.kategori_alasan);
-    if (item.alasan) q.set("alasan", item.alasan);
-
-    router.push(`/terapis/terapi/detail?${q.toString()}`);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`terapi_selected_${item.id}`, JSON.stringify(item));
+    }
+    router.push(
+      `/terapis/terapi/detail?jadwal_id=${item.id}&type=${getType()}&status=${getMappedStatus()}`
+    );
   };
 
   const handleLihatHasil = (item: JadwalRow) => {
-    const q = new URLSearchParams({
-      namaPasien: item.namaPasien,
-      namaOrangTua: item.namaOrangTua,
-      telepon: item.telepon,
-      tipeTerapi: item.tipeTerapi,
-      terapis: item.terapis,
-      tanggalTerapi: formatTanggal(item.tanggal),
-      waktu: item.waktu,
-    });
-    router.push(`/terapis/terapi/hasil?${q.toString()}`);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`terapi_selected_${item.id}`, JSON.stringify(item));
+    }
+    router.push(
+      `/terapis/terapi/hasil?jadwal_id=${item.id}&type=${getType()}&status=${getMappedStatus()}`
+    );
   };
 
   const handleUnduh = () => {
@@ -783,7 +1134,18 @@ function JadwalContent() {
     } else {
       return `Tidak ada data terapi terjadwal ${dateText}`;
     }
-  }, [activeFilter, dateFilter]);
+  }, [activeFilter, dateFilter, dateRangeMode]);
+
+  if (!profile || !profileApplied.current) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8FBFB]">
+        <div className="flex flex-col items-center gap-3 text-[#1E5C58]">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#81B7A9] border-t-transparent" />
+          <p className="text-sm font-semibold animate-pulse">Menyesuaikan profil keahlian...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 md:p-8 space-y-6 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">
@@ -1008,7 +1370,7 @@ function JadwalContent() {
                 className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-teal-50 hover:bg-teal-50/50 text-[#1E5C58] rounded-lg text-sm font-bold transition-all shadow-sm"
               >
                 <Download size={16} />
-                <span className="hidden sm:inline">Unduh Hasil</span>
+                <span className="hidden sm:inline">Hasil SOAP</span>
               </button>
             </div>
           )}

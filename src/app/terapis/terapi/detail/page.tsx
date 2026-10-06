@@ -1,9 +1,41 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+
+interface JadwalDetail {
+  id: string;
+  namaPasien: string;
+  namaOrangTua: string;
+  telepon: string;
+  tipeTerapi: string;
+  terapis: string;
+  tanggal: string;
+  waktu: string;
+  status: string;
+  nomorRM?: string;
+  usia?: string;
+  jenisKelamin?: string;
+  tempatTglLahir?: string;
+  asalSekolah?: string;
+  alamat?: string;
+  hubunganWali?: string;
+  tanggal_lama?: string | null;
+  waktu_lama?: string | null;
+  kategori_alasan?: "Sakit" | "Izin" | "Tidak Hadir" | null;
+  alasan?: string | null;
+}
+
+const formatTanggal = (yyyyMmDd: string) => {
+  if (!yyyyMmDd) return "";
+  const parts = yyyyMmDd.split("-");
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+  }
+  return yyyyMmDd;
+};
 
 // ── Wrapper Suspense ──────────────────────────────────────────────────────────
 export default function DetailJadwalPage() {
@@ -26,29 +58,42 @@ export default function DetailJadwalPage() {
 // ── Konten ───────────────────────────────────────────────────────────────────
 function DetailJadwalContent() {
   const params = useSearchParams();
+  const jadwalId = params.get("jadwal_id") || params.get("id");
 
-  // Data dikirim via query params dari halaman jadwal
-  const namaPasien = params.get("namaPasien") ?? "—";
-  const namaOrangTua = params.get("namaOrangTua") ?? "—";
-  const telepon = params.get("telepon") ?? "—";
-  const tipeTerapi = params.get("tipeTerapi") ?? "—";
-  const terapis = params.get("terapis") ?? "—";
-  const tanggalTerapi = params.get("tanggalTerapi") ?? "—";
-  const waktu = params.get("waktu") ?? "—";
-  // Field tambahan dari API nantinya (placeholder dulu)
-  const jenisKelamin = params.get("jenisKelamin") ?? "—";
-  const usia = params.get("usia") ?? "—";
-  const tempatTglLahir = params.get("tempatTglLahir") ?? "—";
-  const asalSekolah = params.get("asalSekolah") ?? "—";
-  const alamat = params.get("alamat") ?? "—";
-  const nomorRM = params.get("nomorRM") ?? "—";
-  const hubunganWali = params.get("hubunganWali") ?? "—";
+  // Ambil detail jadwal berdasarkan ID (dari sessionStorage sebelum tersambung ke API).
+  // TODO: Saat endpoint API backend sudah tersedia, ganti baris ini dengan query/fetch API.
+  const jadwal = useMemo<JadwalDetail | null>(() => {
+    if (typeof window === "undefined" || !jadwalId) return null;
+    try {
+      const stored = sessionStorage.getItem(`terapi_selected_${jadwalId}`);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.warn("Gagal membaca jadwal dari sessionStorage:", e);
+    }
+    return null;
+  }, [jadwalId]);
+
+  // Data pasien dari jadwal by ID (atau fallback ke params jika ada)
+  const namaPasien = jadwal?.namaPasien ?? params.get("namaPasien") ?? "—";
+  const namaOrangTua = jadwal?.namaOrangTua ?? params.get("namaOrangTua") ?? "—";
+  const telepon = jadwal?.telepon ?? params.get("telepon") ?? "—";
+  const tipeTerapi = jadwal?.tipeTerapi ?? params.get("tipeTerapi") ?? "—";
+  const terapis = jadwal?.terapis ?? params.get("terapis") ?? "—";
+  const tanggalTerapi = (jadwal?.tanggal ? formatTanggal(jadwal.tanggal) : null) ?? params.get("tanggalTerapi") ?? "—";
+  const waktu = jadwal?.waktu ?? params.get("waktu") ?? "—";
+  const jenisKelamin = jadwal?.jenisKelamin ?? params.get("jenisKelamin") ?? "—";
+  const usia = jadwal?.usia ?? params.get("usia") ?? "—";
+  const tempatTglLahir = jadwal?.tempatTglLahir ?? params.get("tempatTglLahir") ?? "—";
+  const asalSekolah = jadwal?.asalSekolah ?? params.get("asalSekolah") ?? "—";
+  const alamat = jadwal?.alamat ?? params.get("alamat") ?? "—";
+  const nomorRM = jadwal?.nomorRM ?? params.get("nomorRM") ?? "—";
+  const hubunganWali = jadwal?.hubunganWali ?? params.get("hubunganWali") ?? "—";
 
   // Field Reschedule
-  const tanggalLama = params.get("tanggal_lama");
-  const waktuLama = params.get("waktu_lama");
-  const kategoriAlasan = params.get("kategori_alasan");
-  const alasan = params.get("alasan");
+  const tanggalLama = (jadwal?.tanggal_lama ? formatTanggal(jadwal.tanggal_lama) : null) ?? params.get("tanggal_lama");
+  const waktuLama = jadwal?.waktu_lama ?? params.get("waktu_lama");
+  const kategoriAlasan = jadwal?.kategori_alasan ?? params.get("kategori_alasan");
+  const alasan = jadwal?.alasan ?? params.get("alasan");
 
   const isRescheduled = tanggalLama || waktuLama || kategoriAlasan || alasan;
 
