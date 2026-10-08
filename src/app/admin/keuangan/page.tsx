@@ -200,39 +200,33 @@ function genId() {
 function StatusBadge({ status }: { status: InvoiceStatus }) {
   const config: Record<
     InvoiceStatus,
-    { label: string; className: string; icon: React.ReactNode }
+    { label: string; className: string }
   > = {
     LUNAS: {
-      label: "LUNAS",
+      label: "Lunas",
       className: "text-emerald-600 font-extrabold",
-      icon: <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />,
     },
     "BELUM DIBAYAR": {
-      label: "BELUM DIBAYAR",
+      label: "Belum Dibayar",
       className: "text-red-500 font-extrabold",
-      icon: <AlertCircle size={13} className="text-red-400 shrink-0" />,
     },
     "PERIODE BERIKUTNYA": {
-      label: "PERIODE\nBERIKUTNYA",
+      label: "Periode Berikutnya",
       className: "text-orange-500 font-extrabold leading-tight",
-      icon: <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0 mt-0.5" />,
     },
     DIKEMBALIKAN: {
-      label: "DIKEMBALIKAN",
+      label: "Dikembalikan",
       className: "text-[#2B7A75] font-extrabold",
-      icon: <RotateCcw size={13} className="text-[#2B7A75] shrink-0" />,
     },
     BERJALAN: {
-      label: "BERJALAN",
+      label: "Selesai",
       className: "text-teal-600 font-extrabold",
-      icon: <CheckCircle2 size={13} className="text-teal-500 shrink-0" />,
     },
   };
 
   const c = config[status];
   return (
-    <span className={`inline-flex items-start gap-1.5 text-xs ${c.className}`}>
-      {c.icon}
+    <span className={`inline-flex items-center text-xs ${c.className}`}>
       <span style={{ whiteSpace: "pre-line" }}>{c.label}</span>
     </span>
   );
@@ -616,7 +610,6 @@ function ActionDropdown({
         onClick={handleToggle}
         className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-teal-100 rounded-xl text-[#1E5C58] hover:bg-teal-50/40 text-xs font-semibold transition-colors"
       >
-        <Settings size={14} />
         <span>Aksi</span>
         <ChevronDown
           size={12}
