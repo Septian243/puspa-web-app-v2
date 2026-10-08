@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Wallet,
@@ -23,6 +23,8 @@ import {
   Info,
   Trash2,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TabPembayaran, { PotonganData } from "@/components/keuangan/TabPembayaran";
@@ -52,8 +54,8 @@ interface Invoice {
 interface TerapiRow {
   id: string;
   jenis: string;
-  jumlah_sesi: number;
-  harga_sesi: number;
+  jumlah_sesi: number | "";
+  harga_sesi: number | "";
 }
 
 // ── Dummy Data ────────────────────────────────────────────────────────────────
@@ -917,12 +919,9 @@ function hitungDurasiPaket(mulai: string, selesai: string) {
 
 function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv: Invoice) => void }) {
   const [tipeTagihan, setTipeTagihan] = useState<"Bulanan" | "Paket Durasi">("Bulanan");
-  const [selectedWali, setSelectedWali] = useState(DUMMY_WALI[0]);
-  const [selectedAnak, setSelectedAnak] = useState(DUMMY_ANAK[DUMMY_WALI[0]][0]);
-  const [periode, setPeriode] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [selectedWali, setSelectedWali] = useState("");
+  const [selectedAnak, setSelectedAnak] = useState("");
+  const [periode, setPeriode] = useState("");
 
   // Paket Durasi fields
   const [tanggalMulai, setTanggalMulai] = useState("");
@@ -930,11 +929,11 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
 
   // Terapi rows
   const [terapiRows, setTerapiRows] = useState<TerapiRow[]>([
-    { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 8, harga_sesi: 150000 },
+    { id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" },
   ]);
 
   // Harga & Pembayaran
-  const [potongan, setPotongan] = useState(300000);
+  const [potongan, setPotongan] = useState<number | "">("");
   const [catatan, setCatatan] = useState("");
 
   // Pratinjau modal
@@ -946,9 +945,9 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
   // Untuk Paket Durasi, subtotal tiap baris = harga_sesi saja (bukan × sesi)
   const isPaket = tipeTagihan === "Paket Durasi";
   const rowSubtotal = (row: TerapiRow) =>
-    isPaket ? row.harga_sesi : row.jumlah_sesi * row.harga_sesi;
+    isPaket ? (Number(row.harga_sesi) || 0) : (Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0);
   const totalSeharusnya = terapiRows.reduce((sum, r) => sum + rowSubtotal(r), 0);
-  const totalBayar = Math.max(0, totalSeharusnya - potongan);
+  const totalBayar = Math.max(0, totalSeharusnya - (Number(potongan) || 0));
 
   // Durasi paket (hanya untuk Paket Durasi)
   const durasiPaket = isPaket ? hitungDurasiPaket(tanggalMulai, tanggalSelesai) : null;
@@ -971,18 +970,9 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
     setSelectedAnak(DUMMY_ANAK[wali]?.[0] ?? "");
   };
 
-  // Saat ganti tipe, reset rows ke default sesuai tipe
+  // Saat ganti tipe, jangan ubah isi baris (biarkan kosong / manual)
   const handleTipeChange = (tipe: "Bulanan" | "Paket Durasi") => {
     setTipeTagihan(tipe);
-    if (tipe === "Paket Durasi") {
-      setTerapiRows([
-        { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 26, harga_sesi: 0 },
-      ]);
-    } else {
-      setTerapiRows([
-        { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 8, harga_sesi: 150000 },
-      ]);
-    }
   };
 
   const updateTerapiRow = (id: string, field: keyof TerapiRow, value: string | number) => {
@@ -994,9 +984,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
   const addTerapiRow = () => {
     setTerapiRows((rows) => [
       ...rows,
-      isPaket
-        ? { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 26, harga_sesi: 0 }
-        : { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 1, harga_sesi: 0 },
+      { id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" },
     ]);
   };
 
@@ -1037,16 +1025,8 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.22 }}
     >
-      {/* Toolbar: kembali & pratinjau */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <button
-          onClick={onBack}
-          id="btn-kembali-tagihan"
-          className="cursor-pointer inline-flex items-center gap-1.5 text-sm font-semibold text-[#2B7A75] hover:text-[#1E5C58] transition-colors"
-        >
-          <ArrowLeft size={16} />
-          Kembali ke Tagihan
-        </button>
+      {/* Toolbar: pratinjau */}
+      <div className="flex items-center justify-end px-4 py-3 border-b border-gray-100">
         <button
           id="btn-pratinjau-invoice"
           onClick={() => setShowPratinjau(true)}
@@ -1066,7 +1046,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
               1
             </div>
-            <h2 className="text-sm font-extrabold text-gray-800">Siapa yang ditagih</h2>
+            <h2 className="text-sm font-extrabold text-gray-800">Penerima Tagihan</h2>
           </div>
 
           <div className="p-5 space-y-5">
@@ -1106,6 +1086,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     onChange={(e) => handleWaliChange(e.target.value)}
                     className={selectClass}
                   >
+                    <option value="" disabled>Pilih Orang Tua / Wali</option>
                     {DUMMY_WALI.map((w) => (
                       <option key={w} value={w}>
                         {w}
@@ -1130,6 +1111,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     onChange={(e) => setSelectedAnak(e.target.value)}
                     className={selectClass}
                   >
+                    <option value="" disabled>Pilih Anak</option>
                     {(DUMMY_ANAK[selectedWali] ?? []).map((a) => (
                       <option key={a} value={a}>
                         {a}
@@ -1156,8 +1138,13 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     type="month"
                     value={periode}
                     onChange={(e) => setPeriode(e.target.value)}
-                    className={`${inputClass} cursor-pointer pr-10`}
+                    className={`${inputClass} cursor-pointer pr-10 ${!periode ? "text-transparent" : ""}`}
                   />
+                  {!periode && (
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
+                      mm/yyyy
+                    </span>
+                  )}
                   <Calendar
                     size={16}
                     className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
@@ -1176,8 +1163,13 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                       type="date"
                       value={tanggalMulai}
                       onChange={(e) => setTanggalMulai(e.target.value)}
-                      className={`${inputClass} cursor-pointer pr-10`}
+                      className={`${inputClass} cursor-pointer pr-10 ${!tanggalMulai ? "text-transparent" : ""}`}
                     />
+                    {!tanggalMulai && (
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
+                        dd/mm/yyyy
+                      </span>
+                    )}
                     <Calendar
                       size={16}
                       className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
@@ -1195,8 +1187,13 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                       value={tanggalSelesai}
                       min={tanggalMulai || undefined}
                       onChange={(e) => setTanggalSelesai(e.target.value)}
-                      className={`${inputClass} cursor-pointer pr-10`}
+                      className={`${inputClass} cursor-pointer pr-10 ${!tanggalSelesai ? "text-transparent" : ""}`}
                     />
+                    {!tanggalSelesai && (
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
+                        dd/mm/yyyy
+                      </span>
+                    )}
                     <Calendar
                       size={16}
                       className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
@@ -1214,7 +1211,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
               2
             </div>
-            <h2 className="text-sm font-extrabold text-gray-800">Terapi & jumlah sesi</h2>
+            <h2 className="text-sm font-extrabold text-gray-800">Terapi & Jumlah Sesi</h2>
           </div>
 
           <div className="p-5 space-y-3">
@@ -1253,6 +1250,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                       onChange={(e) => updateTerapiRow(row.id, "jenis", e.target.value)}
                       className={selectClass}
                     >
+                      <option value="" disabled>Pilih Jenis Terapi</option>
                       {JENIS_TERAPI_OPTIONS.map((j) => (
                         <option key={j} value={j}>
                           {j}
@@ -1271,8 +1269,9 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     type="number"
                     min={1}
                     value={row.jumlah_sesi}
+                    placeholder="Jumlah sesi"
                     onChange={(e) =>
-                      updateTerapiRow(row.id, "jumlah_sesi", Number(e.target.value))
+                      updateTerapiRow(row.id, "jumlah_sesi", e.target.value === "" ? "" : Number(e.target.value))
                     }
                     className={inputClass}
                   />
@@ -1285,7 +1284,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     value={row.harga_sesi}
                     placeholder={isPaket ? "Harga paket" : "Harga/sesi"}
                     onChange={(e) =>
-                      updateTerapiRow(row.id, "harga_sesi", Number(e.target.value))
+                      updateTerapiRow(row.id, "harga_sesi", e.target.value === "" ? "" : Number(e.target.value))
                     }
                     className={inputClass}
                   />
@@ -1321,11 +1320,22 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
             </button>
 
             {/* Info note — berbeda per tipe */}
-            <p className="text-[11px] text-[#2B7A75] font-medium leading-relaxed pt-1">
-              {isPaket
-                ? "Harga paket tetap untuk seluruh durasi. Jumlah sesi default 1 sesi per minggu dan bisa diubah."
-                : "Subtotal = jumlah sesi × harga per sesi. Kehadiran dicatat di akhir periode saat penyelesaian sisa sesi."}
-            </p>
+            <div className="min-h-[40px] pt-1 flex items-start">
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={isPaket ? "paket" : "bulanan"}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.15 }}
+                  className="text-[11px] text-[#2B7A75] font-medium leading-relaxed m-0"
+                >
+                  {isPaket
+                    ? "Harga paket tetap untuk seluruh durasi. Jumlah sesi default 1 sesi per minggu dan bisa diubah."
+                    : "Subtotal = jumlah sesi × harga per sesi. Kehadiran dicatat di akhir periode saat penyelesaian sisa sesi."}
+                </motion.p>
+              </AnimatePresence>
+            </div>
 
             {/* Durasi paket (hanya Paket Durasi, jika tanggal sudah diisi) */}
             {isPaket && durasiPaket && (
@@ -1343,7 +1353,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
               3
             </div>
-            <h2 className="text-sm font-extrabold text-gray-800">Harga & pembayaran</h2>
+            <h2 className="text-sm font-extrabold text-gray-800">Pembayaran</h2>
           </div>
 
           <div className="p-5 space-y-4">
@@ -1360,12 +1370,12 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                 onChange={(e) => setPotongan(Number(e.target.value))}
                 className={`${inputClass} max-w-xs`}
               />
-              {potongan > 0 && (
+              {potongan !== "" && Number(potongan) > 0 && (
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <Info size={13} className="text-[#2B7A75] shrink-0" />
                   <p className="text-xs font-semibold text-[#2B7A75]">
                     Potongan terisi otomatis dari sisa sesi periode sebelumnya:{" "}
-                    <span className="font-extrabold">{formatRupiah(potongan)}</span>
+                    <span className="font-extrabold">{formatRupiah(Number(potongan))}</span>
                   </p>
                 </div>
               )}
@@ -1390,7 +1400,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
             <div className="border-t border-gray-100 pt-4 space-y-2.5">
               {/* Total seharusnya */}
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-gray-500">Total seharusnya</span>
+                <span className="font-medium text-gray-500">Subtotal</span>
                 <span className="font-semibold text-gray-700">
                   {formatRupiah(totalSeharusnya)}
                 </span>
@@ -1400,7 +1410,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-gray-500">Potongan</span>
                 <span className="font-semibold text-red-500">
-                  - {formatRupiah(potongan)}
+                  - {formatRupiah(Number(potongan) || 0)}
                 </span>
               </div>
 
@@ -1408,7 +1418,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
               <div className="border-t border-gray-100 pt-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-extrabold text-[#1E5C58]">
-                    Total yang harus dibayar
+                    Total
                   </span>
                   <span className="text-lg font-extrabold text-[#1E5C58]">
                     {formatRupiah(totalBayar)}
@@ -1478,7 +1488,15 @@ export default function KeuanganPage() {
   const [bulan, setBulan] = useState("Bulan");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [pengembalianInvoice, setPengembalianInvoice] = useState<Invoice | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const lunasInvoices = invoices.filter((i) => i.status === "LUNAS");
+
+  // Reset pagination when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, search, tipe, tahun, bulan]);
 
   // Filtered invoices
   const filtered = invoices.filter((inv) => {
@@ -1519,6 +1537,12 @@ export default function KeuanganPage() {
 
     return matchSearch && matchTipe && matchTahun && matchBulan && matchTab;
   });
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedData = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   // Summary stats — jumlah tagihan dari filtered, belum dibayar & potongan global
   const jumlahTagihan = filtered.length;
@@ -1615,52 +1639,73 @@ export default function KeuanganPage() {
       <div className="min-h-screen bg-[#F8FAFA] p-4 sm:p-6 lg:p-8">
         {/* Page Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2.5 rounded-2xl bg-[#2B7A75]/10">
-              <Wallet size={22} className="text-[#2B7A75]" />
+          {pageView === "buat-tagihan" ? (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setPageView("list")}
+                className="p-2.5 rounded-2xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <ArrowLeft size={22} />
+              </button>
+              <div>
+                <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
+                  Buat Tagihan Baru
+                </h1>
+                <p className="text-sm font-medium text-gray-400">
+                  Buat tagihan untuk anak berdasarkan sesi terapi.
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
-                Manajemen Keuangan
-              </h1>
-              <p className="text-sm font-medium text-gray-400">
-                Kelola tagihan, catat pembayaran, dan pantau riwayat keuangan klinik.
-              </p>
+          ) : (
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2.5 rounded-2xl bg-[#2B7A75]/10">
+                <Wallet size={22} className="text-[#2B7A75]" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
+                  Manajemen Keuangan
+                </h1>
+                <p className="text-sm font-medium text-gray-400">
+                  Kelola tagihan, catat pembayaran, dan pantau riwayat keuangan klinik.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Main Tab (Tagihan / Pembayaran) */}
-        <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] p-2 mb-6 flex gap-2">
-          <button
-            onClick={() => {
-              setMainTab("Tagihan");
-              setPageView("list");
-            }}
-            id="tab-tagihan"
-            className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Tagihan"
-              ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
-              : "bg-transparent text-gray-400 hover:bg-gray-50"
-              }`}
-          >
-            <FileText size={16} />
-            Tagihan
-          </button>
-          <button
-            onClick={() => {
-              setMainTab("Pembayaran");
-              setPageView("list");
-            }}
-            id="tab-pembayaran"
-            className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Pembayaran"
-              ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
-              : "bg-transparent text-gray-400 hover:bg-gray-50"
-              }`}
-          >
-            <CreditCard size={16} />
-            Pembayaran
-          </button>
-        </div>
+        {pageView !== "buat-tagihan" && (
+          <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] p-2 mb-6 flex gap-2">
+            <button
+              onClick={() => {
+                setMainTab("Tagihan");
+                setPageView("list");
+              }}
+              id="tab-tagihan"
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Tagihan"
+                ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
+                : "bg-transparent text-gray-400 hover:bg-gray-50"
+                }`}
+            >
+              <FileText size={16} />
+              Tagihan
+            </button>
+            <button
+              onClick={() => {
+                setMainTab("Pembayaran");
+                setPageView("list");
+              }}
+              id="tab-pembayaran"
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Pembayaran"
+                ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
+                : "bg-transparent text-gray-400 hover:bg-gray-50"
+                }`}
+            >
+              <CreditCard size={16} />
+              Pembayaran
+            </button>
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           {/* ── FORM BUAT TAGIHAN ── */}
@@ -1684,151 +1729,150 @@ export default function KeuanganPage() {
               transition={{ duration: 0.2 }}
               className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] overflow-hidden"
             >
-                {/* Status Tabs */}
-                <div className="flex items-center gap-1 px-4 pt-4 overflow-x-auto border-b border-gray-100">
-                  {TABS.map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      id={`status-tab-${tab.toLowerCase().replace(/ /g, "-")}`}
-                      className={`cursor-pointer whitespace-nowrap px-4 py-3 text-sm font-semibold transition-all border-b-2 ${activeTab === tab
-                        ? "border-[#2B7A75] text-[#1E5C58] font-bold"
-                        : "border-transparent text-gray-400 hover:text-[#2B7A75]"
-                        }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                  <div className="flex gap-1 pb-1 ml-auto shrink-0">
-                    <button className="p-1.5 text-gray-300 hover:text-[#2B7A75] transition-colors">
-                      <ChevronUp size={16} />
-                    </button>
-                    <button className="p-1.5 text-gray-300 hover:text-[#2B7A75] transition-colors">
-                      <ChevronDown size={16} />
-                    </button>
-                  </div>
+              {/* Status Tabs */}
+              <div className="flex items-center gap-1 px-4 pt-4 overflow-x-auto border-b border-gray-100">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    id={`status-tab-${tab.toLowerCase().replace(/ /g, "-")}`}
+                    className={`cursor-pointer whitespace-nowrap px-4 py-3 text-sm font-semibold transition-all border-b-2 ${activeTab === tab
+                      ? "border-[#2B7A75] text-[#1E5C58] font-bold"
+                      : "border-transparent text-gray-400 hover:text-[#2B7A75]"
+                      }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {/* Filters Bar */}
+              <div className="flex items-center gap-2.5 px-4 py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
+                {/* Semua tipe */}
+                <div className="relative shrink-0">
+                  <select
+                    id="filter-tipe"
+                    value={tipe}
+                    onChange={(e) => setTipe(e.target.value)}
+                    className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
+                  >
+                    <option>Tipe</option>
+                    <option>Bulanan</option>
+                    <option>Paket Durasi</option>
+                  </select>
+                  <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
-                {/* Filters Bar */}
-                <div className="flex items-center gap-2.5 px-4 py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
-                  {/* Semua tipe */}
-                  <div className="relative shrink-0">
-                    <select
-                      id="filter-tipe"
-                      value={tipe}
-                      onChange={(e) => setTipe(e.target.value)}
-                      className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
-                    >
-                      <option>Tipe</option>
-                      <option>Bulanan</option>
-                      <option>Paket Durasi</option>
-                    </select>
-                    <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  </div>
-
-                  {/* Semua tahun */}
-                  <div className="relative shrink-0">
-                    <select
-                      id="filter-tahun"
-                      value={tahun}
-                      onChange={(e) => setTahun(e.target.value)}
-                      className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
-                    >
-                      <option>Tahun</option>
-                      <option>2025</option>
-                      <option>2026</option>
-                    </select>
-                    <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  </div>
-
-                  {/* Semua bulan */}
-                  <div className="relative shrink-0">
-                    <select
-                      id="filter-bulan"
-                      value={bulan}
-                      onChange={(e) => setBulan(e.target.value)}
-                      className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
-                    >
-                      <option>Bulan</option>
-                      {[
-                        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-                        "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-                      ].map((b) => (
-                        <option key={b}>{b}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  </div>
-
-                  {/* Group Search Box, Export & Buat tagihan on the right */}
-                  <div className="flex items-center gap-2.5 ml-auto shrink-0 whitespace-nowrap">
-                    {/* Search box — fixed width */}
-                    <div className="relative w-[240px]">
-                      <Search
-                        size={15}
-                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
-                      />
-                      <input
-                        id="search-invoice"
-                        type="text"
-                        placeholder="Cari anak, orang tua, atau no. invoice"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all"
-                      />
-                    </div>
-
-                    <button
-                      id="btn-export"
-                      onClick={handleExport}
-                      className="cursor-pointer flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                    >
-                      <Download size={15} />
-                      Export
-                    </button>
-                    <button
-                      id="btn-buat-tagihan"
-                      onClick={() => setPageView("buat-tagihan")}
-                      className="cursor-pointer flex items-center gap-2 px-4 py-2.5 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors"
-                    >
-                      <Plus size={15} />
-                      Buat tagihan
-                    </button>
-                  </div>
+                {/* Semua tahun */}
+                <div className="relative shrink-0">
+                  <select
+                    id="filter-tahun"
+                    value={tahun}
+                    onChange={(e) => setTahun(e.target.value)}
+                    className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
+                  >
+                    <option>Tahun</option>
+                    <option>2025</option>
+                    <option>2026</option>
+                  </select>
+                  <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
+                {/* Semua bulan */}
+                <div className="relative shrink-0">
+                  <select
+                    id="filter-bulan"
+                    value={bulan}
+                    onChange={(e) => setBulan(e.target.value)}
+                    className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
+                  >
+                    <option>Bulan</option>
+                    {[
+                      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                      "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+                    ].map((b) => (
+                      <option key={b}>{b}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
 
-                {/* Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-gray-100 border-y bg-gray-50/60">
-                        <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                          No. Invoice
-                        </th>
-                        <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                          Anak
-                        </th>
-                        <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                          Periode
-                        </th>
-                        <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                          Total
-                        </th>
-                        <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                          Tanggal Terbit
-                        </th>
-                        <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-right text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                          Aksi
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <AnimatePresence>
-                        {filtered.length === 0 ? (
+                {/* Group Search Box, Export & Buat tagihan on the right */}
+                <div className="flex items-center gap-2.5 ml-auto shrink-0 whitespace-nowrap">
+                  {/* Search box — fixed width */}
+                  <div className="relative w-[240px]">
+                    <Search
+                      size={15}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
+                    />
+                    <input
+                      id="search-invoice"
+                      type="text"
+                      placeholder="Cari anak, orang tua, invoice"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all"
+                    />
+                  </div>
+
+                  <button
+                    id="btn-export"
+                    onClick={handleExport}
+                    className="cursor-pointer flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <Download size={15} />
+                    Export
+                  </button>
+                  <button
+                    id="btn-buat-tagihan"
+                    onClick={() => setPageView("buat-tagihan")}
+                    className="cursor-pointer flex items-center gap-2 px-4 py-2.5 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors"
+                  >
+                    <Plus size={15} />
+                    Buat tagihan
+                  </button>
+                </div>
+              </div>
+
+
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${activeTab}-${search}-${tipe}-${tahun}-${bulan}-${currentPage}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {/* Table */}
+                  <div className="overflow-x-auto min-h-[300px]">
+                    <table className="w-full text-sm table-fixed">
+                      <thead>
+                        <tr className="border-gray-100 border-y bg-gray-50/60">
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
+                            No. Invoice
+                          </th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[18%]">
+                            Anak
+                          </th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
+                            Periode
+                          </th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[14%]">
+                            Total
+                          </th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
+                            Tanggal Terbit
+                          </th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[12%]">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-right text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[8%]">
+                            Aksi
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedData.length === 0 ? (
                           <tr>
                             <td colSpan={7} className="px-6 py-20 text-center">
                               <div className="flex flex-col items-center gap-3">
@@ -1840,13 +1884,9 @@ export default function KeuanganPage() {
                             </td>
                           </tr>
                         ) : (
-                          filtered.map((inv, idx) => (
-                            <motion.tr
+                          paginatedData.map((inv, idx) => (
+                            <tr
                               key={inv.id}
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -6 }}
-                              transition={{ delay: idx * 0.03 }}
                               className="transition-colors border-b border-gray-100 hover:bg-teal-50/20 group"
                             >
                               <td className="px-6 py-4">
@@ -1895,50 +1935,84 @@ export default function KeuanganPage() {
                                 setOpenDropdownId={setOpenDropdownId}
                                 onPengembalian={setPengembalianInvoice}
                               />
-                            </motion.tr>
+                            </tr>
                           ))
                         )}
-                      </AnimatePresence>
-                    </tbody>
-                  </table>
-                </div>
+                      </tbody>
+                    </table>
+                  </div>
 
-                {/* Summary Footer */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
-                  {/* Jumlah Tagihan */}
-                  <div className="px-6 py-5 border-r border-gray-100">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Jumlah Tagihan</p>
-                    <p className="text-lg font-extrabold text-[#1E5C58]">{jumlahTagihan}</p>
-                  </div>
-                  {/* Belum Dibayar */}
-                  <div className="px-6 py-5 border-r border-gray-100">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Belum Dibayar</p>
-                    <p className="text-lg font-extrabold text-[#1E5C58]">
-                      {formatRupiah(totalBelumDibayar)}
-                    </p>
-                  </div>
-                  {/* Periode Berakhir */}
-                  <div className="px-6 py-5 border-r border-gray-100">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Periode Berakhir</p>
-                    <p className="text-lg font-extrabold text-[#1E5C58]">{periodeBerikutnya} tagihan</p>
-                  </div>
-                  {/* Potongan Berikutnya */}
-                  <div className="px-6 py-5">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Potongan Berikutnya</p>
-                    <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(potonganBerikutnya)}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <TabPembayaran
-                data={DUMMY_POTONGAN}
-                onBuatTagihan={(anak, wali) => {
-                  setMainTab("Tagihan");
-                  setPageView("buat-tagihan");
-                }}
-              />
-            )}
-          </AnimatePresence>
+                  {/* Summary Footer */}
+                  {filtered.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
+                      {/* Jumlah Tagihan */}
+                      <div className="px-6 py-5 border-r border-gray-100">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Jumlah Tagihan</p>
+                        <p className="text-lg font-extrabold text-[#1E5C58]">{jumlahTagihan}</p>
+                      </div>
+                      {/* Belum Dibayar */}
+                      <div className="px-6 py-5 border-r border-gray-100">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Belum Dibayar</p>
+                        <p className="text-lg font-extrabold text-[#1E5C58]">
+                          {formatRupiah(totalBelumDibayar)}
+                        </p>
+                      </div>
+                      {/* Periode Berakhir */}
+                      <div className="px-6 py-5 border-r border-gray-100">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Periode Berakhir</p>
+                        <p className="text-lg font-extrabold text-[#1E5C58]">{periodeBerikutnya} tagihan</p>
+                      </div>
+                      {/* Potongan Berikutnya */}
+                      <div className="px-6 py-5">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Potongan Berikutnya</p>
+                        <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(potonganBerikutnya)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
+                      <p className="text-sm text-gray-500">
+                        Menampilkan <span className="font-semibold text-gray-800">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> hingga{" "}
+                        <span className="font-semibold text-gray-800">
+                          {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
+                        </span>{" "}
+                        dari <span className="font-semibold text-gray-800">{filtered.length}</span> data
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                          className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700 px-2">
+                          Halaman {currentPage} dari {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                          disabled={currentPage === totalPages}
+                          className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </motion.div>
+          ) : (
+            <TabPembayaran
+              data={DUMMY_POTONGAN}
+              onBuatTagihan={(anak, wali) => {
+                setPageView("buat-tagihan");
+              }}
+            />
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Modal Pengembalian Dana */}
