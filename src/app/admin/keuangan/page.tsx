@@ -25,6 +25,7 @@ import {
   Filter,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import TabPembayaran, { PotonganData } from "@/components/keuangan/TabPembayaran";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type InvoiceStatus =
@@ -152,6 +153,8 @@ const DUMMY_WALI = [
   "Bpk. Andi Pratama",
   "Ibu Siti Nurhaliza",
   "Bpk. Teguh Santoso",
+  "Ibu Dewi Lestari",
+  "Bpk. Hendra Wijaya",
 ];
 
 const DUMMY_ANAK: Record<string, string[]> = {
@@ -159,8 +162,18 @@ const DUMMY_ANAK: Record<string, string[]> = {
   "Bpk. Andi Pratama": ["Alya", "Raka"],
   "Ibu Siti Nurhaliza": ["Zahra"],
   "Bpk. Teguh Santoso": ["Bima"],
+  "Ibu Dewi Lestari": ["Naufal"],
+  "Bpk. Hendra Wijaya": ["Queenza"],
 };
 
+const DUMMY_POTONGAN: PotonganData[] = [
+  { id: "1", anak: "Kenzo", wali: "Ibu Rina Wulandari", jumlah: 300000 },
+  { id: "2", anak: "Naufal", wali: "Ibu Dewi Lestari", jumlah: 450000 },
+  { id: "3", anak: "Queenza", wali: "Bpk. Hendra Wijaya", jumlah: 400000 },
+  { id: "4", anak: "Alya", wali: "Bpk. Andi Pratama", jumlah: 500000 },
+  { id: "5", anak: "Zahra", wali: "Ibu Siti Nurhaliza", jumlah: 350000 },
+  { id: "6", anak: "Bima", wali: "Bpk. Teguh Santoso", jumlah: 260000 },
+];
 const JENIS_TERAPI_OPTIONS = [
   "Terapi Wicara",
   "Terapi Okupasi",
@@ -298,7 +311,7 @@ function PengembalianDanaModal({
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div className="flex-1 px-6 py-5 space-y-5 overflow-y-auto">
 
             {/* Tagihan (sudah dibayar) */}
             <div>
@@ -324,14 +337,14 @@ function PengembalianDanaModal({
                 </select>
                 <ChevronDown
                   size={15}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                 />
               </div>
             </div>
 
             {/* Kehadiran selama periode */}
             <div>
-              <p className="text-xs font-bold text-gray-500 mb-2">Kehadiran selama periode</p>
+              <p className="mb-2 text-xs font-bold text-gray-500">Kehadiran selama periode</p>
               <div className="h-px bg-gradient-to-r from-[#2B7A75]/60 to-transparent mb-3" />
               <div className="flex items-center gap-3">
                 <span className="flex-1 text-sm font-semibold text-gray-700">{jenis}</span>
@@ -346,7 +359,7 @@ function PengembalianDanaModal({
                   }
                   className="w-20 px-3 py-2 border border-gray-200 rounded-xl text-sm text-center font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]"
                 />
-                <span className="text-sm text-gray-400 font-medium whitespace-nowrap">
+                <span className="text-sm font-medium text-gray-400 whitespace-nowrap">
                   dari {totalSesi} sesi
                 </span>
               </div>
@@ -380,8 +393,8 @@ function PengembalianDanaModal({
 
             {/* Toggle sisa sesi */}
             <div>
-              <p className="text-xs font-bold text-gray-500 mb-2">Sisa sesi mau diapakan?</p>
-              <div className="flex rounded-xl overflow-hidden border border-gray-200">
+              <p className="mb-2 text-xs font-bold text-gray-500">Sisa sesi mau diapakan?</p>
+              <div className="flex overflow-hidden border border-gray-200 rounded-xl">
                 <button
                   id="mode-dikembalikan"
                   type="button"
@@ -418,7 +431,7 @@ function PengembalianDanaModal({
                   transition={{ duration: 0.18 }}
                   className="space-y-4"
                 >
-                  <p className="text-xs text-gray-400 font-medium">
+                  <p className="text-xs font-medium text-gray-400">
                     Dana dikirim kembali ke orang tua (transfer, tunai, atau QRIS).
                   </p>
 
@@ -440,7 +453,7 @@ function PengembalianDanaModal({
                         </select>
                         <ChevronDown
                           size={14}
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                         />
                       </div>
                     </div>
@@ -463,7 +476,7 @@ function PengembalianDanaModal({
                   <div>
                     <label className="block mb-1.5 text-xs font-bold text-gray-500">
                       Upload bukti pengembalian{" "}
-                      <span className="text-gray-300 font-normal normal-case">
+                      <span className="font-normal text-gray-300 normal-case">
                         (bukti transfer / kwitansi, opsional)
                       </span>
                     </label>
@@ -476,7 +489,7 @@ function PengembalianDanaModal({
                       >
                         Pilih File
                       </button>
-                      <span className="text-xs text-gray-400 font-medium truncate">{fileName}</span>
+                      <span className="text-xs font-medium text-gray-400 truncate">{fileName}</span>
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -498,7 +511,7 @@ function PengembalianDanaModal({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
-                  className="text-xs text-gray-400 font-medium"
+                  className="text-xs font-medium text-gray-400"
                 >
                   Nilainya otomatis jadi potongan di tagihan periode berikutnya.
                 </motion.p>
@@ -507,7 +520,7 @@ function PengembalianDanaModal({
           </div>
 
           {/* Bottom summary + CTA */}
-          <div className="shrink-0 px-6 pt-4 pb-6 border-t border-gray-100 space-y-3">
+          <div className="px-6 pt-4 pb-6 space-y-3 border-t border-gray-100 shrink-0">
             {/* Invoice info row */}
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-700">
@@ -518,12 +531,12 @@ function PengembalianDanaModal({
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400 font-medium">Total dibayar</span>
+              <span className="font-medium text-gray-400">Total dibayar</span>
               <span className="font-extrabold text-gray-800">{formatRupiah(selectedInv.total)}</span>
             </div>
 
             {/* Sesi tidak terpakai */}
-            <div className="flex items-center justify-between py-3 border-t border-dashed border-gray-200">
+            <div className="flex items-center justify-between py-3 border-t border-gray-200 border-dashed">
               <span className="text-sm font-extrabold text-[#1E5C58]">Sesi tidak terpakai</span>
               <span className="text-sm font-extrabold text-[#1E5C58]">{sisaSesi} sesi</span>
             </div>
@@ -743,44 +756,23 @@ function PratinjauInvoiceModal({
           exit={{ opacity: 0, scale: 0.93, y: 16 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl shadow-black/20 overflow-hidden"
+          className="relative w-full max-w-lg overflow-hidden bg-white shadow-2xl rounded-2xl shadow-black/20"
           style={{ fontFamily: "'Inter', sans-serif" }}
         >
-          <style>{`
-            @media print {
-              body * {
-                visibility: hidden;
-              }
-              #printable-invoice, #printable-invoice * {
-                visibility: visible;
-              }
-              #printable-invoice {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                margin: 0;
-                padding: 0;
-                box-shadow: none !important;
-                background: white;
-                transform: none !important;
-              }
-            }
-          `}</style>
           {/* Close button */}
           <button
             onClick={onClose}
-            className="cursor-pointer absolute top-3 right-3 z-10 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors print:hidden"
+            className="cursor-pointer absolute top-3 right-3 z-10 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <X size={16} />
           </button>
 
           {/* Invoice Content */}
-          <div id="printable-invoice" className="p-7">
+          <div className="p-7">
             {/* Header */}
             <div className="flex items-start justify-between mb-5">
               <div>
-                <p className="text-lg font-extrabold text-gray-900 leading-tight">Puspa</p>
+                <p className="text-lg font-extrabold leading-tight text-gray-900">Puspa</p>
                 <p className="text-[11px] text-gray-400 font-medium">Holistic Integrative Care</p>
               </div>
               <div className="text-right">
@@ -793,7 +785,7 @@ function PratinjauInvoiceModal({
             <div className="h-px bg-[#2B7A75] mb-5" />
 
             {/* Billing info */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-5 text-sm">
+            <div className="grid grid-cols-2 mb-5 text-sm gap-x-4 gap-y-3">
               <div>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">
                   Ditagihkan kepada
@@ -821,7 +813,7 @@ function PratinjauInvoiceModal({
             </div>
 
             {/* Items table */}
-            <div className="rounded-xl overflow-hidden border border-gray-100 mb-4">
+            <div className="mb-4 overflow-hidden border border-gray-100 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-[#EAF4F3]">
@@ -874,28 +866,28 @@ function PratinjauInvoiceModal({
               {/* Teal divider */}
               <div className="h-px bg-[#2B7A75] my-2" />
 
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
                 <span className="text-sm font-extrabold text-gray-800">Total tagihan</span>
                 <span className="text-base font-extrabold text-[#1E5C58]">
                   {formatRupiah(data.totalBayar)}
                 </span>
               </div>
-              <div className="flex justify-between items-center pt-1">
+              <div className="flex items-center justify-between pt-1">
                 <span className="text-sm text-gray-500">Status</span>
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-600 text-xs font-extrabold">
+                <span className="inline-flex items-center px-3 py-1 text-xs font-extrabold text-red-600 bg-red-100 rounded-full">
                   Belum dibayar
                 </span>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="border-t border-gray-100 pt-4 flex items-end justify-between">
+            <div className="flex items-end justify-between pt-4 border-t border-gray-100">
               <div className="text-[11px] text-gray-400 leading-relaxed">
                 <p>Pembayaran dilakukan di awal periode.</p>
                 <p>Rek. BCA 000-000-0000 a.n. Puspa</p>
               </div>
               <div className="text-right">
-                <div className="w-24 border-t border-gray-400 mb-1" />
+                <div className="w-24 mb-1 border-t border-gray-400" />
                 <p className="text-[11px] text-gray-500 font-semibold">Admin Puspa</p>
               </div>
             </div>
@@ -925,9 +917,12 @@ function hitungDurasiPaket(mulai: string, selesai: string) {
 
 function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv: Invoice) => void }) {
   const [tipeTagihan, setTipeTagihan] = useState<"Bulanan" | "Paket Durasi">("Bulanan");
-  const [selectedWali, setSelectedWali] = useState("");
-  const [selectedAnak, setSelectedAnak] = useState("");
-  const [periode, setPeriode] = useState("");
+  const [selectedWali, setSelectedWali] = useState(DUMMY_WALI[0]);
+  const [selectedAnak, setSelectedAnak] = useState(DUMMY_ANAK[DUMMY_WALI[0]][0]);
+  const [periode, setPeriode] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   // Paket Durasi fields
   const [tanggalMulai, setTanggalMulai] = useState("");
@@ -935,11 +930,11 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
 
   // Terapi rows
   const [terapiRows, setTerapiRows] = useState<TerapiRow[]>([
-    { id: genId(), jenis: "", jumlah_sesi: 0, harga_sesi: 0 },
+    { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 8, harga_sesi: 150000 },
   ]);
 
   // Harga & Pembayaran
-  const [potongan, setPotongan] = useState(0);
+  const [potongan, setPotongan] = useState(300000);
   const [catatan, setCatatan] = useState("");
 
   // Pratinjau modal
@@ -962,15 +957,9 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
   const periodeLabel = tipeTagihan === "Bulanan"
     ? (() => {
       if (!periode) return "—";
-      const parts = periode.split("-");
-      const y = parts[0];
-      const m = parts[1];
-      const d = parts[2];
+      const [y, m] = periode.split("-");
       const names = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
         "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-      if (d) {
-        return `${d} ${names[parseInt(m, 10) - 1]} ${y}`;
-      }
       return `${names[parseInt(m, 10) - 1]} ${y}`;
     })()
     : tanggalMulai && tanggalSelesai
@@ -985,9 +974,15 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
   // Saat ganti tipe, reset rows ke default sesuai tipe
   const handleTipeChange = (tipe: "Bulanan" | "Paket Durasi") => {
     setTipeTagihan(tipe);
-    setTerapiRows([
-      { id: genId(), jenis: "", jumlah_sesi: 0, harga_sesi: 0 },
-    ]);
+    if (tipe === "Paket Durasi") {
+      setTerapiRows([
+        { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 26, harga_sesi: 0 },
+      ]);
+    } else {
+      setTerapiRows([
+        { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 8, harga_sesi: 150000 },
+      ]);
+    }
   };
 
   const updateTerapiRow = (id: string, field: keyof TerapiRow, value: string | number) => {
@@ -999,7 +994,9 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
   const addTerapiRow = () => {
     setTerapiRows((rows) => [
       ...rows,
-      { id: genId(), jenis: "", jumlah_sesi: 0, harga_sesi: 0 },
+      isPaket
+        ? { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 26, harga_sesi: 0 }
+        : { id: genId(), jenis: "Terapi Wicara", jumlah_sesi: 1, harga_sesi: 0 },
     ]);
   };
 
@@ -1014,23 +1011,6 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
     "w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all cursor-pointer appearance-none";
 
   const handleSimpan = () => {
-    if (!selectedWali || !selectedAnak) {
-      alert("Harap pilih Orang tua dan Anak!");
-      return;
-    }
-    if (tipeTagihan === "Bulanan" && !periode) {
-      alert("Harap isi periode (bulan)!");
-      return;
-    }
-    if (tipeTagihan === "Paket Durasi" && (!tanggalMulai || !tanggalSelesai)) {
-      alert("Harap isi tanggal mulai dan selesai paket!");
-      return;
-    }
-    if (terapiRows.some((r) => !r.jenis || r.jumlah_sesi <= 0 || r.harga_sesi <= 0)) {
-      alert("Harap lengkapi detail layanan terapi (Jenis, Jumlah Sesi, dan Harga harus lebih dari 0)!");
-      return;
-    }
-
     const newInvoice: Invoice = {
       id: genId(),
       no_invoice: noInvoicePreview,
@@ -1070,7 +1050,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
         <button
           id="btn-pratinjau-invoice"
           onClick={() => setShowPratinjau(true)}
-          className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors border border-gray-200 cursor-pointer rounded-xl hover:bg-gray-50"
         >
           <Printer size={15} />
           Pratinjau invoice
@@ -1078,10 +1058,10 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
       </div>
 
       {/* Form Content */}
-      <div className="p-4 sm:p-6 space-y-5">
+      <div className="p-4 space-y-5 sm:p-6">
 
         {/* ── Section 1: Siapa yang ditagih ── */}
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-hidden bg-white border border-gray-200 rounded-2xl">
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
               1
@@ -1092,7 +1072,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
           <div className="p-5 space-y-5">
             {/* Tipe tagihan */}
             <div>
-              <label className="block mb-2 text-xs font-bold text-gray-500 uppercase tracking-wide">
+              <label className="block mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
                 Tipe tagihan
               </label>
               <div className="flex rounded-xl overflow-hidden border border-gray-200 bg-[#F4F9F8]">
@@ -1114,7 +1094,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
             </div>
 
             {/* Orang tua / wali & Anak */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
                   Orang tua / wali
@@ -1126,7 +1106,6 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     onChange={(e) => handleWaliChange(e.target.value)}
                     className={selectClass}
                   >
-                    <option value="" disabled>Pilih Orang Tua...</option>
                     {DUMMY_WALI.map((w) => (
                       <option key={w} value={w}>
                         {w}
@@ -1135,7 +1114,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                   </select>
                   <ChevronDown
                     size={15}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                   />
                 </div>
               </div>
@@ -1151,7 +1130,6 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     onChange={(e) => setSelectedAnak(e.target.value)}
                     className={selectClass}
                   >
-                    <option value="" disabled>Pilih Anak...</option>
                     {(DUMMY_ANAK[selectedWali] ?? []).map((a) => (
                       <option key={a} value={a}>
                         {a}
@@ -1160,7 +1138,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                   </select>
                   <ChevronDown
                     size={15}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                   />
                 </div>
               </div>
@@ -1175,19 +1153,19 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                 <div className="relative max-w-xs">
                   <input
                     id="input-periode-bulan"
-                    type="date"
+                    type="month"
                     value={periode}
                     onChange={(e) => setPeriode(e.target.value)}
                     className={`${inputClass} cursor-pointer pr-10`}
                   />
                   <Calendar
                     size={16}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                   />
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block mb-1.5 text-xs font-bold text-gray-500">
                     Tanggal mulai
@@ -1202,7 +1180,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     />
                     <Calendar
                       size={16}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                     />
                   </div>
                 </div>
@@ -1221,7 +1199,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                     />
                     <Calendar
                       size={16}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                     />
                   </div>
                 </div>
@@ -1231,7 +1209,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
         </div>
 
         {/* ── Section 2: Terapi & jumlah sesi ── */}
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-hidden bg-white border border-gray-200 rounded-2xl">
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
               2
@@ -1275,15 +1253,15 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                       onChange={(e) => updateTerapiRow(row.id, "jenis", e.target.value)}
                       className={selectClass}
                     >
-                      <option value="" disabled>Pilih Terapi...</option>
-                      <option value="Terapi Wicara">Terapi Wicara</option>
-                      <option value="Terapi Okupasi">Terapi Okupasi</option>
-                      <option value="Fisioterapi">Fisioterapi</option>
-                      <option value="Terapi Perilaku">Terapi Perilaku</option>
+                      {JENIS_TERAPI_OPTIONS.map((j) => (
+                        <option key={j} value={j}>
+                          {j}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown
                       size={14}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                     />
                   </div>
 
@@ -1321,7 +1299,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
                       type="button"
                       onClick={() => removeTerapiRow(row.id)}
                       disabled={terapiRows.length === 1}
-                      className="cursor-pointer text-red-400 hover:text-red-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                      className="text-red-400 transition-colors cursor-pointer hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
                       title="Hapus baris"
                     >
                       <X size={16} strokeWidth={2.5} />
@@ -1360,7 +1338,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
         </div>
 
         {/* ── Section 3: Harga & pembayaran ── */}
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-hidden bg-white border border-gray-200 rounded-2xl">
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
               3
@@ -1412,7 +1390,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
             <div className="border-t border-gray-100 pt-4 space-y-2.5">
               {/* Total seharusnya */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 font-medium">Total seharusnya</span>
+                <span className="font-medium text-gray-500">Total seharusnya</span>
                 <span className="font-semibold text-gray-700">
                   {formatRupiah(totalSeharusnya)}
                 </span>
@@ -1420,7 +1398,7 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
 
               {/* Potongan row */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 font-medium">Potongan</span>
+                <span className="font-medium text-gray-500">Potongan</span>
                 <span className="font-semibold text-red-500">
                   - {formatRupiah(potongan)}
                 </span>
@@ -1454,10 +1432,6 @@ function BuatTagihanForm({ onBack, onSave }: { onBack: () => void; onSave: (inv:
           <button
             id="btn-cetak-invoice"
             type="button"
-            onClick={() => {
-              setShowPratinjau(true);
-              setTimeout(() => window.print(), 300);
-            }}
             className="cursor-pointer px-6 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
           >
             Cetak invoice
@@ -1595,12 +1569,12 @@ export default function KeuanganPage() {
     filtered.forEach((inv) => {
       const totalLayanan = inv.total;
       const potongan = 0;
-      const potonganSisa = inv.id === "7" ? 175000 : 0; 
+      const potonganSisa = inv.id === "7" ? 175000 : 0;
       const totalTagihan = totalLayanan - potongan - potonganSisa;
-      
+
       const isLunasOrSemacamnya = ["LUNAS", "DIKEMBALIKAN", "PERIODE BERIKUTNYA"].includes(inv.status);
       const dibayar = isLunasOrSemacamnya ? totalTagihan : 0;
-      
+
       const pengembalian = inv.status === "DIKEMBALIKAN" ? 150000 : 0;
       const periodeBerikutnya = inv.status === "PERIODE BERIKUTNYA" ? (inv.id === "8" ? 300000 : 175000) : 0;
 
@@ -1649,68 +1623,69 @@ export default function KeuanganPage() {
               <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
                 Manajemen Keuangan
               </h1>
-              <p className="text-sm text-gray-400 font-medium">
+              <p className="text-sm font-medium text-gray-400">
                 Kelola tagihan, catat pembayaran, dan pantau riwayat keuangan klinik.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Main Content Card */}
-        <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] overflow-hidden">
-          {/* Main Tab (Tagihan / Pembayaran) */}
-          <div className="flex gap-3 p-4 border-b border-gray-100">
-            <button
-              onClick={() => {
-                setMainTab("Tagihan");
-                setPageView("list");
-              }}
-              id="tab-tagihan"
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Tagihan"
-                ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
-                : "bg-gray-50 text-gray-400 hover:bg-gray-100"
-                }`}
-            >
-              <FileText size={16} />
-              Tagihan
-            </button>
-            <button
-              onClick={() => {
-                setMainTab("Pembayaran");
-                setPageView("list");
-              }}
-              id="tab-pembayaran"
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Pembayaran"
-                ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
-                : "bg-gray-50 text-gray-400 hover:bg-gray-100"
-                }`}
-            >
-              <CreditCard size={16} />
-              Pembayaran
-            </button>
-          </div>
+        {/* Main Tab (Tagihan / Pembayaran) */}
+        <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] p-2 mb-6 flex gap-2">
+          <button
+            onClick={() => {
+              setMainTab("Tagihan");
+              setPageView("list");
+            }}
+            id="tab-tagihan"
+            className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Tagihan"
+              ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
+              : "bg-transparent text-gray-400 hover:bg-gray-50"
+              }`}
+          >
+            <FileText size={16} />
+            Tagihan
+          </button>
+          <button
+            onClick={() => {
+              setMainTab("Pembayaran");
+              setPageView("list");
+            }}
+            id="tab-pembayaran"
+            className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Pembayaran"
+              ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
+              : "bg-transparent text-gray-400 hover:bg-gray-50"
+              }`}
+          >
+            <CreditCard size={16} />
+            Pembayaran
+          </button>
+        </div>
 
-          <AnimatePresence mode="wait">
-            {/* ── FORM BUAT TAGIHAN ── */}
-            {pageView === "buat-tagihan" ? (
-              <BuatTagihanForm 
-                key="buat-tagihan" 
-                onBack={() => setPageView("list")} 
+        <AnimatePresence mode="wait">
+          {/* ── FORM BUAT TAGIHAN ── */}
+          {pageView === "buat-tagihan" ? (
+            <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] overflow-hidden">
+              <BuatTagihanForm
+                key="buat-tagihan"
+                onBack={() => setPageView("list")}
                 onSave={(newInv) => {
                   setInvoices([newInv, ...invoices]);
                   setPageView("list");
                 }}
               />
-            ) : mainTab === "Tagihan" ? (
-              <motion.div
-                key="tagihan-list"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-              >
+            </div>
+          ) : mainTab === "Tagihan" ? (
+            <motion.div
+              key="tagihan-list"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] overflow-hidden"
+            >
                 {/* Status Tabs */}
-                <div className="flex items-center gap-1 px-4 pt-4 border-b border-gray-100 overflow-x-auto">
+                <div className="flex items-center gap-1 px-4 pt-4 overflow-x-auto border-b border-gray-100">
                   {TABS.map((tab) => (
                     <button
                       key={tab}
@@ -1724,7 +1699,7 @@ export default function KeuanganPage() {
                       {tab}
                     </button>
                   ))}
-                  <div className="ml-auto flex gap-1 pb-1 shrink-0">
+                  <div className="flex gap-1 pb-1 ml-auto shrink-0">
                     <button className="p-1.5 text-gray-300 hover:text-[#2B7A75] transition-colors">
                       <ChevronUp size={16} />
                     </button>
@@ -1827,7 +1802,7 @@ export default function KeuanganPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-y border-gray-100 bg-gray-50/60">
+                      <tr className="border-gray-100 border-y bg-gray-50/60">
                         <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
                           No. Invoice
                         </th>
@@ -1872,7 +1847,7 @@ export default function KeuanganPage() {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -6 }}
                               transition={{ delay: idx * 0.03 }}
-                              className="border-b border-gray-100 hover:bg-teal-50/20 transition-colors group"
+                              className="transition-colors border-b border-gray-100 hover:bg-teal-50/20 group"
                             >
                               <td className="px-6 py-4">
                                 <div>
@@ -1886,7 +1861,7 @@ export default function KeuanganPage() {
                               </td>
                               <td className="px-6 py-4">
                                 <div>
-                                  <p className="font-bold text-gray-800 text-sm">
+                                  <p className="text-sm font-bold text-gray-800">
                                     {inv.anak}
                                   </p>
                                   <span className="mt-1 inline-flex max-w-[160px] truncate rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-700">
@@ -1901,7 +1876,7 @@ export default function KeuanganPage() {
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                <p className="font-extrabold text-gray-800 text-sm">
+                                <p className="text-sm font-extrabold text-gray-800">
                                   {formatRupiah(inv.total)}
                                 </p>
                               </td>
@@ -1929,55 +1904,41 @@ export default function KeuanganPage() {
                 </div>
 
                 {/* Summary Footer */}
-                {filtered.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
-                    {/* Jumlah Tagihan */}
-                    <div className="px-6 py-5 border-r border-gray-100">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Jumlah Tagihan</p>
-                      <p className="text-lg font-extrabold text-[#1E5C58]">{jumlahTagihan}</p>
-                    </div>
-                    {/* Belum Dibayar */}
-                    <div className="px-6 py-5 border-r border-gray-100">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Belum Dibayar</p>
-                      <p className="text-lg font-extrabold text-[#1E5C58]">
-                        {formatRupiah(totalBelumDibayar)}
-                      </p>
-                    </div>
-                    {/* Periode Berakhir */}
-                    <div className="px-6 py-5 border-r border-gray-100">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Periode Berakhir</p>
-                      <p className="text-lg font-extrabold text-[#1E5C58]">{periodeBerikutnya} tagihan</p>
-                    </div>
-                    {/* Potongan Berikutnya */}
-                    <div className="px-6 py-5">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Potongan Berikutnya</p>
-                      <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(potonganBerikutnya)}</p>
-                    </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
+                  {/* Jumlah Tagihan */}
+                  <div className="px-6 py-5 border-r border-gray-100">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Jumlah Tagihan</p>
+                    <p className="text-lg font-extrabold text-[#1E5C58]">{jumlahTagihan}</p>
                   </div>
-                )}
+                  {/* Belum Dibayar */}
+                  <div className="px-6 py-5 border-r border-gray-100">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Belum Dibayar</p>
+                    <p className="text-lg font-extrabold text-[#1E5C58]">
+                      {formatRupiah(totalBelumDibayar)}
+                    </p>
+                  </div>
+                  {/* Periode Berakhir */}
+                  <div className="px-6 py-5 border-r border-gray-100">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Periode Berakhir</p>
+                    <p className="text-lg font-extrabold text-[#1E5C58]">{periodeBerikutnya} tagihan</p>
+                  </div>
+                  {/* Potongan Berikutnya */}
+                  <div className="px-6 py-5">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Potongan Berikutnya</p>
+                    <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(potonganBerikutnya)}</p>
+                  </div>
+                </div>
               </motion.div>
             ) : (
-              <motion.div
-                key="pembayaran"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-                className="flex flex-col items-center justify-center py-24 text-center"
-              >
-                <div className="p-5 rounded-3xl bg-teal-50 mb-5">
-                  <CreditCard size={32} className="text-[#2B7A75]" />
-                </div>
-                <h3 className="text-base font-extrabold text-[#1E5C58] mb-2">
-                  Riwayat Pembayaran
-                </h3>
-                <p className="text-sm text-gray-400 font-medium max-w-sm">
-                  Fitur pencatatan dan riwayat pembayaran akan segera tersedia.
-                </p>
-              </motion.div>
+              <TabPembayaran
+                data={DUMMY_POTONGAN}
+                onBuatTagihan={(anak, wali) => {
+                  setMainTab("Tagihan");
+                  setPageView("buat-tagihan");
+                }}
+              />
             )}
           </AnimatePresence>
-        </div>
       </div>
 
       {/* Modal Pengembalian Dana */}
