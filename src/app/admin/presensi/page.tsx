@@ -584,27 +584,69 @@ function RekapKehadiran() {
     loadOptions();
   }, []);
 
+  const [previewItems, setPreviewItems] = useState<SessionAttendanceItem[]>([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [totalFiltered, setTotalFiltered] = useState(0);
+
+  // Compute date_from and date_to based on current periode state
+  const computedDateRange = useMemo(() => {
+    let dateFrom = "";
+    let dateTo = "";
+
+    if (periode === "Harian" && periodeValues.hari) {
+      dateFrom = periodeValues.hari;
+      dateTo = periodeValues.hari;
+    } else if (periode === "Bulanan" && periodeValues.bulan) {
+      const [y, m] = periodeValues.bulan.split("-");
+      const lastDay = new Date(Number(y), Number(m), 0).getDate();
+      dateFrom = `${periodeValues.bulan}-01`;
+      dateTo = `${periodeValues.bulan}-${String(lastDay).padStart(2, "0")}`;
+    } else if (periode === "Custom") {
+      dateFrom = periodeValues.dari;
+      dateTo = periodeValues.sampai;
+    }
+
+    return { dateFrom, dateTo };
+  }, [periode, periodeValues]);
+
+  // Fetch preview data when filters change
+  useEffect(() => {
+    let isSubscribed = true;
+    async function fetchPreview() {
+      setLoadingPreview(true);
+      try {
+        const res = await getTodaySessions({
+          date_from: computedDateRange.dateFrom || undefined,
+          date_to: computedDateRange.dateTo || undefined,
+          child_id: anakId || undefined,
+          therapist_id: terapisId || undefined,
+          therapy_type: jenisTerapi || undefined,
+          per_page: 10,
+          page: 1,
+        } as any);
+
+        if (isSubscribed) {
+          setPreviewItems(res.items || []);
+          setTotalFiltered(res.meta?.total || 0);
+        }
+      } catch (err) {
+        console.error("Gagal memuat preview export:", err);
+      } finally {
+        if (isSubscribed) setLoadingPreview(false);
+      }
+    }
+
+    fetchPreview();
+    return () => {
+      isSubscribed = false;
+    };
+  }, [anakId, terapisId, jenisTerapi, computedDateRange]);
+
   const handleExportClick = async (format: "excel" | "pdf") => {
     try {
-      let dateFrom = "";
-      let dateTo = "";
-
-      if (periode === "Harian" && periodeValues.hari) {
-        dateFrom = periodeValues.hari;
-        dateTo = periodeValues.hari;
-      } else if (periode === "Bulanan" && periodeValues.bulan) {
-        const [y, m] = periodeValues.bulan.split("-");
-        const lastDay = new Date(Number(y), Number(m), 0).getDate();
-        dateFrom = `${periodeValues.bulan}-01`;
-        dateTo = `${periodeValues.bulan}-${String(lastDay).padStart(2, "0")}`;
-      } else if (periode === "Custom") {
-        dateFrom = periodeValues.dari;
-        dateTo = periodeValues.sampai;
-      }
-
       await exportAttendance({
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: computedDateRange.dateFrom || undefined,
+        date_to: computedDateRange.dateTo || undefined,
         therapy_type: jenisTerapi || undefined,
         therapist_id: terapisId || undefined,
         child_id: anakId || undefined,
@@ -802,6 +844,80 @@ function RekapKehadiran() {
             </div>
           </div>
         </div>
+
+        {/* Live Preview Table (First 10 rows) */}
+        <div className="pt-2 border-t border-teal-50/80">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-extrabold tracking-wider text-gray-400 uppercase flex items-center gap-2">
+              <span>Preview Data Laporan</span>
+              <span className="px-2 py-0.5 text-[10px] text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-md font-bold lowercase">
+                (maks 10 baris pertama)
+              </span>
+            </p>
+            <span className="text-xs font-semibold text-gray-500">
+              Total terfilter: <b className="text-[#1E5C58]">{totalFiltered}</b> sesi
+            </span>
+          </div>
+
+          <div className="overflow-x-auto border border-gray-100 rounded-xl bg-gray-50/30">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100 bg-[#F4F9F8] text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">
+                  <th className="py-3 px-4">No. RM & Nama Anak</th>
+                  <th className="py-3 px-4">Tanggal & Jam</th>
+                  <th className="py-3 px-4">Terapi & Terapis</th>
+                  <th className="py-3 px-4 text-center">Status Presensi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-xs">
+                {loadingPreview ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-gray-400 font-medium">
+                      Memuat preview data...
+                    </td>
+                  </tr>
+                ) : previewItems.length > 0 ? (
+                  previewItems.map((item) => {
+                    const uiStatus = mapBackendStatusToUi(item.status);
+                    return (
+                      <tr key={item.id} className="hover:bg-white transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-gray-800">{item.child_name}</div>
+                          <div className="text-[10px] text-gray-400 font-medium">
+                            No. RM: {item.medical_record_number || "-"}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-gray-600">
+                          <div>{item.session_date}</div>
+                          <div className="text-[11px] text-gray-400 font-normal">
+                            {item.start_time} - {item.end_time}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-[#1E5C58]">
+                            {formatTherapyType(item.therapy_type)}
+                          </div>
+                          <div className="text-[11px] text-gray-500">
+                            {item.therapist_name}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <StatusBadge status={uiStatus} />
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-gray-400 font-medium">
+                      Tidak ada data sesi terapi sesuai filter di atas.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
@@ -956,6 +1072,12 @@ export default function PresensiPage() {
       setLoading(false);
     }
   };
+
+  // Reset page to 1 when filter date or search changes
+  useEffect(() => {
+    setPresensiPage(1);
+    setReschedulePage(1);
+  }, [selectedDate, searchTerm]);
 
   useEffect(() => {
     if (activeTab === "Presensi") {
