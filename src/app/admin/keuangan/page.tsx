@@ -2008,6 +2008,7 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function KeuanganPage() {
   const [invoices, setInvoices] = useState<Invoice[]>(dummyInvoices);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [mainTab, setMainTab] = useState<MainTab>("Tagihan");
   const [pageView, setPageView] = useState<PageView>("list");
   const [activeTab, setActiveTab] = useState<TabKey>("Semua");
@@ -2023,6 +2024,24 @@ export default function KeuanganPage() {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    const saved = localStorage.getItem("puspa_invoices");
+    if (saved) {
+      try {
+        setInvoices(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse invoices from localStorage", e);
+      }
+    }
+    setIsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem("puspa_invoices", JSON.stringify(invoices));
+    }
+  }, [invoices, isLoaded]);
 
   const lunasInvoices = invoices.filter((i) => i.status === "LUNAS");
 
