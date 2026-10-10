@@ -28,8 +28,19 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TabPembayaran, { PotonganData } from "@/components/keuangan/TabPembayaran";
+import {
+  getChildrenWithGuardians,
+  ChildGuardianItem,
+  getInvoices,
+  createInvoice,
+  updateInvoice,
+  deleteInvoice,
+  payInvoice,
+  refundInvoice,
+  getAttendanceForRefund,
+} from "@/lib/api/keuangan";
+import { showSuccessToast, showErrorToast, handleApiError } from "@/lib/toast";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 type InvoiceStatus =
   | "LUNAS"
   | "BELUM DIBAYAR"
@@ -44,14 +55,17 @@ interface Invoice {
   no_invoice: string;
   anak: string;
   wali: string;
+  child_id?: string;
+  guardian_id?: string;
   tipe: InvoiceType;
   periode: string;
   total: number;
+  subtotal?: number;
   tanggal_terbit: string;
   status: InvoiceStatus;
   terapiRows?: TerapiRow[];
   potongan?: number;
-  pembayaran?: { tanggal: string; metode: string; noResi: string };
+  pembayaran?: { tanggal: string; metode: string; noResi: string; buktiUrl?: string };
 }
 
 interface TerapiRow {
@@ -61,131 +75,6 @@ interface TerapiRow {
   harga_sesi: number | "";
 }
 
-// ── Dummy Data ────────────────────────────────────────────────────────────────
-const dummyInvoices: Invoice[] = [
-  {
-    id: "1",
-    no_invoice: "INV/2025/11/0000",
-    anak: "Kenzo",
-    wali: "Ibu Rina Wulandari",
-    tipe: "Bulanan",
-    periode: "November 2025",
-    total: 1200000,
-    tanggal_terbit: "28 Nov 2025",
-    status: "LUNAS",
-  },
-  {
-    id: "2",
-    no_invoice: "INV/2026/08/0001",
-    anak: "Alya",
-    wali: "Bpk. Andi Pratama",
-    tipe: "Bulanan",
-    periode: "Agustus 2026",
-    total: 1200000,
-    tanggal_terbit: "25 Agu 2026",
-    status: "DIKEMBALIKAN",
-  },
-  {
-    id: "3",
-    no_invoice: "INV/2026/08/0002",
-    anak: "Raka",
-    wali: "Bpk. Andi Pratama",
-    tipe: "Bulanan",
-    periode: "Agustus 2026",
-    total: 700000,
-    tanggal_terbit: "25 Agu 2026",
-    status: "PERIODE BERIKUTNYA",
-  },
-  {
-    id: "4",
-    no_invoice: "INV/2026/09/0003",
-    anak: "Zahra",
-    wali: "Ibu Siti Nurhaliza",
-    tipe: "Bulanan",
-    periode: "September 2026",
-    total: 1600000,
-    tanggal_terbit: "25 Sep 2026",
-    status: "LUNAS",
-  },
-  {
-    id: "5",
-    no_invoice: "INV/2026/09/0004",
-    anak: "Kenzo",
-    wali: "Ibu Rina Wulandari",
-    tipe: "Bulanan",
-    periode: "September 2026",
-    total: 1900000,
-    tanggal_terbit: "25 Sep 2026",
-    status: "BELUM DIBAYAR",
-    terapiRows: [
-      { id: "r5a", jenis: "Terapi Wicara", jumlah_sesi: 8, harga_sesi: 150000 },
-      { id: "r5b", jenis: "Terapi Okupasi", jumlah_sesi: 4, harga_sesi: 175000 },
-    ],
-  },
-  {
-    id: "6",
-    no_invoice: "INV/2026/PKT/0005",
-    anak: "Zahra",
-    wali: "Ibu Siti Nurhaliza",
-    tipe: "Paket Durasi",
-    periode: "1 Okt 2026 – 31 Mar 2027 (181 hari)",
-    total: 9600000,
-    tanggal_terbit: "28 Sep 2026",
-    status: "LUNAS",
-  },
-  {
-    id: "7",
-    no_invoice: "INV/2026/09/0006",
-    anak: "Raka",
-    wali: "Bpk. Andi Pratama",
-    tipe: "Bulanan",
-    periode: "September 2026",
-    total: 525000,
-    tanggal_terbit: "26 Sep 2026",
-    status: "BELUM DIBAYAR",
-    terapiRows: [
-      { id: "r7a", jenis: "PLB (Paedagog)", jumlah_sesi: 3, harga_sesi: 175000 },
-    ],
-  },
-  {
-    id: "8",
-    no_invoice: "INV/2026/08/0007",
-    anak: "Kenzo",
-    wali: "Ibu Rina Wulandari",
-    tipe: "Bulanan",
-    periode: "Agustus 2026",
-    total: 1200000,
-    tanggal_terbit: "25 Agu 2026",
-    status: "PERIODE BERIKUTNYA",
-  },
-];
-
-const DUMMY_WALI = [
-  "Ibu Rina Wulandari",
-  "Bpk. Andi Pratama",
-  "Ibu Siti Nurhaliza",
-  "Bpk. Teguh Santoso",
-  "Ibu Dewi Lestari",
-  "Bpk. Hendra Wijaya",
-];
-
-const DUMMY_ANAK: Record<string, string[]> = {
-  "Ibu Rina Wulandari": ["Kenzo"],
-  "Bpk. Andi Pratama": ["Alya", "Raka"],
-  "Ibu Siti Nurhaliza": ["Zahra"],
-  "Bpk. Teguh Santoso": ["Bima"],
-  "Ibu Dewi Lestari": ["Naufal"],
-  "Bpk. Hendra Wijaya": ["Queenza"],
-};
-
-const DUMMY_POTONGAN: PotonganData[] = [
-  { id: "1", anak: "Kenzo", wali: "Ibu Rina Wulandari", jumlah: 300000 },
-  { id: "2", anak: "Naufal", wali: "Ibu Dewi Lestari", jumlah: 450000 },
-  { id: "3", anak: "Queenza", wali: "Bpk. Hendra Wijaya", jumlah: 400000 },
-  { id: "4", anak: "Alya", wali: "Bpk. Andi Pratama", jumlah: 500000 },
-  { id: "5", anak: "Zahra", wali: "Ibu Siti Nurhaliza", jumlah: 350000 },
-  { id: "6", anak: "Bima", wali: "Bpk. Teguh Santoso", jumlah: 260000 },
-];
 const JENIS_TERAPI_OPTIONS = [
   "Terapi Wicara",
   "Terapi Okupasi",
@@ -234,7 +123,7 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
     },
   };
 
-  const c = config[status];
+  const c = config[status] || { label: status, className: "text-gray-600 font-extrabold" };
   return (
     <span className={`inline-flex items-center text-xs ${c.className}`}>
       <span style={{ whiteSpace: "pre-line" }}>{c.label}</span>
@@ -242,30 +131,172 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
   );
 }
 
+// ── CONFIRM DIALOG MODAL ──────────────────────────────────────────────────────
+function ConfirmDialogModal({
+  isOpen,
+  title,
+  message,
+  confirmText = "Ya, Lanjutkan",
+  confirmVariant = "danger",
+  onConfirm,
+  onCancel,
+}: {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  confirmText?: string;
+  confirmVariant?: "primary" | "danger";
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!isOpen) return null;
 
-// ── Pengembalian Dana Modal ───────────────────────────────────────────────────
-// Dummy sesi per invoice: asumsikan 1 baris terapi Wicara 8 sesi
-function getPengembalianSesi(inv: Invoice) {
-  const totalSesi = 8;
-  const hargaPerSesi = Math.round(inv.total / totalSesi);
-  return { jenis: "Terapi Wicara", totalSesi, hargaPerSesi };
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        key="confirm-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[400] flex items-center justify-center p-4"
+      >
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onCancel} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="relative z-10 w-full max-w-[400px] rounded-2xl bg-white p-6 shadow-2xl shadow-black/20 flex flex-col items-center text-center"
+        >
+          <div className={`p-3.5 rounded-full mb-4 ${confirmVariant === "danger" ? "bg-red-50 text-red-500" : "bg-teal-50 text-[#1E5C58]"}`}>
+            <AlertCircle size={28} />
+          </div>
+          <h3 className="text-base font-extrabold text-gray-900 mb-2">{title}</h3>
+          <p className="text-xs font-medium text-gray-500 mb-6 leading-relaxed">{message}</p>
+
+          <div className="flex items-center gap-3 w-full">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="cursor-pointer flex-1 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              id="btn-confirm-action"
+              className={`cursor-pointer flex-1 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-colors ${
+                confirmVariant === "danger"
+                  ? "bg-red-600 hover:bg-red-700 shadow-red-700/20"
+                  : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"
+              }`}
+            >
+              {confirmText}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body
+  );
 }
 
+// ── BUKTI TRANSFER MODAL ──────────────────────────────────────────────────────
+function BuktiTransferModal({
+  buktiUrl,
+  onClose,
+}: {
+  buktiUrl: string;
+  onClose: () => void;
+}) {
+  const fullUrl = buktiUrl.startsWith("http")
+    ? buktiUrl
+    : `${process.env.NEXT_PUBLIC_STORAGE_URL || "http://localhost:8000/storage"}/${buktiUrl.replace(/^\//, "")}`;
+
+  const isPdf = fullUrl.toLowerCase().endsWith(".pdf");
+
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        key="bukti-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[350] flex items-center justify-center p-4 sm:p-6"
+      >
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="relative z-10 w-full max-w-[560px] max-h-[85vh] rounded-2xl bg-white shadow-2xl shadow-black/20 flex flex-col overflow-hidden"
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+            <div className="flex items-center gap-2">
+              <FileText size={18} className="text-[#2B7A75]" />
+              <h2 className="text-base font-extrabold text-[#1E5C58]">Bukti Transfer / Pembayaran</h2>
+            </div>
+            <button onClick={onClose} className="cursor-pointer p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 p-6 overflow-y-auto flex items-center justify-center bg-gray-50 min-h-[300px]">
+            {isPdf ? (
+              <iframe src={fullUrl} className="w-full h-[450px] rounded-xl border border-gray-200" title="Bukti Transfer PDF" />
+            ) : (
+              <img src={fullUrl} alt="Bukti Transfer" className="max-w-full max-h-[450px] object-contain rounded-xl shadow-sm border border-gray-200" />
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="cursor-pointer flex-1 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Tutup
+            </button>
+            <a
+              href={fullUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="cursor-pointer flex-1 py-2.5 bg-[#1E5C58] text-white rounded-xl text-xs font-bold hover:bg-[#174d49] text-center shadow-sm transition-colors flex items-center justify-center gap-2"
+            >
+              Buka di Tab Baru
+            </a>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body
+  );
+}
+
+// ── Pengembalian Dana Modal ───────────────────────────────────────────────────
 function PengembalianDanaModal({
   invoice,
   lunasInvoices,
   onClose,
+  onRefresh,
 }: {
   invoice: Invoice;
   lunasInvoices: Invoice[];
   onClose: () => void;
+  onRefresh: () => void;
 }) {
   const [selectedInvId, setSelectedInvId] = useState(invoice.id);
   const selectedInv = lunasInvoices.find((i) => i.id === selectedInvId) ?? invoice;
-  const { jenis, totalSesi, hargaPerSesi } = getPengembalianSesi(selectedInv);
+  
+  const [totalSesi, setTotalSesi] = useState(8);
+  const [kehadiran, setKehadiran] = useState(8);
+  const [hargaPerSesi, setHargaPerSesi] = useState(selectedInv.total / 8);
 
   const [modeSisi, setModeSisi] = useState<"dikembalikan" | "catat">("dikembalikan");
-  const [kehadiran, setKehadiran] = useState(totalSesi);
   const sisaSesi = Math.max(0, totalSesi - kehadiran);
   const nilaiSisaSesi = sisaSesi * hargaPerSesi;
 
@@ -273,8 +304,53 @@ function PengembalianDanaModal({
   const [tanggal, setTanggal] = useState(todayStr);
   const [metodePengembalian, setMetodePengembalian] = useState("Transfer bank");
   const [noResi, setNoResi] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("Tidak ada File yang dipilih");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch Attendance count from backend
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      const data = await getAttendanceForRefund(selectedInvId);
+      if (data) {
+        setTotalSesi(data.total_sessions || 8);
+        setKehadiran(data.present_sessions || 8);
+        setHargaPerSesi(data.harga_per_sesi || (selectedInv.total / 8));
+      } else {
+        const rows = selectedInv.terapiRows || [];
+        const sumSessions = rows.reduce((sum, r) => sum + (Number(r.jumlah_sesi) || 0), 0) || 8;
+        setTotalSesi(sumSessions);
+        setKehadiran(sumSessions);
+        setHargaPerSesi(selectedInv.total / sumSessions);
+      }
+    };
+    fetchAttendance();
+  }, [selectedInvId]);
+
+  const handleSubmit = async () => {
+    try {
+      const formData = new FormData();
+      formData.append("mode", modeSisi);
+      formData.append("kehadiran", kehadiran.toString());
+      formData.append("total_sesi", totalSesi.toString());
+      formData.append("tanggal", tanggal);
+      formData.append("metode_pengembalian", metodePengembalian);
+      if (noResi) formData.append("no_resi", noResi);
+      if (file) formData.append("bukti_file", file);
+
+      await refundInvoice(selectedInvId, formData);
+      showSuccessToast(
+        modeSisi === "dikembalikan"
+          ? "Pengembalian dana berhasil dicatat!"
+          : "Sisa sesi berhasil dicatat ke periode berikutnya!",
+        "Berhasil"
+      );
+      onRefresh();
+      onClose();
+    } catch (e) {
+      handleApiError(e, "Gagal memproses pengembalian dana");
+    }
+  };
 
   const inputCls =
     "w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all";
@@ -291,14 +367,9 @@ function PengembalianDanaModal({
         transition={{ duration: 0.2 }}
         className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6"
       >
-        {/* Backdrop */}
-        <div
-          className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
-          onClick={onClose}
-        />
-
-        {/* Modal panel */}
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
         <motion.div
+          onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -308,18 +379,13 @@ function PengembalianDanaModal({
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
             <h2 className="text-base font-extrabold text-[#1E5C58]">Pengembalian dana</h2>
-            <button
-              onClick={onClose}
-              className="cursor-pointer text-sm font-bold text-[#2B7A75] hover:text-[#1E5C58] transition-colors"
-            >
+            <button onClick={onClose} className="cursor-pointer text-sm font-bold text-[#2B7A75] hover:text-[#1E5C58] transition-colors">
               Tutup
             </button>
           </div>
 
-          {/* Scrollable body */}
+          {/* Body */}
           <div className="flex-1 px-6 py-5 space-y-5 overflow-y-auto">
-
-            {/* Tagihan (sudah dibayar) */}
             <div>
               <label className="block mb-1.5 text-xs font-bold text-gray-500">
                 Tagihan (sudah dibayar)
@@ -328,11 +394,7 @@ function PengembalianDanaModal({
                 <select
                   id="pengembalian-select-invoice"
                   value={selectedInvId}
-                  onChange={(e) => {
-                    setSelectedInvId(e.target.value);
-                    const inv = lunasInvoices.find((i) => i.id === e.target.value);
-                    if (inv) setKehadiran(getPengembalianSesi(inv).totalSesi);
-                  }}
+                  onChange={(e) => setSelectedInvId(e.target.value)}
                   className={selectCls}
                 >
                   {lunasInvoices.map((inv) => (
@@ -341,28 +403,22 @@ function PengembalianDanaModal({
                     </option>
                   ))}
                 </select>
-                <ChevronDown
-                  size={15}
-                  className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
-                />
+                <ChevronDown size={15} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
               </div>
             </div>
 
-            {/* Kehadiran selama periode */}
             <div>
               <p className="mb-2 text-xs font-bold text-gray-500">Kehadiran selama periode</p>
               <div className="h-px bg-gradient-to-r from-[#2B7A75]/60 to-transparent mb-3" />
               <div className="flex items-center gap-3">
-                <span className="flex-1 text-sm font-semibold text-gray-700">{jenis}</span>
+                <span className="flex-1 text-sm font-semibold text-gray-700">Total Kehadiran</span>
                 <input
                   id="pengembalian-kehadiran"
                   type="number"
                   min={0}
                   max={totalSesi}
                   value={kehadiran}
-                  onChange={(e) =>
-                    setKehadiran(Math.min(totalSesi, Math.max(0, Number(e.target.value))))
-                  }
+                  onChange={(e) => setKehadiran(Math.min(totalSesi, Math.max(0, Number(e.target.value))))}
                   className="w-20 px-3 py-2 border border-gray-200 rounded-xl text-sm text-center font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]"
                 />
                 <span className="text-sm font-medium text-gray-400 whitespace-nowrap">
@@ -371,7 +427,6 @@ function PengembalianDanaModal({
               </div>
             </div>
 
-            {/* Nilai sisa & Tanggal */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
@@ -397,7 +452,6 @@ function PengembalianDanaModal({
               </div>
             </div>
 
-            {/* Toggle sisa sesi */}
             <div>
               <p className="mb-2 text-xs font-bold text-gray-500">Sisa sesi mau diapakan?</p>
               <div className="flex overflow-hidden border border-gray-200 rounded-xl">
@@ -405,10 +459,9 @@ function PengembalianDanaModal({
                   id="mode-dikembalikan"
                   type="button"
                   onClick={() => setModeSisi("dikembalikan")}
-                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${modeSisi === "dikembalikan"
-                    ? "bg-[#1E5C58] text-white shadow-sm"
-                    : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
-                    }`}
+                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${
+                    modeSisi === "dikembalikan" ? "bg-[#1E5C58] text-white shadow-sm" : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
+                  }`}
                 >
                   Dikembalikan ke orang tua
                 </button>
@@ -416,17 +469,15 @@ function PengembalianDanaModal({
                   id="mode-catat"
                   type="button"
                   onClick={() => setModeSisi("catat")}
-                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${modeSisi === "catat"
-                    ? "bg-[#1E5C58] text-white shadow-sm"
-                    : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
-                    }`}
+                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${
+                    modeSisi === "catat" ? "bg-[#1E5C58] text-white shadow-sm" : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
+                  }`}
                 >
                   Catat ke periode setelahnya
                 </button>
               </div>
             </div>
 
-            {/* Conditional body */}
             <AnimatePresence mode="wait">
               {modeSisi === "dikembalikan" ? (
                 <motion.div
@@ -440,12 +491,9 @@ function PengembalianDanaModal({
                   <p className="text-xs font-medium text-gray-400">
                     Dana dikirim kembali ke orang tua (transfer, tunai, atau QRIS).
                   </p>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                        Metode pengembalian
-                      </label>
+                      <label className="block mb-1.5 text-xs font-bold text-gray-500">Metode pengembalian</label>
                       <div className="relative">
                         <select
                           id="pengembalian-metode"
@@ -457,16 +505,11 @@ function PengembalianDanaModal({
                           <option>Tunai</option>
                           <option>QRIS</option>
                         </select>
-                        <ChevronDown
-                          size={14}
-                          className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
-                        />
+                        <ChevronDown size={14} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
                       </div>
                     </div>
                     <div>
-                      <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                        No. resi
-                      </label>
+                      <label className="block mb-1.5 text-xs font-bold text-gray-500">No. resi</label>
                       <input
                         id="pengembalian-no-resi"
                         type="text"
@@ -478,13 +521,10 @@ function PengembalianDanaModal({
                     </div>
                   </div>
 
-                  {/* Upload bukti */}
                   <div>
                     <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                      Upload bukti pengembalian{" "}
-                      <span className="font-normal text-gray-300 normal-case">
-                        (bukti transfer / kwitansi, opsional)
-                      </span>
+                      Upload bukti pengembalian{" "}
+                      <span className="font-normal text-gray-300 normal-case">(bukti transfer / kwitansi, opsional)</span>
                     </label>
                     <div className="flex items-center gap-3 px-3.5 py-2.5 border border-gray-200 rounded-xl bg-white">
                       <button
@@ -501,11 +541,10 @@ function PengembalianDanaModal({
                         type="file"
                         accept="image/*,.pdf"
                         className="hidden"
-                        onChange={(e) =>
-                          setFileName(
-                            e.target.files?.[0]?.name ?? "Tidak ada File yang dipilih"
-                          )
-                        }
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) { setFile(f); setFileName(f.name); }
+                        }}
                       />
                     </div>
                   </div>
@@ -525,9 +564,8 @@ function PengembalianDanaModal({
             </AnimatePresence>
           </div>
 
-          {/* Bottom summary + CTA */}
+          {/* Bottom CTA */}
           <div className="px-6 pt-4 pb-6 space-y-3 border-t border-gray-100 shrink-0">
-            {/* Invoice info row */}
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-700">
                 {selectedInv.anak} – {selectedInv.periode}
@@ -540,23 +578,18 @@ function PengembalianDanaModal({
               <span className="font-medium text-gray-400">Total dibayar</span>
               <span className="font-extrabold text-gray-800">{formatRupiah(selectedInv.total)}</span>
             </div>
-
-            {/* Sesi tidak terpakai */}
             <div className="flex items-center justify-between py-3 border-t border-gray-200 border-dashed">
               <span className="text-sm font-extrabold text-[#1E5C58]">Sesi tidak terpakai</span>
               <span className="text-sm font-extrabold text-[#1E5C58]">{sisaSesi} sesi</span>
             </div>
 
-            {/* CTA */}
             <button
               id="btn-catat-pengembalian"
               type="button"
-              onClick={onClose}
+              onClick={handleSubmit}
               className="cursor-pointer w-full py-3 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors"
             >
-              {modeSisi === "dikembalikan"
-                ? "Catat pengembalian dana"
-                : "Catat ke periode setelahnya"}
+              {modeSisi === "dikembalikan" ? "Catat pengembalian dana" : "Catat ke periode setelahnya"}
             </button>
           </div>
         </motion.div>
@@ -566,23 +599,21 @@ function PengembalianDanaModal({
   );
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // ── CATAT BAYAR MODAL ─────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
 function CatatBayarModal({
   invoice,
   onClose,
-  onSave,
+  onRefresh,
 }: {
   invoice: Invoice;
   onClose: () => void;
-  onSave: (updated: Invoice) => void;
+  onRefresh: () => void;
 }) {
   const todayStr = new Date().toISOString().split("T")[0];
   const [tanggal, setTanggal] = useState(todayStr);
   const [metode, setMetode] = useState("Transfer bank");
   const [noResi, setNoResi] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("Tidak ada File yang dipilih");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -591,8 +622,21 @@ function CatatBayarModal({
   const selectCls =
     "w-full pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer appearance-none";
 
-  const handleSimpan = () => {
-    onSave({ ...invoice, status: "LUNAS", pembayaran: { tanggal, metode, noResi } });
+  const handleSimpan = async () => {
+    try {
+      const formData = new FormData();
+      formData.append("payment_date", tanggal);
+      formData.append("payment_method", metode);
+      if (noResi) formData.append("receipt_number", noResi);
+      if (file) formData.append("bukti_file", file);
+
+      await payInvoice(invoice.id, formData);
+      showSuccessToast("Pembayaran berhasil dicatat!", "Berhasil");
+      onRefresh();
+      onClose();
+    } catch (e) {
+      handleApiError(e, "Gagal mencatat pembayaran");
+    }
   };
 
   return createPortal(
@@ -607,19 +651,18 @@ function CatatBayarModal({
       >
         <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
         <motion.div
+          onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
           className="relative z-10 w-full max-w-[480px] max-h-[90vh] rounded-2xl bg-white shadow-2xl shadow-black/20 flex flex-col overflow-hidden"
         >
-          {/* Header */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
             <h2 className="text-base font-extrabold text-[#1E5C58]">Catat pembayaran</h2>
             <button onClick={onClose} className="cursor-pointer text-sm font-bold text-[#2B7A75] hover:text-[#1E5C58] transition-colors">Tutup</button>
           </div>
 
-          {/* Body */}
           <div className="flex-1 px-6 py-5 space-y-4 overflow-y-auto">
             <div>
               <label className="block mb-1.5 text-xs font-bold text-gray-500">Tagihan yang belum dibayar</label>
@@ -630,11 +673,11 @@ function CatatBayarModal({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block mb-1.5 text-xs font-bold text-gray-500">Tanggal dibayar</label>
+                <label htmlFor="catat-tanggal" className="block mb-1.5 text-xs font-bold text-gray-500">Tanggal dibayar</label>
                 <input id="catat-tanggal" type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className={`${inputCls} cursor-pointer`} />
               </div>
               <div>
-                <label className="block mb-1.5 text-xs font-bold text-gray-500">Metode bayar</label>
+                <label htmlFor="catat-metode" className="block mb-1.5 text-xs font-bold text-gray-500">Metode bayar</label>
                 <div className="relative">
                   <select id="catat-metode" value={metode} onChange={(e) => setMetode(e.target.value)} className={selectCls}>
                     <option>Transfer bank</option>
@@ -646,7 +689,7 @@ function CatatBayarModal({
               </div>
             </div>
             <div>
-              <label className="block mb-1.5 text-xs font-bold text-gray-500">No. resi</label>
+              <label htmlFor="catat-no-resi" className="block mb-1.5 text-xs font-bold text-gray-500">No. resi</label>
               <input id="catat-no-resi" type="text" placeholder="Opsional" value={noResi} onChange={(e) => setNoResi(e.target.value)} className={inputCls} />
             </div>
             <div>
@@ -659,12 +702,14 @@ function CatatBayarModal({
                   className="cursor-pointer shrink-0 px-4 py-1.5 bg-[#EAF4F3] text-[#1E5C58] text-xs font-bold rounded-lg hover:bg-[#d4ede9] transition-colors">Pilih File</button>
                 <span className="text-xs font-medium text-gray-400 truncate">{fileName}</span>
                 <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden"
-                  onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "Tidak ada File yang dipilih")} />
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) { setFile(f); setFileName(f.name); }
+                  }} />
               </div>
             </div>
           </div>
 
-          {/* Footer */}
           <div className="px-6 pt-4 pb-6 space-y-3 border-t border-gray-100 shrink-0">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-700">{invoice.anak} – {invoice.periode}</span>
@@ -690,18 +735,17 @@ function CatatBayarModal({
   );
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // ── LIHAT DETAIL MODAL ────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
 function LihatDetailModal({
   invoice,
   onClose,
   onCetakInvoice,
+  onLihatBukti,
 }: {
   invoice: Invoice;
   onClose: () => void;
   onCetakInvoice: () => void;
+  onLihatBukti?: (url: string) => void;
 }) {
   const statusLabelMap: Record<InvoiceStatus, string> = {
     LUNAS: "Lunas",
@@ -740,20 +784,17 @@ function LihatDetailModal({
           transition={{ duration: 0.2, ease: "easeOut" }}
           className="relative z-10 w-full max-w-[520px] max-h-[90vh] rounded-2xl bg-white shadow-2xl shadow-black/20 flex flex-col overflow-hidden"
         >
-          {/* Header */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 shrink-0">
             <h2 className="text-base font-extrabold text-[#1E5C58]">Detail tagihan</h2>
             <button onClick={onClose} className="cursor-pointer text-sm font-bold text-[#2B7A75] hover:text-[#1E5C58] transition-colors">Tutup</button>
           </div>
 
-          {/* Body */}
           <div className="flex-1 px-6 py-5 space-y-5 overflow-y-auto">
-            {/* Status & amounts */}
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-600">Status</span>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusClassMap[invoice.status]}`}>
-                  {statusLabelMap[invoice.status]}
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusClassMap[invoice.status] || ""}`}>
+                  {statusLabelMap[invoice.status] || invoice.status}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
@@ -766,7 +807,6 @@ function LihatDetailModal({
               </div>
             </div>
 
-            {/* Riwayat transaksi */}
             <div>
               <p className="text-sm font-extrabold text-[#1E5C58] mb-2">Riwayat transaksi</p>
               {invoice.pembayaran ? (
@@ -775,6 +815,19 @@ function LihatDetailModal({
                   <div className="flex justify-between"><span className="text-gray-500 font-medium">Metode</span><span className="font-semibold text-gray-800">{invoice.pembayaran.metode}</span></div>
                   {invoice.pembayaran.noResi && (
                     <div className="flex justify-between"><span className="text-gray-500 font-medium">No. resi</span><span className="font-semibold text-gray-800">{invoice.pembayaran.noResi}</span></div>
+                  )}
+                  {invoice.pembayaran.buktiUrl && onLihatBukti && (
+                    <div className="flex justify-between items-center pt-1 border-t border-[#2B7A75]/10">
+                      <span className="text-gray-500 font-medium">Bukti Pembayaran</span>
+                      <button
+                        type="button"
+                        onClick={() => onLihatBukti(invoice.pembayaran!.buktiUrl!)}
+                        className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-[#1E5C58] text-white text-xs font-bold rounded-lg hover:bg-[#174d49] transition-colors"
+                      >
+                        <FileText size={13} />
+                        Lihat Bukti Transfer
+                      </button>
+                    </div>
                   )}
                   <div className="flex justify-between pt-1.5 border-t border-[#2B7A75]/10">
                     <span className="font-extrabold text-[#1E5C58]">Jumlah dibayar</span>
@@ -786,7 +839,6 @@ function LihatDetailModal({
               )}
             </div>
 
-            {/* Invoice preview */}
             <div>
               <p className="text-sm font-extrabold text-[#1E5C58] mb-3">Invoice</p>
               <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -824,18 +876,13 @@ function LihatDetailModal({
                     {rows.length > 0 && (<><div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-700">{formatRupiah(totalSeharusnya||invoice.total)}</span></div><div className="flex justify-between"><span className="text-gray-500">Potongan</span><span className="font-semibold text-gray-700">- {formatRupiah(potonganVal)}</span></div></>)}
                     <div className="h-px bg-[#2B7A75] my-1.5" />
                     <div className="flex items-center justify-between"><span className="text-sm font-extrabold text-gray-800">Total tagihan</span><span className="text-sm font-extrabold text-[#1E5C58]">{formatRupiah(invoice.total)}</span></div>
-                    <div className="flex items-center justify-between pt-0.5"><span className="text-gray-500">Status</span><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${statusClassMap[invoice.status]}`}>{statusLabelMap[invoice.status]}</span></div>
-                  </div>
-                  <div className="flex items-end justify-between pt-3 border-t border-gray-100 mt-3">
-                    <div className="text-[10px] text-gray-400 leading-relaxed"><p>Pembayaran dilakukan di awal periode.</p><p>Rek. BCA 000-000-0000 a.n. Puspa</p></div>
-                    <div className="text-right"><div className="w-20 mb-1 border-t border-gray-400" /><p className="text-[10px] text-gray-500 font-semibold">Admin Puspa</p></div>
+                    <div className="flex items-center justify-between pt-0.5"><span className="text-gray-500">Status</span><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${statusClassMap[invoice.status] || ""}`}>{statusLabelMap[invoice.status] || invoice.status}</span></div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Bottom CTA */}
           <div className="px-6 py-4 border-t border-gray-100 shrink-0">
             <button id="btn-cetak-invoice-detail" type="button" onClick={onCetakInvoice}
               className="cursor-pointer w-full py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
@@ -849,10 +896,7 @@ function LihatDetailModal({
   );
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // ── CETAK INVOICE MODAL ───────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
 function CetakInvoiceModal({
   invoice,
   onClose,
@@ -866,10 +910,6 @@ function CetakInvoiceModal({
   const statusColorMap: Record<InvoiceStatus, string> = {
     LUNAS: "#059669", "BELUM DIBAYAR": "#ef4444",
     "PERIODE BERIKUTNYA": "#f97316", DIKEMBALIKAN: "#2B7A75", BERJALAN: "#0d9488",
-  };
-  const statusLabelMap: Record<InvoiceStatus, string> = {
-    LUNAS: "LUNAS", "BELUM DIBAYAR": "BELUM DIBAYAR",
-    "PERIODE BERIKUTNYA": "PERIODE BERIKUTNYA", DIKEMBALIKAN: "DIKEMBALIKAN", BERJALAN: "BERJALAN",
   };
 
   const handleCetak = () => {
@@ -960,7 +1000,7 @@ function CetakInvoiceModal({
               </div>
               <div className="flex justify-between items-center mt-1 text-[10px]">
                 <span className="text-gray-400">Status</span>
-                <span className="font-extrabold" style={{ color: statusColorMap[invoice.status] }}>{statusLabelMap[invoice.status]}</span>
+                <span className="font-extrabold" style={{ color: statusColorMap[invoice.status] || "#1E5C58" }}>{invoice.status}</span>
               </div>
               {invoice.pembayaran && (
                 <>
@@ -971,23 +1011,12 @@ function CetakInvoiceModal({
                   </div>
                 </>
               )}
-              <div className="border-t border-dashed border-gray-300 my-2.5" />
-              <div className="text-center space-y-0.5">
-                <p className="text-[9px] text-gray-400">Pembayaran dilakukan di awal periode.</p>
-                <p className="text-[9px] text-gray-400">Terima kasih atas kepercayaan Anda.</p>
-              </div>
             </div>
           </div>
 
           <div className="px-5 pb-5 pt-3 border-t border-gray-100 shrink-0 flex gap-3">
-            <button type="button" onClick={onClose}
-              className="cursor-pointer flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-              Tutup
-            </button>
-            <button id="btn-cetak-struk" type="button" onClick={handleCetak}
-              className="cursor-pointer flex-1 py-2.5 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm transition-colors flex items-center justify-center gap-2">
-              <Printer size={14} />Cetak
-            </button>
+            <button type="button" onClick={onClose} className="cursor-pointer flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors">Tutup</button>
+            <button id="btn-cetak-struk" type="button" onClick={handleCetak} className="cursor-pointer flex-1 py-2.5 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm transition-colors flex items-center justify-center gap-2"><Printer size={14} />Cetak</button>
           </div>
         </motion.div>
       </motion.div>
@@ -995,7 +1024,6 @@ function CetakInvoiceModal({
     document.body
   );
 }
-
 
 // ── Action Dropdown ───────────────────────────────────────────────────────────
 function ActionDropdown({
@@ -1005,6 +1033,7 @@ function ActionDropdown({
   onPengembalian,
   onCatatBayar,
   onLihatDetail,
+  onLihatBukti,
   onEdit,
   onCetakInvoice,
   onHapus,
@@ -1015,6 +1044,7 @@ function ActionDropdown({
   onPengembalian: (inv: Invoice) => void;
   onCatatBayar: (inv: Invoice) => void;
   onLihatDetail: (inv: Invoice) => void;
+  onLihatBukti?: (url: string) => void;
   onEdit: (inv: Invoice) => void;
   onCetakInvoice: (inv: Invoice) => void;
   onHapus: (id: string) => void;
@@ -1023,7 +1053,7 @@ function ActionDropdown({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
   const MENU_WIDTH = 192;
-  const MENU_HEIGHT_ESTIMATE = 210;
+  const MENU_HEIGHT_ESTIMATE = 250;
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1045,7 +1075,6 @@ function ActionDropdown({
     setOpenDropdownId(isOpen ? null : item.id);
   };
 
-  // Shared style classes
   const primaryItemClass =
     "cursor-pointer flex items-center w-full px-4 py-2.5 text-xs font-bold text-[#1E5C58] bg-[#EAF4F3] hover:bg-[#d4ede9] transition-colors border-b border-teal-100/80";
   const normalItemClass =
@@ -1061,10 +1090,7 @@ function ActionDropdown({
         className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-teal-100 rounded-xl text-[#1E5C58] hover:bg-teal-50/40 text-xs font-semibold transition-colors"
       >
         <span>Aksi</span>
-        <ChevronDown
-          size={12}
-          className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-        />
+        <ChevronDown size={12} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {isOpen &&
@@ -1073,10 +1099,7 @@ function ActionDropdown({
           <AnimatePresence>
             {isOpen && (
               <>
-                <div
-                  className="fixed inset-0 z-[100]"
-                  onClick={() => setOpenDropdownId(null)}
-                />
+                <div className="fixed inset-0 z-[100]" onClick={() => setOpenDropdownId(null)} />
                 <motion.div
                   initial={{ opacity: 0, y: menuPos.openUpward ? 8 : -8, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1090,58 +1113,31 @@ function ActionDropdown({
                   }}
                   className="z-[101] rounded-2xl bg-white shadow-[0_8px_32px_rgba(0,0,0,0.13)] border border-gray-100 overflow-hidden"
                 >
-                  {/* ── LUNAS → Pengembalian Dana (teal highlight) ── */}
                   {item.status === "LUNAS" && (
-                    <button
-                      onClick={() => {
-                        setOpenDropdownId(null);
-                        onPengembalian(item);
-                      }}
-                      className={primaryItemClass}
-                    >
+                    <button onClick={() => { setOpenDropdownId(null); onPengembalian(item); }} className={primaryItemClass}>
                       Pengembalian dana
                     </button>
                   )}
-
-                  {/* ── BELUM DIBAYAR → Catat Bayar ── */}
                   {item.status === "BELUM DIBAYAR" && (
-                    <button
-                      onClick={() => { setOpenDropdownId(null); onCatatBayar(item); }}
-                      className={primaryItemClass}
-                    >
+                    <button onClick={() => { setOpenDropdownId(null); onCatatBayar(item); }} className={primaryItemClass}>
                       Catat bayar
                     </button>
                   )}
-
-                  {/* ── Lihat detail ── */}
-                  <button
-                    onClick={() => { setOpenDropdownId(null); onLihatDetail(item); }}
-                    className={normalItemClass}
-                  >
+                  {item.pembayaran?.buktiUrl && onLihatBukti && (
+                    <button onClick={() => { setOpenDropdownId(null); onLihatBukti(item.pembayaran!.buktiUrl!); }} className={normalItemClass}>
+                      Lihat Bukti Transfer
+                    </button>
+                  )}
+                  <button onClick={() => { setOpenDropdownId(null); onLihatDetail(item); }} className={normalItemClass}>
                     Lihat detail
                   </button>
-
-                  {/* ── Edit ── */}
-                  <button
-                    onClick={() => { setOpenDropdownId(null); onEdit(item); }}
-                    className={normalItemClass}
-                  >
+                  <button onClick={() => { setOpenDropdownId(null); onEdit(item); }} className={normalItemClass}>
                     Edit
                   </button>
-
-                  {/* ── Cetak invoice ── */}
-                  <button
-                    onClick={() => { setOpenDropdownId(null); onCetakInvoice(item); }}
-                    className={normalItemClass}
-                  >
+                  <button onClick={() => { setOpenDropdownId(null); onCetakInvoice(item); }} className={normalItemClass}>
                     Cetak invoice
                   </button>
-
-                  {/* ── Hapus ── */}
-                  <button
-                    onClick={() => { setOpenDropdownId(null); onHapus(item.id); }}
-                    className={dangerItemClass}
-                  >
+                  <button onClick={() => { setOpenDropdownId(null); onHapus(item.id); }} className={dangerItemClass}>
                     Hapus
                   </button>
                 </motion.div>
@@ -1154,220 +1150,72 @@ function ActionDropdown({
   );
 }
 
-
-// ── Tab types ─────────────────────────────────────────────────────────────────
 type TabKey = "Semua" | "Belum dibayar" | "Berjalan" | "Periode berakhir" | "Selesai";
 type MainTab = "Tagihan" | "Pembayaran";
 type PageView = "list" | "buat-tagihan" | "edit-tagihan";
 
 const TABS: TabKey[] = ["Semua", "Belum dibayar", "Berjalan", "Periode berakhir", "Selesai"];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ── PRATINJAU INVOICE MODAL ───────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-interface PratinjauData {
-  wali: string;
-  anak: string;
-  tipeTagihan: string;
-  periode: string;
-  tanggalTerbit: string;
-  noInvoice: string;
-  rows: TerapiRow[];
-  potongan: number;
-  totalSeharusnya: number;
-  totalBayar: number;
-}
-
-function PratinjauInvoiceModal({
-  data,
-  onClose,
-}: {
-  data: PratinjauData;
-  onClose: () => void;
-}) {
-  const today = new Date().toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-  return createPortal(
-    <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.93, y: 16 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.93, y: 16 }}
-          transition={{ duration: 0.22, ease: "easeOut" }}
-          onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-lg overflow-hidden bg-white shadow-2xl rounded-2xl shadow-black/20"
-          style={{ fontFamily: "'Inter', sans-serif" }}
-        >
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            className="cursor-pointer absolute top-3 right-3 z-10 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          >
-            <X size={16} />
-          </button>
-
-          {/* Invoice Content */}
-          <div className="p-7">
-            {/* Header */}
-            <div className="flex items-start justify-between mb-5">
-              <div>
-                <p className="text-lg font-extrabold leading-tight text-gray-900">Puspa</p>
-                <p className="text-[11px] text-gray-400 font-medium">Holistic Integrative Care</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xl font-extrabold text-[#1E5C58]">Invoice</p>
-                <p className="text-xs text-gray-500 font-semibold mt-0.5">{data.noInvoice}</p>
-              </div>
-            </div>
-
-            {/* Teal divider */}
-            <div className="h-px bg-[#2B7A75] mb-5" />
-
-            {/* Billing info */}
-            <div className="grid grid-cols-2 mb-5 text-sm gap-x-4 gap-y-3">
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">
-                  Ditagihkan kepada
-                </p>
-                <p className="font-semibold text-gray-800">{data.wali}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">
-                  Nama anak
-                </p>
-                <p className="font-semibold text-gray-800">{data.anak}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">
-                  Periode
-                </p>
-                <p className="font-semibold text-gray-800">{data.periode || "—"}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">
-                  Tanggal terbit
-                </p>
-                <p className="font-semibold text-gray-800">{today}</p>
-              </div>
-            </div>
-
-            {/* Items table */}
-            <div className="mb-4 overflow-hidden border border-gray-100 rounded-xl">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-[#EAF4F3]">
-                    <th className="px-4 py-2.5 text-left text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wide">
-                      Terapi
-                    </th>
-                    <th className="px-4 py-2.5 text-left text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wide">
-                      Jumlah sesi
-                    </th>
-                    <th className="px-4 py-2.5 text-left text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wide">
-                      Harga
-                    </th>
-                    <th className="px-4 py-2.5 text-right text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wide">
-                      Jumlah
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((row, i) => (
-                    <tr key={row.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
-                      <td className="px-4 py-2.5 text-gray-700 font-medium">{row.jenis}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{row.jumlah_sesi} sesi</td>
-                      <td className="px-4 py-2.5 text-gray-600">
-                        {formatRupiah(row.harga_sesi)}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-gray-800">
-                        {formatRupiah(row.jumlah_sesi * row.harga_sesi)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Totals */}
-            <div className="space-y-1.5 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Total</span>
-                <span className="font-semibold text-gray-700">{formatRupiah(data.totalSeharusnya)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Potongan</span>
-                <span className="font-semibold text-gray-700">- Rp 0</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Potongan dari sisa sesi sebelumnya</span>
-                <span className="font-semibold text-gray-700">- {formatRupiah(data.potongan)}</span>
-              </div>
-
-              {/* Teal divider */}
-              <div className="h-px bg-[#2B7A75] my-2" />
-
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-extrabold text-gray-800">Total tagihan</span>
-                <span className="text-base font-extrabold text-[#1E5C58]">
-                  {formatRupiah(data.totalBayar)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-sm text-gray-500">Status</span>
-                <span className="inline-flex items-center px-3 py-1 text-xs font-extrabold text-red-600 bg-red-100 rounded-full">
-                  Belum dibayar
-                </span>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-end justify-between pt-4 border-t border-gray-100">
-              <div className="text-[11px] text-gray-400 leading-relaxed">
-                <p>Pembayaran dilakukan di awal periode.</p>
-                <p>Rek. BCA 000-000-0000 a.n. Puspa</p>
-              </div>
-              <div className="text-right">
-                <div className="w-24 mb-1 border-t border-gray-400" />
-                <p className="text-[11px] text-gray-500 font-semibold">Admin Puspa</p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </AnimatePresence>,
-    document.body
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // ── FORM BUAT TAGIHAN ─────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Helper: hitung durasi paket ──────────────────────────────────────────────
 function hitungDurasiPaket(mulai: string, selesai: string) {
   if (!mulai || !selesai) return null;
   const d1 = new Date(mulai);
   const d2 = new Date(selesai);
   if (isNaN(d1.getTime()) || isNaN(d2.getTime()) || d2 <= d1) return null;
   const hari = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-  const bulan =
-    (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+  const bulan = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
   const minggu = Math.floor(hari / 7);
   return { hari, bulan, minggu };
 }
 
-function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; onSave: (inv: Invoice) => void; initialData?: Invoice }) {
+function BuatTagihanForm({
+  onBack,
+  onSave,
+  initialData,
+}: {
+  onBack: () => void;
+  onSave: (invData: any) => void;
+  initialData?: Invoice;
+}) {
+  const [childrenList, setChildrenList] = useState<ChildGuardianItem[]>([]);
   const [tipeTagihan, setTipeTagihan] = useState<"Bulanan" | "Paket Durasi">(initialData?.tipe ?? "Bulanan");
-  const [selectedWali, setSelectedWali] = useState(initialData?.wali ?? "");
-  const [selectedAnak, setSelectedAnak] = useState(initialData?.anak ?? "");
-  
-  // Try to parse `periode` if it's Bulanan
+
+  const [selectedChildId, setSelectedChildId] = useState(initialData?.child_id ?? "");
+  const [selectedGuardianId, setSelectedGuardianId] = useState(initialData?.guardian_id ?? "");
+  const [selectedWaliName, setSelectedWaliName] = useState(initialData?.wali ?? "");
+  const [selectedAnakName, setSelectedAnakName] = useState(initialData?.anak ?? "");
+
+  // Load children list from Backend API
+  useEffect(() => {
+    const fetchList = async () => {
+      const data = await getChildrenWithGuardians();
+      setChildrenList(data);
+
+      if (initialData?.child_id) {
+        const found = data.find((c) => c.child_id === initialData.child_id);
+        if (found) {
+          setSelectedChildId(found.child_id);
+          setSelectedGuardianId(found.guardian_id);
+          setSelectedWaliName(found.guardian_name);
+          setSelectedAnakName(found.child_name);
+        }
+      }
+    };
+    fetchList();
+  }, [initialData]);
+
+  // Child selection handler: auto-populates Guardian
+  const handleChildChange = (childId: string) => {
+    setSelectedChildId(childId);
+    const item = childrenList.find((c) => c.child_id === childId);
+    if (item) {
+      setSelectedAnakName(item.child_name);
+      setSelectedGuardianId(item.guardian_id);
+      setSelectedWaliName(item.guardian_name);
+      setErrors((prev) => ({ ...prev, anak: false, wali: false }));
+    }
+  };
+
   let initPeriode = "";
   if (initialData?.tipe === "Bulanan" && initialData.periode && initialData.periode !== "—") {
     const names = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -1379,7 +1227,6 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
   }
   const [periode, setPeriode] = useState(initPeriode);
 
-  // Paket Durasi fields
   let initMulai = "", initSelesai = "";
   if (initialData?.tipe === "Paket Durasi" && initialData.periode && initialData.periode !== "—") {
     const parts = initialData.periode.split(" – ");
@@ -1388,18 +1235,15 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
   const [tanggalMulai, setTanggalMulai] = useState(initMulai);
   const [tanggalSelesai, setTanggalSelesai] = useState(initSelesai);
 
-  // Terapi rows
   const [terapiRows, setTerapiRows] = useState<TerapiRow[]>(
     initialData?.terapiRows && initialData.terapiRows.length > 0
       ? initialData.terapiRows
       : [{ id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" }]
   );
 
-  // Harga & Pembayaran
   const [potongan, setPotongan] = useState<number | "">(initialData?.potongan ?? "");
   const [catatan, setCatatan] = useState("");
 
-  // Validation
   const [errors, setErrors] = useState<{
     wali?: boolean;
     anak?: boolean;
@@ -1409,23 +1253,12 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
     terapi?: { id: string; field: keyof TerapiRow }[];
   }>({});
 
-  // Pratinjau modal
-  const [showPratinjau, setShowPratinjau] = useState(false);
-  const noInvoicePreview = useRef(
-    initialData?.no_invoice || `INV/${new Date().getFullYear()}/PKT/${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, "0")}`
-  ).current;
-
-  // Untuk Paket Durasi, subtotal tiap baris = harga_sesi saja (bukan × sesi)
   const isPaket = tipeTagihan === "Paket Durasi";
-  const rowSubtotal = (row: TerapiRow) =>
-    isPaket ? (Number(row.harga_sesi) || 0) : (Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0);
+  const rowSubtotal = (row: TerapiRow) => (Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0);
   const totalSeharusnya = terapiRows.reduce((sum, r) => sum + rowSubtotal(r), 0);
   const totalBayar = Math.max(0, totalSeharusnya - (Number(potongan) || 0));
-
-  // Durasi paket (hanya untuk Paket Durasi)
   const durasiPaket = isPaket ? hitungDurasiPaket(tanggalMulai, tanggalSelesai) : null;
 
-  // Build periode label for pratinjau
   const periodeLabel = tipeTagihan === "Bulanan"
     ? (() => {
       if (!periode) return "—";
@@ -1438,28 +1271,12 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
       ? `${tanggalMulai} – ${tanggalSelesai}`
       : "—";
 
-  const handleWaliChange = (wali: string) => {
-    setSelectedWali(wali);
-    setSelectedAnak(DUMMY_ANAK[wali]?.[0] ?? "");
-  };
-
-  // Saat ganti tipe, jangan ubah isi baris (biarkan kosong / manual)
-  const handleTipeChange = (tipe: "Bulanan" | "Paket Durasi") => {
-    setTipeTagihan(tipe);
-    setErrors({});
-  };
-
   const updateTerapiRow = (id: string, field: keyof TerapiRow, value: string | number) => {
-    setTerapiRows((rows) =>
-      rows.map((r) => (r.id === id ? { ...r, [field]: value } : r))
-    );
+    setTerapiRows((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
   const addTerapiRow = () => {
-    setTerapiRows((rows) => [
-      ...rows,
-      { id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" },
-    ]);
+    setTerapiRows((rows) => [...rows, { id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" }]);
   };
 
   const removeTerapiRow = (id: string) => {
@@ -1473,18 +1290,11 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
     "w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all cursor-pointer appearance-none";
 
   const handleSimpan = () => {
-    // Validation
     const newErrors: typeof errors = { terapi: [] };
     let hasError = false;
 
-    if (!selectedWali) { newErrors.wali = true; hasError = true; }
-    if (!selectedAnak) { newErrors.anak = true; hasError = true; }
-
-    if (tipeTagihan === "Bulanan" && !periode) {
-      newErrors.periode = true;
-      hasError = true;
-    }
-
+    if (!selectedChildId) { newErrors.anak = true; hasError = true; }
+    if (tipeTagihan === "Bulanan" && !periode) { newErrors.periode = true; hasError = true; }
     if (tipeTagihan === "Paket Durasi") {
       if (!tanggalMulai) { newErrors.tanggalMulai = true; hasError = true; }
       if (!tanggalSelesai) { newErrors.tanggalSelesai = true; hasError = true; }
@@ -1501,27 +1311,23 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
       return;
     }
 
-    setErrors({});
-
-    const newInvoice: Invoice = {
-      ...initialData,
-      id: initialData?.id ?? genId(),
-      no_invoice: noInvoicePreview,
-      anak: selectedAnak,
-      wali: selectedWali,
-      tipe: tipeTagihan,
-      periode: periodeLabel,
-      total: totalBayar,
-      tanggal_terbit: initialData?.tanggal_terbit ?? new Date().toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-      status: initialData?.status ?? "BELUM DIBAYAR",
-      terapiRows,
-      potongan: Number(potongan) || 0,
+    const payload = {
+      child_id: selectedChildId,
+      guardian_id: selectedGuardianId,
+      type: tipeTagihan,
+      period_label: periodeLabel,
+      start_date: isPaket ? tanggalMulai : null,
+      end_date: isPaket ? tanggalSelesai : null,
+      discount: Number(potongan) || 0,
+      notes: catatan,
+      items: terapiRows.map((r) => ({
+        therapy_type: r.jenis,
+        session_count: Number(r.jumlah_sesi),
+        price_per_session: Number(r.harga_sesi),
+      })),
     };
-    onSave(newInvoice);
+
+    onSave(payload);
   };
 
   return (
@@ -1532,22 +1338,7 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.22 }}
     >
-      {/* Toolbar: pratinjau */}
-      <div className="flex items-center justify-end px-4 py-3 border-b border-gray-100">
-        <button
-          id="btn-pratinjau-invoice"
-          onClick={() => setShowPratinjau(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors border border-gray-200 cursor-pointer rounded-xl hover:bg-gray-50"
-        >
-          <Printer size={15} />
-          Pratinjau invoice
-        </button>
-      </div>
-
-      {/* Form Content */}
       <div className="p-4 space-y-5 sm:p-6">
-
-        {/* ── Section 1: Siapa yang ditagih ── */}
         <div className="overflow-hidden bg-white border border-gray-200 rounded-2xl">
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
@@ -1557,7 +1348,6 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
           </div>
 
           <div className="p-5 space-y-5">
-            {/* Tipe tagihan */}
             <div>
               <label className="block mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
                 Tipe tagihan
@@ -1567,12 +1357,11 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
                   <button
                     key={t}
                     type="button"
-                    onClick={() => handleTipeChange(t)}
+                    onClick={() => { setTipeTagihan(t); setErrors({}); }}
                     id={`tipe-${t.toLowerCase().replace(" ", "-")}`}
-                    className={`flex-1 px-6 py-2.5 text-sm font-bold transition-all ${tipeTagihan === t
-                      ? "bg-[#1E5C58] text-white shadow-sm"
-                      : "text-gray-500 hover:text-[#2B7A75]"
-                      }`}
+                    className={`flex-1 px-6 py-2.5 text-sm font-bold transition-all ${
+                      tipeTagihan === t ? "bg-[#1E5C58] text-white shadow-sm" : "text-gray-500 hover:text-[#2B7A75]"
+                    }`}
                   >
                     {t}
                   </button>
@@ -1580,60 +1369,42 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
               </div>
             </div>
 
-            {/* Orang tua / wali & Anak */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                  Orang tua / wali
-                </label>
-                <div className="relative">
-                  <select
-                    id="select-wali"
-                    value={selectedWali}
-                    onChange={(e) => { handleWaliChange(e.target.value); setErrors(prev => ({...prev, wali: false})); }}
-                    className={`${selectClass} ${errors.wali ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
-                  >
-                    <option value="" disabled>Pilih Orang Tua / Wali</option>
-                    {DUMMY_WALI.map((w) => (
-                      <option key={w} value={w}>
-                        {w}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={15}
-                    className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                  Anak
+                  Pilih Anak
                 </label>
                 <div className="relative">
                   <select
                     id="select-anak"
-                    value={selectedAnak}
-                    onChange={(e) => { setSelectedAnak(e.target.value); setErrors(prev => ({...prev, anak: false})); }}
+                    value={selectedChildId}
+                    onChange={(e) => handleChildChange(e.target.value)}
                     className={`${selectClass} ${errors.anak ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                   >
                     <option value="" disabled>Pilih Anak</option>
-                    {(DUMMY_ANAK[selectedWali] ?? []).map((a) => (
-                      <option key={a} value={a}>
-                        {a}
+                    {childrenList.map((c) => (
+                      <option key={c.child_id} value={c.child_id}>
+                        {c.child_name}
                       </option>
                     ))}
                   </select>
-                  <ChevronDown
-                    size={15}
-                    className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
-                  />
+                  <ChevronDown size={15} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
                 </div>
+              </div>
+
+              <div>
+                <label className="block mb-1.5 text-xs font-bold text-gray-500">
+                  Orang tua / wali (Otomatis)
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={selectedWaliName || "Pilih anak terlebih dahulu"}
+                  className={`${inputClass} bg-gray-50 text-gray-700 cursor-default font-semibold`}
+                />
               </div>
             </div>
 
-            {/* Periode */}
             {tipeTagihan === "Bulanan" ? (
               <div>
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
@@ -1652,41 +1423,25 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
                       mm/yyyy
                     </span>
                   )}
-                  <Calendar
-                    size={16}
-                    className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
-                  />
+                  <Calendar size={16} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                    Tanggal mulai
-                  </label>
+                  <label className="block mb-1.5 text-xs font-bold text-gray-500">Tanggal mulai</label>
                   <div className="relative">
                     <input
                       id="input-tanggal-mulai"
                       type="date"
                       value={tanggalMulai}
                       onChange={(e) => { setTanggalMulai(e.target.value); setErrors(prev => ({...prev, tanggalMulai: false})); }}
-                      className={`${inputClass} cursor-pointer pr-10 ${!tanggalMulai ? "text-transparent" : ""} ${errors.tanggalMulai ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
-                    />
-                    {!tanggalMulai && (
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
-                        dd/mm/yyyy
-                      </span>
-                    )}
-                    <Calendar
-                      size={16}
-                      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
+                      className={`${inputClass} cursor-pointer pr-10 ${errors.tanggalMulai ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                    Tanggal berakhir
-                  </label>
+                  <label className="block mb-1.5 text-xs font-bold text-gray-500">Tanggal berakhir</label>
                   <div className="relative">
                     <input
                       id="input-tanggal-selesai"
@@ -1694,16 +1449,7 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
                       value={tanggalSelesai}
                       min={tanggalMulai || undefined}
                       onChange={(e) => { setTanggalSelesai(e.target.value); setErrors(prev => ({...prev, tanggalSelesai: false})); }}
-                      className={`${inputClass} cursor-pointer pr-10 ${!tanggalSelesai ? "text-transparent" : ""} ${errors.tanggalSelesai ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
-                    />
-                    {!tanggalSelesai && (
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
-                        dd/mm/yyyy
-                      </span>
-                    )}
-                    <Calendar
-                      size={16}
-                      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
+                      className={`${inputClass} cursor-pointer pr-10 ${errors.tanggalSelesai ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                     />
                   </div>
                 </div>
@@ -1712,7 +1458,7 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
           </div>
         </div>
 
-        {/* ── Section 2: Terapi & jumlah sesi ── */}
+        {/* Section 2: Terapi */}
         <div className="overflow-hidden bg-white border border-gray-200 rounded-2xl">
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
@@ -1722,20 +1468,11 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
           </div>
 
           <div className="p-5 space-y-3">
-            {/* Header row */}
             <div className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 items-center">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                Jenis terapi
-              </span>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                Jumlah sesi
-              </span>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                {isPaket ? "Harga paket" : "Harga / sesi"}
-              </span>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
-                Subtotal
-              </span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">Jenis terapi</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">Jumlah sesi</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">{isPaket ? "Harga paket" : "Harga / sesi"}</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">Subtotal</span>
               <span className="w-6" />
             </div>
 
@@ -1749,59 +1486,41 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
                   transition={{ duration: 0.18 }}
                   className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 items-center"
                 >
-                  {/* Jenis terapi */}
                   <div className="relative">
                     <select
                       id={`jenis-terapi-${idx}`}
                       value={row.jenis}
-                      onChange={(e) => {
-                        updateTerapiRow(row.id, "jenis", e.target.value);
-                        setErrors(prev => ({ ...prev, terapi: prev.terapi?.filter(t => !(t.id === row.id && t.field === "jenis")) }));
-                      }}
-                      className={`${selectClass} ${errors.terapi?.some(t => t.id === row.id && t.field === "jenis") ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
+                      onChange={(e) => updateTerapiRow(row.id, "jenis", e.target.value)}
+                      className={selectClass}
                     >
                       <option value="" disabled>Pilih Jenis Terapi</option>
                       {JENIS_TERAPI_OPTIONS.map((j) => (
-                        <option key={j} value={j}>
-                          {j}
-                        </option>
+                        <option key={j} value={j}>{j}</option>
                       ))}
                     </select>
-                    <ChevronDown
-                      size={14}
-                      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
-                    />
+                    <ChevronDown size={14} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
                   </div>
 
-                  {/* Jumlah sesi */}
                   <input
                     id={`jumlah-sesi-${idx}`}
                     type="number"
                     min={1}
                     value={row.jumlah_sesi}
                     placeholder="Jumlah sesi"
-                    onChange={(e) => {
-                      updateTerapiRow(row.id, "jumlah_sesi", e.target.value === "" ? "" : Number(e.target.value));
-                      setErrors(prev => ({ ...prev, terapi: prev.terapi?.filter(t => !(t.id === row.id && t.field === "jumlah_sesi")) }));
-                    }}
-                    className={`${inputClass} ${errors.terapi?.some(t => t.id === row.id && t.field === "jumlah_sesi") ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
+                    onChange={(e) => updateTerapiRow(row.id, "jumlah_sesi", e.target.value === "" ? "" : Number(e.target.value))}
+                    className={inputClass}
                   />
 
-                  {/* Harga / sesi atau Harga paket */}
                   <input
                     id={`harga-sesi-${idx}`}
                     type="number"
                     min={0}
                     value={row.harga_sesi}
                     placeholder={isPaket ? "Harga paket" : "Harga/sesi"}
-                    onChange={(e) => {
-                      updateTerapiRow(row.id, "harga_sesi", e.target.value === "" ? "" : Number(e.target.value));
-                      setErrors(prev => ({ ...prev, terapi: prev.terapi?.filter(t => !(t.id === row.id && t.field === "harga_sesi")) }));
-                    }}
-                    className={`${inputClass} ${errors.terapi?.some(t => t.id === row.id && t.field === "harga_sesi") ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
+                    onChange={(e) => updateTerapiRow(row.id, "harga_sesi", e.target.value === "" ? "" : Number(e.target.value))}
+                    className={inputClass}
                   />
 
-                  {/* Subtotal */}
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-extrabold text-gray-800 whitespace-nowrap">
                       {formatRupiah(rowSubtotal(row))}
@@ -1811,7 +1530,6 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
                       onClick={() => removeTerapiRow(row.id)}
                       disabled={terapiRows.length === 1}
                       className="text-red-400 transition-colors cursor-pointer hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                      title="Hapus baris"
                     >
                       <X size={16} strokeWidth={2.5} />
                     </button>
@@ -1820,7 +1538,6 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
               ))}
             </AnimatePresence>
 
-            {/* Tambah terapi button */}
             <button
               type="button"
               id="btn-tambah-terapi"
@@ -1830,36 +1547,10 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
               <Plus size={15} />
               Tambah terapi
             </button>
-
-            {/* Info note — berbeda per tipe */}
-            <div className="min-h-[40px] pt-1 flex items-start">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={isPaket ? "paket" : "bulanan"}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  transition={{ duration: 0.15 }}
-                  className="text-[11px] text-[#2B7A75] font-medium leading-relaxed m-0"
-                >
-                  {isPaket
-                    ? "Harga paket tetap untuk seluruh durasi. Jumlah sesi default 1 sesi per minggu dan bisa diubah."
-                    : "Subtotal = jumlah sesi × harga per sesi. Kehadiran dicatat di akhir periode saat penyelesaian sisa sesi."}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-
-            {/* Durasi paket (hanya Paket Durasi, jika tanggal sudah diisi) */}
-            {isPaket && durasiPaket && (
-              <p className="text-[11px] font-bold text-[#1E5C58] bg-[#EAF4F3] rounded-lg px-3 py-2">
-                Durasi paket: {durasiPaket.hari} hari (± {durasiPaket.bulan} bulan,{" "}
-                {durasiPaket.minggu} minggu)
-              </p>
-            )}
           </div>
         </div>
 
-        {/* ── Section 3: Harga & pembayaran ── */}
+        {/* Section 3: Pembayaran */}
         <div className="overflow-hidden bg-white border border-gray-200 rounded-2xl">
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
@@ -1869,7 +1560,6 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
           </div>
 
           <div className="p-5 space-y-4">
-            {/* Potongan */}
             <div>
               <label className="block mb-1.5 text-xs font-bold text-gray-500">
                 Potongan (Rp)
@@ -1882,22 +1572,10 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
                 onChange={(e) => setPotongan(Number(e.target.value))}
                 className={`${inputClass} max-w-xs`}
               />
-              {potongan !== "" && Number(potongan) > 0 && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <Info size={13} className="text-[#2B7A75] shrink-0" />
-                  <p className="text-xs font-semibold text-[#2B7A75]">
-                    Potongan terisi otomatis dari sisa sesi periode sebelumnya:{" "}
-                    <span className="font-extrabold">{formatRupiah(Number(potongan))}</span>
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Catatan */}
             <div>
-              <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                Catatan
-              </label>
+              <label className="block mb-1.5 text-xs font-bold text-gray-500">Catatan</label>
               <input
                 id="input-catatan"
                 type="text"
@@ -1908,97 +1586,38 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
               />
             </div>
 
-            {/* Divider */}
             <div className="border-t border-gray-100 pt-4 space-y-2.5">
-              {/* Total seharusnya */}
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-gray-500">Subtotal</span>
-                <span className="font-semibold text-gray-700">
-                  {formatRupiah(totalSeharusnya)}
-                </span>
+                <span className="font-semibold text-gray-700">{formatRupiah(totalSeharusnya)}</span>
               </div>
-
-              {/* Potongan row */}
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-gray-500">Potongan</span>
-                <span className="font-semibold text-red-500">
-                  - {formatRupiah(Number(potongan) || 0)}
-                </span>
+                <span className="font-semibold text-red-500">- {formatRupiah(Number(potongan) || 0)}</span>
               </div>
-
-              {/* Divider */}
               <div className="border-t border-gray-100 pt-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-extrabold text-[#1E5C58]">
-                    Total
-                  </span>
-                  <span className="text-lg font-extrabold text-[#1E5C58]">
-                    {formatRupiah(totalBayar)}
-                  </span>
+                  <span className="text-sm font-extrabold text-[#1E5C58]">Total</span>
+                  <span className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(totalBayar)}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── Action Buttons ── */}
         <div className="pb-2">
-          <AnimatePresence>
-            {(errors.wali || errors.anak || errors.periode || errors.tanggalMulai || errors.tanggalSelesai || (errors.terapi && errors.terapi.length > 0)) && (
-              <motion.p
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 5 }}
-                className="text-sm font-bold text-red-500 mb-3"
-              >
-                * Silakan lengkapi semua data utama!
-              </motion.p>
-            )}
-          </AnimatePresence>
-
           <div className="flex items-center flex-wrap gap-3">
             <button
               id="btn-simpan-tagihan"
               type="button"
               onClick={handleSimpan}
-              className={`cursor-pointer px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-sm transition-colors ${
-                initialData ? "bg-[#059669] hover:bg-[#047857] shadow-emerald-700/20" : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"
-              }`}
+              className="cursor-pointer px-6 py-2.5 bg-[#1E5C58] hover:bg-[#174d49] text-white rounded-xl text-sm font-bold shadow-sm shadow-teal-700/20 transition-colors"
             >
               {initialData ? "Simpan Perubahan" : "Simpan tagihan"}
-            </button>
-            <button
-              id="btn-cetak-invoice"
-              type="button"
-              className="cursor-pointer px-6 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cetak invoice
             </button>
           </div>
         </div>
       </div>
-      {/* Pratinjau Invoice Modal */}
-      {showPratinjau && (
-        <PratinjauInvoiceModal
-          data={{
-            wali: selectedWali,
-            anak: selectedAnak,
-            tipeTagihan,
-            periode: periodeLabel,
-            tanggalTerbit: new Date().toLocaleDateString("id-ID", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            }),
-            noInvoice: noInvoicePreview,
-            rows: terapiRows,
-            potongan,
-            totalSeharusnya,
-            totalBayar,
-          }}
-          onClose={() => setShowPratinjau(false)}
-        />
-      )}
     </motion.div>
   );
 }
@@ -2007,8 +1626,14 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 export default function KeuanganPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(dummyInvoices);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [summary, setSummary] = useState({
+    jumlah_tagihan: 0,
+    total_belum_dibayar: 0,
+    periode_berakhir: 0,
+    potongan_berikutnya: 0,
+  });
+
   const [mainTab, setMainTab] = useState<MainTab>("Tagihan");
   const [pageView, setPageView] = useState<PageView>("list");
   const [activeTab, setActiveTab] = useState<TabKey>("Semua");
@@ -2017,163 +1642,144 @@ export default function KeuanganPage() {
   const [tahun, setTahun] = useState("Tahun");
   const [bulan, setBulan] = useState("Bulan");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
   const [pengembalianInvoice, setPengembalianInvoice] = useState<Invoice | null>(null);
   const [catatBayarInvoice, setCatatBayarInvoice] = useState<Invoice | null>(null);
   const [lihatDetailInvoice, setLihatDetailInvoice] = useState<Invoice | null>(null);
   const [cetakInvoiceData, setCetakInvoiceData] = useState<Invoice | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [selectedBuktiUrl, setSelectedBuktiUrl] = useState<string | null>(null);
+
+  // Confirmation Pop-up state
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    confirmVariant?: "primary" | "danger";
+    action?: () => Promise<void> | void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+  });
+
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalData, setTotalData] = useState(0);
   const ITEMS_PER_PAGE = 10;
 
-  useEffect(() => {
-    const saved = localStorage.getItem("puspa_invoices");
-    if (saved) {
-      try {
-        setInvoices(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse invoices from localStorage", e);
+  // Load backend invoices data
+  const fetchInvoicesData = async () => {
+    const res = await getInvoices({
+      status_tab: activeTab,
+      tipe,
+      tahun,
+      bulan,
+      search,
+      page: currentPage,
+      per_page: ITEMS_PER_PAGE,
+    });
+
+    if (res) {
+      if (res.summary) setSummary(res.summary);
+      if (res.invoices) {
+        const mapped = (res.invoices.data || []).map((inv: any) => ({
+          id: inv.id,
+          no_invoice: inv.no_invoice,
+          anak: inv.child?.child_name || "—",
+          wali: inv.guardian?.guardian_name || "—",
+          child_id: inv.child_id,
+          guardian_id: inv.guardian_id,
+          tipe: inv.type,
+          periode: inv.period_label,
+          total: parseFloat(inv.total_amount || 0),
+          subtotal: parseFloat(inv.subtotal_amount || 0),
+          tanggal_terbit: inv.issued_date ? new Date(inv.issued_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—",
+          status: inv.status as InvoiceStatus,
+          potongan: parseFloat(inv.discount_amount || 0),
+          terapiRows: (inv.items || []).map((it: any) => ({
+            id: it.id,
+            jenis: it.therapy_type,
+            jumlah_sesi: it.session_count,
+            harga_sesi: parseFloat(it.price_per_session || 0),
+          })),
+          pembayaran: inv.payments && inv.payments.length > 0 ? {
+            tanggal: inv.payments[0].payment_date,
+            metode: inv.payments[0].payment_method,
+            noResi: inv.payments[0].receipt_number || "",
+            buktiUrl: inv.payments[0].proof_file_path || undefined,
+          } : undefined,
+        }));
+        setInvoices(mapped);
+        setTotalPages(res.invoices.last_page || 1);
+        setTotalData(res.invoices.total || 0);
       }
     }
-    setIsLoaded(true);
-  }, []);
+  };
 
   useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem("puspa_invoices", JSON.stringify(invoices));
-    }
-  }, [invoices, isLoaded]);
+    fetchInvoicesData();
+  }, [activeTab, search, tipe, tahun, bulan, currentPage]);
 
   const lunasInvoices = invoices.filter((i) => i.status === "LUNAS");
 
-  // Reset pagination when filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, search, tipe, tahun, bulan]);
+  const handleSaveInvoice = (payload: any) => {
+    const isEdit = pageView === "edit-tagihan" && editingInvoice;
+    setConfirmState({
+      isOpen: true,
+      title: isEdit ? "Konfirmasi Edit Tagihan" : "Konfirmasi Buat Tagihan",
+      message: isEdit
+        ? `Apakah Anda yakin ingin memperbarui tagihan ${editingInvoice.no_invoice}?`
+        : "Apakah Anda yakin data tagihan baru yang dimasukkan sudah benar?",
+      confirmText: isEdit ? "Ya, Perbarui" : "Ya, Simpan",
+      confirmVariant: "primary",
+      action: async () => {
+        try {
+          if (isEdit) {
+            await updateInvoice(editingInvoice.id, payload);
+            showSuccessToast("Tagihan berhasil diperbarui!", "Berhasil");
+          } else {
+            await createInvoice(payload);
+            showSuccessToast("Tagihan berhasil dibuat!", "Berhasil");
+          }
+          setPageView("list");
+          setEditingInvoice(null);
+          fetchInvoicesData();
+        } catch (e) {
+          handleApiError(e, "Gagal menyimpan tagihan");
+        }
+      },
+    });
+  };
 
-  // Filtered invoices
-  const filtered = invoices.filter((inv) => {
-    const matchSearch =
-      search === "" ||
-      inv.anak.toLowerCase().includes(search.toLowerCase()) ||
-      inv.wali.toLowerCase().includes(search.toLowerCase()) ||
-      inv.no_invoice.toLowerCase().includes(search.toLowerCase());
-
-    const matchTipe = tipe === "Tipe" || inv.tipe === tipe;
-
-    // Filter tahun: cocokkan string tahun di periode atau tanggal_terbit
-    const matchTahun =
-      tahun === "Tahun" ||
-      inv.periode.includes(tahun) ||
-      inv.tanggal_terbit.includes(tahun);
-
-    // Filter bulan: cocokkan nama bulan di field periode
-    const matchBulan =
-      bulan === "Bulan" ||
-      inv.periode.toLowerCase().includes(bulan.toLowerCase());
-
-    const matchTab =
-      activeTab === "Semua" ||
-      (activeTab === "Belum dibayar" && inv.status === "BELUM DIBAYAR") ||
-      // Berjalan = Paket Durasi yang sudah LUNAS (paket masih berjalan)
-      (activeTab === "Berjalan" &&
-        inv.tipe === "Paket Durasi" &&
-        inv.status === "LUNAS") ||
-      // Periode berakhir = tagihan LUNAS dari tipe Bulanan (periode sudah selesai/berakhir)
-      (activeTab === "Periode berakhir" &&
-        inv.tipe === "Bulanan" &&
-        inv.status === "LUNAS") ||
-      // Selesai = DIKEMBALIKAN atau PERIODE BERIKUTNYA (sisa sesi dilanjutkan/dikembalikan)
-      (activeTab === "Selesai" &&
-        (inv.status === "DIKEMBALIKAN" ||
-          inv.status === "PERIODE BERIKUTNYA"));
-
-    return matchSearch && matchTipe && matchTahun && matchBulan && matchTab;
-  });
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginatedData = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
-
-  // Summary stats — jumlah tagihan dari filtered, belum dibayar & potongan global
-  const jumlahTagihan = filtered.length;
-  const totalBelumDibayar = invoices
-    .filter((i) => i.status === "BELUM DIBAYAR")
-    .reduce((sum, i) => sum + i.total, 0);
-  const periodeBerikutnya = invoices.filter(
-    (i) => i.status === "PERIODE BERIKUTNYA"
-  ).length;
-  // Potongan berikutnya: nilai tetap Rp 300.000 (sesuai gambar referensi — potongan sisa sesi)
-  const potonganBerikutnya = 300000;
+  const handleDeleteInvoice = (id: string) => {
+    const inv = invoices.find((i) => i.id === id);
+    setConfirmState({
+      isOpen: true,
+      title: "Konfirmasi Hapus Tagihan",
+      message: `Apakah Anda yakin ingin menghapus tagihan ${inv?.no_invoice || ""}? Tindakan ini tidak dapat dibatalkan.`,
+      confirmText: "Ya, Hapus",
+      confirmVariant: "danger",
+      action: async () => {
+        try {
+          await deleteInvoice(id);
+          showSuccessToast("Tagihan berhasil dihapus!", "Berhasil");
+          fetchInvoicesData();
+        } catch (e) {
+          handleApiError(e, "Gagal menghapus tagihan");
+        }
+      },
+    });
+  };
 
   const handleExport = () => {
-    const headers = [
-      "No. invoice",
-      "Tipe",
-      "Anak",
-      "Orang tua",
-      "Periode",
-      "Tanggal terbit",
-      "Total layanan",
-      "Potongan",
-      "Potongan dari sisa sesi sebelumnya",
-      "Total tagihan",
-      "Dibayar",
-      "Pengembalian",
-      "Periode berikutnya",
-      "Status"
-    ];
+    const headers = ["No. invoice", "Tipe", "Anak", "Orang tua", "Periode", "Tanggal terbit", "Total tagihan", "Status"];
+    let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body><table border="1"><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
 
-    const getStatusText = (s: string) => {
-      if (s === "LUNAS") return "Lunas";
-      if (s === "BELUM DIBAYAR") return "Belum dibayar";
-      if (s === "PERIODE BERIKUTNYA") return "Periode berikutnya";
-      if (s === "DIKEMBALIKAN") return "Dikembalikan";
-      return s;
-    };
-
-    let tableHtml = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="UTF-8"></head>
-      <body>
-        <table border="1">
-          <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-          <tbody>
-    `;
-
-    filtered.forEach((inv) => {
-      const totalLayanan = inv.total;
-      const potongan = 0;
-      const potonganSisa = inv.id === "7" ? 175000 : 0;
-      const totalTagihan = totalLayanan - potongan - potonganSisa;
-
-      const isLunasOrSemacamnya = ["LUNAS", "DIKEMBALIKAN", "PERIODE BERIKUTNYA"].includes(inv.status);
-      const dibayar = isLunasOrSemacamnya ? totalTagihan : 0;
-
-      const pengembalian = inv.status === "DIKEMBALIKAN" ? 150000 : 0;
-      const periodeBerikutnya = inv.status === "PERIODE BERIKUTNYA" ? (inv.id === "8" ? 300000 : 175000) : 0;
-
-      tableHtml += `
-        <tr>
-          <td>${inv.no_invoice}</td>
-          <td>${inv.tipe}</td>
-          <td>${inv.anak}</td>
-          <td>${inv.wali}</td>
-          <td>${inv.periode}</td>
-          <td>${inv.tanggal_terbit}</td>
-          <td>${totalLayanan}</td>
-          <td>${potongan}</td>
-          <td>${potonganSisa}</td>
-          <td>${totalTagihan}</td>
-          <td>${dibayar}</td>
-          <td>${pengembalian}</td>
-          <td>${periodeBerikutnya}</td>
-          <td>${getStatusText(inv.status)}</td>
-        </tr>
-      `;
+    invoices.forEach((inv) => {
+      tableHtml += `<tr><td>${inv.no_invoice}</td><td>${inv.tipe}</td><td>${inv.anak}</td><td>${inv.wali}</td><td>${inv.periode}</td><td>${inv.tanggal_terbit}</td><td>${inv.total}</td><td>${inv.status}</td></tr>`;
     });
-
     tableHtml += `</tbody></table></body></html>`;
 
     const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
@@ -2184,19 +1790,16 @@ export default function KeuanganPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showSuccessToast("Data berhasil diexport ke Excel!", "Berhasil");
   };
 
   return (
     <>
       <div className="min-h-screen bg-[#F8FAFA] p-4 sm:p-6 lg:p-8">
-        {/* Page Header */}
         <div className="mb-8">
           {pageView === "buat-tagihan" || pageView === "edit-tagihan" ? (
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => setPageView("list")}
-                className="p-2.5 rounded-2xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
-              >
+              <button onClick={() => setPageView("list")} className="p-2.5 rounded-2xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
                 <ArrowLeft size={22} />
               </button>
               <div>
@@ -2225,57 +1828,37 @@ export default function KeuanganPage() {
           )}
         </div>
 
-        {/* Main Tab (Tagihan / Pembayaran) */}
         {(pageView !== "buat-tagihan" && pageView !== "edit-tagihan") && (
           <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] p-2 mb-6 flex gap-2">
             <button
-              onClick={() => {
-                setMainTab("Tagihan");
-                setPageView("list");
-              }}
+              onClick={() => { setMainTab("Tagihan"); setPageView("list"); }}
               id="tab-tagihan"
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Tagihan"
-                ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
-                : "bg-transparent text-gray-400 hover:bg-gray-50"
-                }`}
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${
+                mainTab === "Tagihan" ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20" : "bg-transparent text-gray-400 hover:bg-gray-50"
+              }`}
             >
-              <FileText size={16} />
-              Tagihan
+              <FileText size={16} /> Tagihan
             </button>
             <button
-              onClick={() => {
-                setMainTab("Pembayaran");
-                setPageView("list");
-              }}
+              onClick={() => { setMainTab("Pembayaran"); setPageView("list"); }}
               id="tab-pembayaran"
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Pembayaran"
-                ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20"
-                : "bg-transparent text-gray-400 hover:bg-gray-50"
-                }`}
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${
+                mainTab === "Pembayaran" ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20" : "bg-transparent text-gray-400 hover:bg-gray-50"
+              }`}
             >
-              <CreditCard size={16} />
-              Pembayaran
+              <CreditCard size={16} /> Pembayaran
             </button>
           </div>
         )}
 
         <AnimatePresence mode="wait">
-          {/* ── FORM BUAT TAGIHAN ── */}
           {pageView === "buat-tagihan" || pageView === "edit-tagihan" ? (
             <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] overflow-hidden">
               <BuatTagihanForm
                 key={pageView}
                 initialData={pageView === "edit-tagihan" && editingInvoice ? editingInvoice : undefined}
                 onBack={() => setPageView("list")}
-                onSave={(newInv) => {
-                  if (pageView === "edit-tagihan") {
-                    setInvoices(invoices.map(i => i.id === newInv.id ? newInv : i));
-                  } else {
-                    setInvoices([newInv, ...invoices]);
-                  }
-                  setPageView("list");
-                  setEditingInvoice(null);
-                }}
+                onSave={handleSaveInvoice}
               />
             </div>
           ) : mainTab === "Tagihan" ? (
@@ -2287,31 +1870,27 @@ export default function KeuanganPage() {
               transition={{ duration: 0.2 }}
               className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] overflow-hidden"
             >
-              {/* Status Tabs */}
               <div className="flex items-center gap-1 px-4 pt-4 overflow-x-auto border-b border-gray-100">
                 {TABS.map((tab) => (
                   <button
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => { setActiveTab(tab); setCurrentPage(1); }}
                     id={`status-tab-${tab.toLowerCase().replace(/ /g, "-")}`}
-                    className={`cursor-pointer whitespace-nowrap px-4 py-3 text-sm font-semibold transition-all border-b-2 ${activeTab === tab
-                      ? "border-[#2B7A75] text-[#1E5C58] font-bold"
-                      : "border-transparent text-gray-400 hover:text-[#2B7A75]"
-                      }`}
+                    className={`cursor-pointer whitespace-nowrap px-4 py-3 text-sm font-semibold transition-all border-b-2 ${
+                      activeTab === tab ? "border-[#2B7A75] text-[#1E5C58] font-bold" : "border-transparent text-gray-400 hover:text-[#2B7A75]"
+                    }`}
                   >
                     {tab}
                   </button>
                 ))}
               </div>
 
-              {/* Filters Bar */}
               <div className="flex items-center gap-2.5 px-4 py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
-                {/* Semua tipe */}
                 <div className="relative shrink-0">
                   <select
                     id="filter-tipe"
                     value={tipe}
-                    onChange={(e) => setTipe(e.target.value)}
+                    onChange={(e) => { setTipe(e.target.value); setCurrentPage(1); }}
                     className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
                   >
                     <option>Tipe</option>
@@ -2321,12 +1900,11 @@ export default function KeuanganPage() {
                   <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
-                {/* Semua tahun */}
                 <div className="relative shrink-0">
                   <select
                     id="filter-tahun"
                     value={tahun}
-                    onChange={(e) => setTahun(e.target.value)}
+                    onChange={(e) => { setTahun(e.target.value); setCurrentPage(1); }}
                     className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
                   >
                     <option>Tahun</option>
@@ -2336,62 +1914,42 @@ export default function KeuanganPage() {
                   <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
-                {/* Semua bulan */}
                 <div className="relative shrink-0">
                   <select
                     id="filter-bulan"
                     value={bulan}
-                    onChange={(e) => setBulan(e.target.value)}
+                    onChange={(e) => { setBulan(e.target.value); setCurrentPage(1); }}
                     className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
                   >
                     <option>Bulan</option>
-                    {[
-                      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-                      "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-                    ].map((b) => (
+                    {["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"].map((b) => (
                       <option key={b}>{b}</option>
                     ))}
                   </select>
                   <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
-                {/* Group Search Box, Export & Buat tagihan on the right */}
                 <div className="flex items-center gap-2.5 ml-auto shrink-0 whitespace-nowrap">
-                  {/* Search box — fixed width */}
                   <div className="relative w-[240px]">
-                    <Search
-                      size={15}
-                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
-                    />
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
                     <input
                       id="search-invoice"
                       type="text"
                       placeholder="Cari anak, orang tua, invoice"
                       value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
                       className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all"
                     />
                   </div>
 
-                  <button
-                    id="btn-export"
-                    onClick={handleExport}
-                    className="cursor-pointer flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    <Download size={15} />
-                    Export
+                  <button id="btn-export" onClick={handleExport} className="cursor-pointer flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                    <Download size={15} /> Export
                   </button>
-                  <button
-                    id="btn-buat-tagihan"
-                    onClick={() => setPageView("buat-tagihan")}
-                    className="cursor-pointer flex items-center gap-2 px-4 py-2.5 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors"
-                  >
-                    <Plus size={15} />
-                    Buat tagihan
+                  <button id="btn-buat-tagihan" onClick={() => { setEditingInvoice(null); setPageView("buat-tagihan"); }} className="cursor-pointer flex items-center gap-2 px-4 py-2.5 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors">
+                    <Plus size={15} /> Buat tagihan
                   </button>
                 </div>
               </div>
-
 
               <AnimatePresence mode="wait">
                 <motion.div
@@ -2401,67 +1959,41 @@ export default function KeuanganPage() {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {/* Table */}
                   <div className="overflow-x-auto min-h-[300px]">
                     <table className="w-full text-sm table-fixed">
                       <thead>
                         <tr className="border-gray-100 border-y bg-gray-50/60">
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
-                            No. Invoice
-                          </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[18%]">
-                            Anak
-                          </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
-                            Periode
-                          </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[14%]">
-                            Total
-                          </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
-                            Tanggal Terbit
-                          </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[12%]">
-                            Status
-                          </th>
-                          <th className="px-6 py-3 text-right text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[8%]">
-                            Aksi
-                          </th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">No. Invoice</th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[18%]">Anak</th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">Periode</th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[14%]">Total</th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">Tanggal Terbit</th>
+                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[12%]">Status</th>
+                          <th className="px-6 py-3 text-right text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[8%]">Aksi</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedData.length === 0 ? (
+                        {invoices.length === 0 ? (
                           <tr>
                             <td colSpan={7} className="px-6 py-20 text-center">
                               <div className="flex flex-col items-center gap-3">
                                 <Filter size={36} className="text-gray-300" strokeWidth={1.5} />
-                                <p className="text-sm font-semibold text-gray-400">
-                                  Tidak Ada Data Yang Ditemukan
-                                </p>
+                                <p className="text-sm font-semibold text-gray-400">Tidak Ada Data Yang Ditemukan</p>
                               </div>
                             </td>
                           </tr>
                         ) : (
-                          paginatedData.map((inv, idx) => (
-                            <tr
-                              key={inv.id}
-                              className="transition-colors border-b border-gray-100 hover:bg-teal-50/20 group"
-                            >
+                          invoices.map((inv) => (
+                            <tr key={inv.id} className="transition-colors border-b border-gray-100 hover:bg-teal-50/20 group">
                               <td className="px-6 py-4">
                                 <div>
-                                  <p className="font-bold text-[#1E5C58] text-xs">
-                                    {inv.no_invoice}
-                                  </p>
-                                  <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                                    {inv.tipe}
-                                  </p>
+                                  <p className="font-bold text-[#1E5C58] text-xs">{inv.no_invoice}</p>
+                                  <p className="text-[11px] text-gray-400 font-medium mt-0.5">{inv.tipe}</p>
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div>
-                                  <p className="text-sm font-bold text-gray-800">
-                                    {inv.anak}
-                                  </p>
+                                  <p className="text-sm font-bold text-gray-800">{inv.anak}</p>
                                   <span className="mt-1 inline-flex max-w-[160px] truncate rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-700">
                                     Wali: {inv.wali}
                                   </span>
@@ -2474,9 +2006,7 @@ export default function KeuanganPage() {
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                <p className="text-sm font-extrabold text-gray-800">
-                                  {formatRupiah(inv.total)}
-                                </p>
+                                <p className="text-sm font-extrabold text-gray-800">{formatRupiah(inv.total)}</p>
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-1.5 text-gray-500 text-sm font-medium">
@@ -2494,9 +2024,10 @@ export default function KeuanganPage() {
                                 onPengembalian={setPengembalianInvoice}
                                 onCatatBayar={setCatatBayarInvoice}
                                 onLihatDetail={setLihatDetailInvoice}
+                                onLihatBukti={(url) => setSelectedBuktiUrl(url)}
                                 onEdit={(i) => { setEditingInvoice(i); setPageView("edit-tagihan"); }}
                                 onCetakInvoice={setCetakInvoiceData}
-                                onHapus={(id) => setInvoices(prev => prev.filter(x => x.id !== id))}
+                                onHapus={handleDeleteInvoice}
                               />
                             </tr>
                           ))
@@ -2505,43 +2036,29 @@ export default function KeuanganPage() {
                     </table>
                   </div>
 
-                  {/* Summary Footer */}
-                  {filtered.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
-                      {/* Jumlah Tagihan */}
-                      <div className="px-6 py-5 border-r border-gray-100">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Jumlah Tagihan</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">{jumlahTagihan}</p>
-                      </div>
-                      {/* Belum Dibayar */}
-                      <div className="px-6 py-5 border-r border-gray-100">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Belum Dibayar</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">
-                          {formatRupiah(totalBelumDibayar)}
-                        </p>
-                      </div>
-                      {/* Periode Berakhir */}
-                      <div className="px-6 py-5 border-r border-gray-100">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Periode Berakhir</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">{periodeBerikutnya} tagihan</p>
-                      </div>
-                      {/* Potongan Berikutnya */}
-                      <div className="px-6 py-5">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Potongan Berikutnya</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(potonganBerikutnya)}</p>
-                      </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
+                    <div className="px-6 py-5 border-r border-gray-100">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Jumlah Tagihan</p>
+                      <p className="text-lg font-extrabold text-[#1E5C58]">{summary.jumlah_tagihan}</p>
                     </div>
-                  )}
+                    <div className="px-6 py-5 border-r border-gray-100">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Belum Dibayar</p>
+                      <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(summary.total_belum_dibayar)}</p>
+                    </div>
+                    <div className="px-6 py-5 border-r border-gray-100">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Periode Berakhir</p>
+                      <p className="text-lg font-extrabold text-[#1E5C58]">{summary.periode_berakhir} tagihan</p>
+                    </div>
+                    <div className="px-6 py-5">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Potongan Berikutnya</p>
+                      <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(summary.potongan_berikutnya)}</p>
+                    </div>
+                  </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
                       <p className="text-sm text-gray-500">
-                        Menampilkan <span className="font-semibold text-gray-800">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> hingga{" "}
-                        <span className="font-semibold text-gray-800">
-                          {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
-                        </span>{" "}
-                        dari <span className="font-semibold text-gray-800">{filtered.length}</span> data
+                        Menampilkan Halaman <span className="font-semibold text-gray-800">{currentPage}</span> dari <span className="font-semibold text-gray-800">{totalPages}</span> ({totalData} data)
                       </p>
                       <div className="flex items-center gap-2">
                         <button
@@ -2569,8 +2086,8 @@ export default function KeuanganPage() {
             </motion.div>
           ) : (
             <TabPembayaran
-              data={DUMMY_POTONGAN}
-              onBuatTagihan={(anak, wali) => {
+              onBuatTagihan={(anak, wali, childId, guardianId) => {
+                setEditingInvoice(null);
                 setPageView("buat-tagihan");
               }}
             />
@@ -2578,12 +2095,12 @@ export default function KeuanganPage() {
         </AnimatePresence>
       </div>
 
-      {/* Modal Pengembalian Dana */}
       {pengembalianInvoice && (
         <PengembalianDanaModal
           invoice={pengembalianInvoice}
           lunasInvoices={lunasInvoices}
           onClose={() => setPengembalianInvoice(null)}
+          onRefresh={fetchInvoicesData}
         />
       )}
 
@@ -2591,10 +2108,7 @@ export default function KeuanganPage() {
         <CatatBayarModal
           invoice={catatBayarInvoice}
           onClose={() => setCatatBayarInvoice(null)}
-          onSave={(updated) => {
-            setInvoices(invoices.map((i) => (i.id === updated.id ? updated : i)));
-            setCatatBayarInvoice(null);
-          }}
+          onRefresh={fetchInvoicesData}
         />
       )}
 
@@ -2602,6 +2116,7 @@ export default function KeuanganPage() {
         <LihatDetailModal
           invoice={lihatDetailInvoice}
           onClose={() => setLihatDetailInvoice(null)}
+          onLihatBukti={(url) => setSelectedBuktiUrl(url)}
           onCetakInvoice={() => {
             setLihatDetailInvoice(null);
             setCetakInvoiceData(lihatDetailInvoice);
@@ -2615,6 +2130,27 @@ export default function KeuanganPage() {
           onClose={() => setCetakInvoiceData(null)}
         />
       )}
+
+      {selectedBuktiUrl && (
+        <BuktiTransferModal
+          buktiUrl={selectedBuktiUrl}
+          onClose={() => setSelectedBuktiUrl(null)}
+        />
+      )}
+
+      <ConfirmDialogModal
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        confirmVariant={confirmState.confirmVariant}
+        onCancel={() => setConfirmState((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={async () => {
+          const act = confirmState.action;
+          setConfirmState((prev) => ({ ...prev, isOpen: false }));
+          if (act) await act();
+        }}
+      />
     </>
   );
 }
