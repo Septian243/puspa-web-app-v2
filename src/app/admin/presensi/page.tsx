@@ -47,11 +47,13 @@ import {
 } from "@/lib/api/presensi";
 import { getTherapists, getChildren } from "@/lib/api/jadwal_terapi";
 import { showSuccessToast, showErrorToast, handleApiError } from "@/lib/toast";
+import { Html5Qrcode } from "html5-qrcode";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PresensiData {
   id: string;
   pasienName: string;
+  medicalRecordNumber: string;
   waliName: string;
   tanggal: string;
   waktu: string;
@@ -122,6 +124,7 @@ function mapSessionToPresensiData(item: SessionAttendanceItem): PresensiData {
   return {
     id: item.id,
     pasienName: item.child_name,
+    medicalRecordNumber: item.medical_record_number || "-",
     waliName: item.guardian_name,
     tanggal,
     waktu,
@@ -131,9 +134,9 @@ function mapSessionToPresensiData(item: SessionAttendanceItem): PresensiData {
     keterangan: item.notes || "-",
     reschedule: item.reschedule_info
       ? {
-          tanggal: item.reschedule_info.new_session_date,
-          waktu,
-        }
+        tanggal: item.reschedule_info.new_session_date,
+        waktu,
+      }
       : undefined,
     rawSession: item,
   };
@@ -539,6 +542,7 @@ const BULAN_SINGKAT = [
   "Des",
 ];
 const PERIODE_OPTIONS: Periode[] = ["Harian", "Mingguan", "Bulanan", "Custom"];
+const PREVIEW_LIMIT = 10;
 
 const DEFAULT_PERIODE: Periode = "Bulanan";
 const DEFAULT_PERIODE_VALUES: PeriodeValues = {
@@ -548,6 +552,222 @@ const DEFAULT_PERIODE_VALUES: PeriodeValues = {
   dari: "",
   sampai: "",
 };
+
+const rekapInputClass =
+  "w-full px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm text-gray-700 font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]";
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="block mb-1.5 text-xs font-bold text-gray-500">{children}</label>;
+}
+
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 text-xs font-bold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Hapus filter ${label}`}
+        className="cursor-pointer flex items-center justify-center w-4 h-4 rounded-full text-[#2B7A75] hover:bg-teal-100 transition-colors"
+      >
+        <X className="w-3 h-3" strokeWidth={3} />
+      </button>
+    </span>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  allLabel,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  allLabel: string;
+  options: { id: string; name: string }[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setHighlightedIndex(0);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [isOpen]);
+
+  const filteredOptions = options.filter((option) =>
+    option.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const selectedOption = options.find((opt) => opt.id === value);
+  const displayValue = isOpen ? search : (selectedOption ? selectedOption.name : "");
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <FieldLabel>{label}</FieldLabel>
+      <div
+        className={`${rekapInputClass} relative flex items-center pr-11 cursor-text`}
+        onClick={() => setIsOpen(true)}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={displayValue}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearch("");
+          }}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setIsOpen(true);
+            setHighlightedIndex(0);
+          }}
+          onKeyDown={(event) => {
+            const optionCount = filteredOptions.length + 1;
+
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setIsOpen(true);
+              setHighlightedIndex((index) => (index + 1) % optionCount);
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setHighlightedIndex((index) => (index - 1 + optionCount) % optionCount);
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              if (highlightedIndex === 0) {
+                onChange("");
+              } else {
+                const opt = filteredOptions[highlightedIndex - 1];
+                if (opt) onChange(opt.id);
+              }
+              setSearch("");
+              setIsOpen(false);
+            }
+            if (event.key === "Escape") setIsOpen(false);
+          }}
+          placeholder={allLabel}
+          aria-label={`Cari ${label.toLowerCase()}`}
+          className="w-full p-0 text-sm text-gray-700 bg-transparent border-0 outline-none placeholder:text-gray-500"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen((open) => !open)}
+          aria-label={`Buka pilihan ${label.toLowerCase()}`}
+          tabIndex={-1}
+          className="absolute right-0 flex items-center justify-center h-full cursor-pointer w-11"
+        >
+          <ChevronDown
+            className={`w-4 h-4 text-gray-700 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 z-30 mt-2 overflow-hidden bg-white border border-gray-100 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.12)]">
+          <div className="max-h-56 overflow-y-auto p-1.5" role="listbox">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setSearch("");
+                setIsOpen(false);
+              }}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${highlightedIndex === 0 ? "bg-teal-50" : "hover:bg-gray-50"} ${!value ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
+            >
+              {allLabel}
+            </button>
+            {filteredOptions.map((option, index) => (
+              <button
+                key={option.id}
+                type="button"
+                role="option"
+                aria-selected={value === option.id}
+                onClick={() => {
+                  onChange(option.id);
+                  setSearch("");
+                  setIsOpen(false);
+                }}
+                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${highlightedIndex === index + 1 ? "bg-teal-50" : "hover:bg-gray-50"} ${value === option.id ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
+              >
+                {option.name}
+              </button>
+            ))}
+            {filteredOptions.length === 0 && (
+              <p className="px-3 py-3 text-sm text-gray-400">Data tidak ditemukan.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Helpers for date filtering
+function formatTanggalRekap(iso: string) {
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  const [y, m, d] = parts;
+  return `${d}/${m}/${y}`;
+}
+
+function weekRange(value: string): [string, string] | null {
+  const match = value.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  const DAY = 86400000;
+
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = (jan4.getUTCDay() + 6) % 7; // Senin = 0
+  const monday = new Date(jan4.getTime() - dayOfWeek * DAY + (week - 1) * 7 * DAY);
+  const sunday = new Date(monday.getTime() + 6 * DAY);
+
+  return [monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)];
+}
+
+function periodeLabel(periode: Periode, v: PeriodeValues): string | null {
+  if (periode === "Harian" && v.hari) return formatTanggalRekap(v.hari);
+  if (periode === "Mingguan" && v.minggu) {
+    const m = v.minggu.match(/^(\d{4})-W(\d{2})$/);
+    return m ? `Minggu ${Number(m[2])}, ${m[1]}` : null;
+  }
+  if (periode === "Bulanan" && v.bulan) {
+    const [y, m] = v.bulan.split("-");
+    if (y && m) return `${BULAN_SINGKAT[Number(m) - 1]} ${y}`;
+  }
+  if (periode === "Custom" && (v.dari || v.sampai)) {
+    return `${v.dari ? formatTanggalRekap(v.dari) : "..."} – ${v.sampai ? formatTanggalRekap(v.sampai) : "..."}`;
+  }
+  return null;
+}
+
+const jenisTerapiOptions = [
+  { id: "okupasi", name: "Terapi Okupasi" },
+  { id: "fisio", name: "Fisioterapi" },
+  { id: "wicara", name: "Terapi Wicara" },
+  { id: "paedagog", name: "PLB (Paedagog)" }
+];
 
 function RekapKehadiran() {
   const [anakId, setAnakId] = useState("");
@@ -567,7 +787,7 @@ function RekapKehadiran() {
       if (Array.isArray(cRes)) {
         setChildrenList(
           cRes.map((c: any) => ({
-            id: c.id,
+            id: c.child_id ?? c.id,
             name: `${c.child_name} (${c.medical_record_number || "-"})`,
           }))
         );
@@ -575,7 +795,7 @@ function RekapKehadiran() {
       if (Array.isArray(tRes)) {
         setTherapistsList(
           tRes.map((t: any) => ({
-            id: t.id,
+            id: t.therapist_id ?? t.id,
             name: t.therapist_name,
           }))
         );
@@ -596,6 +816,12 @@ function RekapKehadiran() {
     if (periode === "Harian" && periodeValues.hari) {
       dateFrom = periodeValues.hari;
       dateTo = periodeValues.hari;
+    } else if (periode === "Mingguan" && periodeValues.minggu) {
+      const range = weekRange(periodeValues.minggu);
+      if (range) {
+        dateFrom = range[0];
+        dateTo = range[1];
+      }
     } else if (periode === "Bulanan" && periodeValues.bulan) {
       const [y, m] = periodeValues.bulan.split("-");
       const lastDay = new Date(Number(y), Number(m), 0).getDate();
@@ -661,6 +887,17 @@ function RekapKehadiran() {
     }
   };
 
+  const setPeriodeValue = (key: keyof PeriodeValues, value: string) =>
+    setPeriodeValues((prev) => ({ ...prev, [key]: value }));
+
+  const clearPeriode = () =>
+    setPeriodeValues((prev) =>
+      periode === "Harian" ? { ...prev, hari: "" }
+        : periode === "Mingguan" ? { ...prev, minggu: "" }
+          : periode === "Bulanan" ? { ...prev, bulan: "" }
+            : { ...prev, dari: "", sampai: "" },
+    );
+
   const handleReset = () => {
     setAnakId("");
     setTerapisId("");
@@ -669,8 +906,21 @@ function RekapKehadiran() {
     setPeriodeValues(DEFAULT_PERIODE_VALUES);
   };
 
-  const rekapInputClass =
-    "w-full px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm text-gray-700 font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]";
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  if (anakId) {
+    const name = childrenList.find(c => c.id === anakId)?.name || anakId;
+    chips.push({ key: "anak", label: name, onRemove: () => setAnakId("") });
+  }
+  if (terapisId) {
+    const name = therapistsList.find(t => t.id === terapisId)?.name || terapisId;
+    chips.push({ key: "terapis", label: name, onRemove: () => setTerapisId("") });
+  }
+  if (jenisTerapi) {
+    const name = jenisTerapiOptions.find(j => j.id === jenisTerapi)?.name || jenisTerapi;
+    chips.push({ key: "jenis", label: name, onRemove: () => setJenisTerapi("") });
+  }
+  const labelPeriode = periodeLabel(periode, periodeValues);
+  if (labelPeriode) chips.push({ key: "periode", label: labelPeriode, onRemove: clearPeriode });
 
   return (
     <div className="bg-white rounded-2xl border border-teal-50 overflow-hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
@@ -687,58 +937,27 @@ function RekapKehadiran() {
             Filter Data
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                Anak / Pasien
-              </label>
-              <select
-                value={anakId}
-                onChange={(e) => setAnakId(e.target.value)}
-                className={rekapInputClass}
-              >
-                <option value="">Semua Anak</option>
-                {childrenList.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                Terapis
-              </label>
-              <select
-                value={terapisId}
-                onChange={(e) => setTerapisId(e.target.value)}
-                className={rekapInputClass}
-              >
-                <option value="">Semua Terapis</option>
-                {therapistsList.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                Jenis Terapi
-              </label>
-              <select
-                value={jenisTerapi}
-                onChange={(e) => setJenisTerapi(e.target.value)}
-                className={rekapInputClass}
-              >
-                <option value="">Semua Jenis Terapi</option>
-                <option value="okupasi">Terapi Okupasi</option>
-                <option value="fisio">Fisioterapi</option>
-                <option value="wicara">Terapi Wicara</option>
-                <option value="paedagog">PLB (Paedagog)</option>
-              </select>
-            </div>
+            <FilterSelect
+              label="Anak / Pasien"
+              value={anakId}
+              onChange={setAnakId}
+              allLabel="Semua Anak"
+              options={childrenList}
+            />
+            <FilterSelect
+              label="Terapis"
+              value={terapisId}
+              onChange={setTerapisId}
+              allLabel="Semua Terapis"
+              options={therapistsList}
+            />
+            <FilterSelect
+              label="Jenis Terapi"
+              value={jenisTerapi}
+              onChange={setJenisTerapi}
+              allLabel="Semua Jenis Terapi"
+              options={jenisTerapiOptions}
+            />
           </div>
         </div>
 
@@ -755,11 +974,10 @@ function RekapKehadiran() {
                     key={opt}
                     type="button"
                     onClick={() => setPeriode(opt)}
-                    className={`cursor-pointer flex-1 whitespace-nowrap px-4 py-2 rounded-lg text-sm transition-all ${
-                      isActive
-                        ? "bg-[#1E5C58] text-white font-bold shadow-sm"
-                        : "text-gray-400 font-semibold hover:text-[#2B7A75]"
-                    }`}
+                    className={`cursor-pointer flex-1 whitespace-nowrap px-4 py-2 rounded-lg text-sm transition-all ${isActive
+                      ? "bg-[#1E5C58] text-white font-bold shadow-sm"
+                      : "text-gray-400 font-semibold hover:text-[#2B7A75]"
+                      }`}
                   >
                     {opt}
                   </button>
@@ -770,36 +988,33 @@ function RekapKehadiran() {
             <div className="flex-1">
               {periode === "Harian" && (
                 <div>
-                  <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                    Tanggal
-                  </label>
+                  <FieldLabel>Tanggal</FieldLabel>
                   <input
                     type="date"
                     value={periodeValues.hari}
-                    onChange={(e) =>
-                      setPeriodeValues((prev) => ({
-                        ...prev,
-                        hari: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setPeriodeValue("hari", e.target.value)}
+                    className={`${rekapInputClass} cursor-pointer`}
+                  />
+                </div>
+              )}
+              {periode === "Mingguan" && (
+                <div>
+                  <FieldLabel>Minggu</FieldLabel>
+                  <input
+                    type="week"
+                    value={periodeValues.minggu}
+                    onChange={(e) => setPeriodeValue("minggu", e.target.value)}
                     className={`${rekapInputClass} cursor-pointer`}
                   />
                 </div>
               )}
               {periode === "Bulanan" && (
                 <div>
-                  <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                    Bulan
-                  </label>
+                  <FieldLabel>Bulan</FieldLabel>
                   <input
                     type="month"
                     value={periodeValues.bulan}
-                    onChange={(e) =>
-                      setPeriodeValues((prev) => ({
-                        ...prev,
-                        bulan: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setPeriodeValue("bulan", e.target.value)}
                     className={`${rekapInputClass} cursor-pointer`}
                   />
                 </div>
@@ -807,35 +1022,22 @@ function RekapKehadiran() {
               {periode === "Custom" && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                      Dari Tanggal
-                    </label>
+                    <FieldLabel>Dari Tanggal</FieldLabel>
                     <input
                       type="date"
                       value={periodeValues.dari}
-                      onChange={(e) =>
-                        setPeriodeValues((prev) => ({
-                          ...prev,
-                          dari: e.target.value,
-                        }))
-                      }
+                      max={periodeValues.sampai || undefined}
+                      onChange={(e) => setPeriodeValue("dari", e.target.value)}
                       className={`${rekapInputClass} cursor-pointer`}
                     />
                   </div>
                   <div>
-                    <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                      Sampai Tanggal
-                    </label>
+                    <FieldLabel>Sampai Tanggal</FieldLabel>
                     <input
                       type="date"
                       value={periodeValues.sampai}
                       min={periodeValues.dari || undefined}
-                      onChange={(e) =>
-                        setPeriodeValues((prev) => ({
-                          ...prev,
-                          sampai: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => setPeriodeValue("sampai", e.target.value)}
                       className={`${rekapInputClass} cursor-pointer`}
                     />
                   </div>
@@ -844,108 +1046,116 @@ function RekapKehadiran() {
             </div>
           </div>
         </div>
-
-        {/* Live Preview Table (First 10 rows) */}
-        <div className="pt-2 border-t border-teal-50/80">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-extrabold tracking-wider text-gray-400 uppercase flex items-center gap-2">
-              <span>Preview Data Laporan</span>
-              <span className="px-2 py-0.5 text-[10px] text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-md font-bold lowercase">
-                (maks 10 baris pertama)
-              </span>
-            </p>
-            <span className="text-xs font-semibold text-gray-500">
-              Total terfilter: <b className="text-[#1E5C58]">{totalFiltered}</b> sesi
-            </span>
-          </div>
-
-          <div className="overflow-x-auto border border-gray-100 rounded-xl bg-gray-50/30">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-gray-100 bg-[#F4F9F8] text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">
-                  <th className="py-3 px-4">No. RM & Nama Anak</th>
-                  <th className="py-3 px-4">Tanggal & Jam</th>
-                  <th className="py-3 px-4">Terapi & Terapis</th>
-                  <th className="py-3 px-4 text-center">Status Presensi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-xs">
-                {loadingPreview ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-gray-400 font-medium">
-                      Memuat preview data...
-                    </td>
-                  </tr>
-                ) : previewItems.length > 0 ? (
-                  previewItems.map((item) => {
-                    const uiStatus = mapBackendStatusToUi(item.status);
-                    return (
-                      <tr key={item.id} className="hover:bg-white transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-gray-800">{item.child_name}</div>
-                          <div className="text-[10px] text-gray-400 font-medium">
-                            No. RM: {item.medical_record_number || "-"}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 font-semibold text-gray-600">
-                          <div>{item.session_date}</div>
-                          <div className="text-[11px] text-gray-400 font-normal">
-                            {item.start_time} - {item.end_time}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-[#1E5C58]">
-                            {formatTherapyType(item.therapy_type)}
-                          </div>
-                          <div className="text-[11px] text-gray-500">
-                            {item.therapist_name}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <StatusBadge status={uiStatus} />
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-gray-400 font-medium">
-                      Tidak ada data sesi terapi sesuai filter di atas.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+      {/* ── Filter Aktif ── */}
+      <div className="flex items-center justify-between gap-3 px-6 py-3 border-t border-gray-100">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-gray-400">Aktif:</span>
+          {chips.length > 0 ? (
+            chips.map((chip) => <FilterChip key={chip.key} label={chip.label} onRemove={chip.onRemove} />)
+          ) : (
+            <span className="text-xs font-medium text-gray-400">Semua data</span>
+          )}
+        </div>
         <button
           type="button"
           onClick={handleReset}
-          className="text-xs font-bold text-red-600 transition-colors cursor-pointer hover:text-red-700"
+          className="text-xs font-bold text-red-600 transition-colors cursor-pointer shrink-0 hover:text-red-700"
         >
-          Reset Filter
+          Reset
         </button>
+      </div>
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => handleExportClick("excel")}
-            className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] active:scale-95 transition-all"
-          >
-            <Download className="w-4 h-4" strokeWidth={2.5} />
-            Export Excel (.xlsx)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExportClick("pdf")}
-            className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl shadow-sm hover:bg-teal-50 active:scale-95 transition-all"
-          >
-            <Download className="w-4 h-4" strokeWidth={2.5} />
-            Export PDF
-          </button>
+      {/* ── Export & Preview Table ── */}
+      <div className="flex flex-wrap justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+        <button
+          type="button"
+          onClick={() => handleExportClick("excel")}
+          disabled={totalFiltered === 0}
+          className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download className="w-4 h-4" strokeWidth={2.5} />
+          Export Excel (.xlsx)
+        </button>
+        <button
+          type="button"
+          onClick={() => handleExportClick("pdf")}
+          disabled={totalFiltered === 0}
+          className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl shadow-sm hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download className="w-4 h-4" strokeWidth={2.5} />
+          Export PDF
+        </button>
+      </div>
+
+      <div className="border-t border-teal-50/80">
+        <div className="flex items-center justify-between gap-3 px-6 py-4">
+          <h3 className="text-sm font-extrabold text-[#1E5C58] flex items-center gap-2">
+            <span>Preview ({PREVIEW_LIMIT} baris pertama)</span>
+          </h3>
+          <span className="px-3 py-1 text-[11px] font-bold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
+            Total terfilter: {totalFiltered} data
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 bg-[#F4F9F8] text-[11px] font-extrabold text-[#1E5C58] uppercase tracking-wider">
+                <th className="px-6 py-3">No. RM & Nama Anak</th>
+                <th className="px-6 py-3">Tanggal & Jam</th>
+                <th className="px-6 py-3">Terapi & Terapis</th>
+                <th className="px-6 py-3 text-center">Status Presensi</th>
+              </tr>
+            </thead>
+            <tbody className="text-xs divide-y divide-gray-100">
+              {loadingPreview ? (
+                <tr>
+                  <td colSpan={4} className="py-8 font-medium text-center text-gray-400">
+                    Memuat preview data...
+                  </td>
+                </tr>
+              ) : previewItems.length > 0 ? (
+                previewItems.map((item) => {
+                  const uiStatus = mapBackendStatusToUi(item.status);
+                  return (
+                    <tr key={item.id} className="transition-colors hover:bg-white">
+                      <td className="px-6 py-3">
+                        <div className="font-bold text-gray-800">{item.child_name}</div>
+                        <div className="text-[10px] text-gray-400 font-medium">
+                          No. RM: {item.medical_record_number || "-"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 font-semibold text-gray-600">
+                        <div>{item.session_date}</div>
+                        <div className="text-[11px] text-gray-400 font-normal">
+                          {item.start_time} - {item.end_time}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="font-bold text-[#1E5C58]">
+                          {formatTherapyType(item.therapy_type)}
+                        </div>
+                        <div className="text-[11px] text-gray-500">
+                          {item.therapist_name}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 text-center">
+                        <StatusBadge status={uiStatus} />
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-8 font-medium text-center text-gray-400">
+                    Tidak ada data sesi terapi sesuai filter di atas.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -956,7 +1166,22 @@ function RekapKehadiran() {
 // ── PAGE UTAMA ────────────────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 export default function PresensiPage() {
-  const [activeTab, setActiveTab] = useState("Presensi");
+  const [activeTab, setActiveTabState] = useState("Presensi");
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("puspa_presensi_tab");
+    if (saved) {
+      setActiveTabState(saved);
+    }
+    setIsClient(true);
+  }, []);
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    localStorage.setItem("puspa_presensi_tab", tab);
+  };
+
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -977,10 +1202,10 @@ export default function PresensiPage() {
   });
 
   // Filters & State
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
+  const [presensiSearch, setPresensiSearch] = useState("");
+  const [presensiDate, setPresensiDate] = useState("");
+  const [rescheduleSearch, setRescheduleSearch] = useState("");
+  const [rescheduleDate, setRescheduleDate] = useState("");
   const [pageSize, setPageSize] = useState(10);
   const [presensiPage, setPresensiPage] = useState(1);
   const [reschedulePage, setReschedulePage] = useState(1);
@@ -992,7 +1217,7 @@ export default function PresensiPage() {
       if (Array.isArray(res)) {
         setTherapistsList(
           res.map((t: any) => ({
-            id: t.id,
+            id: t.therapist_id ?? t.id,
             name: t.therapist_name,
           }))
         );
@@ -1027,24 +1252,38 @@ export default function PresensiPage() {
   // Camera / Scan State
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState("");
-  const cameraVideoRef = useRef<HTMLVideoElement>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const [scanHistory, setScanHistory] = useState<
     { code: string; time: string; patient?: string }[]
   >([]);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
 
   // Fetch Today Sessions from API
   const fetchTodaySessions = async () => {
     setLoading(true);
     try {
       const res = await getTodaySessions({
-        date: selectedDate || undefined,
-        search: searchTerm || undefined,
+        date: presensiDate || new Date().toISOString().slice(0, 10),
+        search: presensiSearch || undefined,
         page: presensiPage,
         per_page: pageSize,
       });
 
-      const mapped = (res.items || []).map(mapSessionToPresensiData);
+      let mapped = (res.items || []).map(mapSessionToPresensiData);
+
+      mapped.sort((a, b) => {
+        const aBelum = a.status === "Belum Presensi";
+        const bBelum = b.status === "Belum Presensi";
+
+        if (aBelum && !bBelum) return -1;
+        if (!aBelum && bBelum) return 1;
+
+        const timeA = a.rawSession?.start_time || "";
+        const timeB = b.rawSession?.start_time || "";
+
+        return timeA.localeCompare(timeB);
+      });
+
       setPresensiItems(mapped);
       setPresensiMeta(res.meta);
     } catch (err: any) {
@@ -1059,7 +1298,8 @@ export default function PresensiPage() {
     setLoading(true);
     try {
       const res = await getRescheduledSessions({
-        search: searchTerm || undefined,
+        date: rescheduleDate || undefined,
+        search: rescheduleSearch || undefined,
         page: reschedulePage,
         per_page: pageSize,
       });
@@ -1076,16 +1316,20 @@ export default function PresensiPage() {
   // Reset page to 1 when filter date or search changes
   useEffect(() => {
     setPresensiPage(1);
-    setReschedulePage(1);
-  }, [selectedDate, searchTerm]);
+  }, [presensiDate, presensiSearch]);
 
   useEffect(() => {
+    setReschedulePage(1);
+  }, [rescheduleDate, rescheduleSearch]);
+
+  useEffect(() => {
+    if (!isClient) return;
     if (activeTab === "Presensi") {
       fetchTodaySessions();
     } else if (activeTab === "Reschedule") {
       fetchReschedules();
     }
-  }, [activeTab, selectedDate, searchTerm, presensiPage, reschedulePage, pageSize]);
+  }, [activeTab, presensiDate, presensiSearch, presensiPage, rescheduleDate, rescheduleSearch, reschedulePage, pageSize, isClient]);
 
   const tabs = [
     { id: "Presensi", label: "Presensi", icon: CheckCircle2 },
@@ -1115,6 +1359,7 @@ export default function PresensiPage() {
       status: item.status === "Belum Presensi" ? undefined : item.status,
       keterangan: item.keterangan === "-" ? "" : item.keterangan,
       reschedule: Boolean(item.reschedule),
+      rescheduleInfo: item.reschedule,
     });
     setPresensiTarget({
       id: item.id,
@@ -1130,6 +1375,7 @@ export default function PresensiPage() {
     setDetailTarget({
       id: item.id,
       pasienName: item.pasienName,
+      medicalRecordNumber: item.medicalRecordNumber,
       waliName: item.waliName,
       tanggal: item.tanggal,
       waktu: item.waktu,
@@ -1206,43 +1452,54 @@ export default function PresensiPage() {
   };
 
   // Camera / QR Code Scan Handler
-  const stopCamera = () => {
-    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
-    cameraStreamRef.current = null;
-    if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
+  const stopCamera = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+      } catch (err) {
+        console.error("Gagal menghentikan kamera", err);
+      }
+      scannerRef.current.clear();
+      scannerRef.current = null;
+    }
     setIsCameraActive(false);
   };
 
   const startCamera = async () => {
     setCameraError("");
+    setIsCameraActive(true);
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("Browser ini tidak mendukung akses kamera.");
-      return;
-    }
-
-    try {
-      stopCamera();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      cameraStreamRef.current = stream;
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject = stream;
-        await cameraVideoRef.current.play();
+    setTimeout(async () => {
+      try {
+        if (!scannerRef.current) {
+          scannerRef.current = new Html5Qrcode("qr-reader");
+        }
+        await scannerRef.current.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+          },
+          (decodedText) => {
+            stopCamera();
+            handleProcessScanCode(decodedText);
+          },
+          (errorMessage) => {
+            // ignore scanning errors
+          }
+        );
+      } catch (err) {
+        setCameraError(
+          "Kamera tidak dapat diakses. Pastikan izin kamera sudah diberikan."
+        );
+        setIsCameraActive(false);
       }
-      setIsCameraActive(true);
-    } catch {
-      setCameraError(
-        "Kamera tidak dapat diakses. Pastikan izin kamera sudah diberikan."
-      );
-      setIsCameraActive(false);
-    }
+    }, 150);
   };
 
   const handleProcessScanCode = async (code: string) => {
-    if (!code.trim()) return;
+    if (!code.trim() || isProcessingScan) return;
+    setIsProcessingScan(true);
 
     try {
       const res = await scanQrAttendance(code.trim());
@@ -1260,66 +1517,35 @@ export default function PresensiPage() {
         },
         ...history,
       ]);
-      fetchTodaySessions();
+      await fetchTodaySessions();
     } catch (err: any) {
       handleApiError(err, "Gagal memproses QR Code presensi");
+    } finally {
+      setIsProcessingScan(false);
     }
   };
 
   useEffect(() => {
     return () => {
-      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => { }).finally(() => {
+          scannerRef.current?.clear();
+        });
+      }
     };
   }, []);
 
-  useEffect(() => {
-    const video = cameraVideoRef.current;
-    const stream = cameraStreamRef.current;
-    if (!isCameraActive || !video || !stream) return;
+  const getPresensiTitle = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const targetDate = presensiDate || today;
+    const parts = targetDate.split("-");
+    const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : targetDate;
 
-    video.srcObject = stream;
-    void video.play();
-  }, [isCameraActive]);
-
-  useEffect(() => {
-    if (!isCameraActive || !cameraVideoRef.current) return;
-
-    const BarcodeDetectorClass = (
-      window as Window & {
-        BarcodeDetector?: new (options?: { formats: string[] }) => {
-          detect: (source: HTMLVideoElement) => Promise<{ rawValue?: string }[]>;
-        };
-      }
-    ).BarcodeDetector;
-
-    if (!BarcodeDetectorClass) return;
-
-    const detector = new BarcodeDetectorClass({
-      formats: ["code_128", "code_39", "ean_13", "qr_code"],
-    });
-    let cancelled = false;
-
-    const detect = async () => {
-      if (cancelled || !cameraVideoRef.current) return;
-      try {
-        const results = await detector.detect(cameraVideoRef.current);
-        const code = results[0]?.rawValue;
-        if (code) {
-          stopCamera();
-          handleProcessScanCode(code);
-          return;
-        }
-      } catch {
-        // frame retry
-      }
-      if (!cancelled) window.requestAnimationFrame(detect);
-    };
-
-    window.requestAnimationFrame(detect);
-    return () => {
-      cancelled = true;
-    };
-  }, [isCameraActive]);
+    if (!presensiDate || presensiDate === today) {
+      return `Presensi Terapi Hari ini (${formattedDate})`;
+    }
+    return `Presensi Terapi (${formattedDate})`;
+  };
 
   return (
     <div className="flex min-h-[calc(100vh-80px)] bg-transparent w-full">
@@ -1361,11 +1587,10 @@ export default function PresensiPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 sm:px-6 py-3 rounded-lg text-sm cursor-pointer transition-all duration-300 ${
-                    isActive
-                      ? "text-white font-bold"
-                      : "text-gray-400 hover:text-[#2B7A75] font-semibold hover:bg-white/50"
-                  }`}
+                  className={`relative flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 sm:px-6 py-3 rounded-lg text-sm cursor-pointer transition-all duration-300 ${isActive
+                    ? "text-white font-bold"
+                    : "text-gray-400 hover:text-[#2B7A75] font-semibold hover:bg-white/50"
+                    }`}
                 >
                   {isActive && (
                     <motion.div
@@ -1379,9 +1604,8 @@ export default function PresensiPage() {
                     />
                   )}
                   <Icon
-                    className={`relative z-10 w-4 h-4 ${
-                      isActive ? "text-white" : "text-gray-400"
-                    }`}
+                    className={`relative z-10 w-4 h-4 ${isActive ? "text-white" : "text-gray-400"
+                      }`}
                     strokeWidth={isActive ? 2.5 : 2}
                   />
                   <span className="relative z-10">{tab.label}</span>
@@ -1404,26 +1628,26 @@ export default function PresensiPage() {
             {/* ── TAB: PRESENSI ── */}
             {activeTab === "Presensi" && (
               <>
-                <div className="flex flex-col gap-4 p-4 bg-white border border-teal-50 rounded-2xl sm:flex-row sm:items-end">
-                  <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="text-xs font-bold text-gray-500">
-                      Tanggal Presensi
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full px-4 py-2.5 mt-1.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
-                      />
-                    </label>
-                  </div>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <input
+                    type="date"
+                    value={presensiDate}
+                    onChange={(e) => setPresensiDate(e.target.value)}
+                    onClick={(e) => {
+                      if ('showPicker' in HTMLInputElement.prototype) {
+                        e.currentTarget.showPicker();
+                      }
+                    }}
+                    className="w-full sm:w-48 px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
+                  />
                   <div className="relative w-full sm:w-72">
                     <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
                       <Search className="w-4 h-4 text-gray-400" />
                     </div>
                     <input
                       type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      value={presensiSearch}
+                      onChange={(e) => setPresensiSearch(e.target.value)}
                       placeholder="Cari anak atau terapis..."
                       className="w-full pl-10 pr-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700"
                     />
@@ -1434,7 +1658,7 @@ export default function PresensiPage() {
                   <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
                     <div className="w-2 h-2 rounded-full bg-[#1E5C58]" />
                     <h3 className="text-sm font-extrabold text-[#1E5C58]">
-                      Presensi Terapi ({selectedDate})
+                      {getPresensiTitle()}
                     </h3>
                   </div>
 
@@ -1577,17 +1801,28 @@ export default function PresensiPage() {
             {/* ── TAB: RESCHEDULE ── */}
             {activeTab === "Reschedule" && (
               <>
-                <div className="flex flex-col gap-4 p-4 bg-white border border-teal-50 rounded-2xl sm:flex-row sm:items-end">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    onClick={(e) => {
+                      if ('showPicker' in HTMLInputElement.prototype) {
+                        e.currentTarget.showPicker();
+                      }
+                    }}
+                    className="w-full sm:w-48 px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
+                  />
                   <div className="relative w-full sm:w-72">
                     <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
                       <Search className="w-4 h-4 text-gray-400" />
                     </div>
                     <input
                       type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      value={rescheduleSearch}
+                      onChange={(e) => setRescheduleSearch(e.target.value)}
                       placeholder="Cari anak atau terapis..."
-                      className="w-full py-2.5 pl-10 pr-4 text-sm text-gray-700 transition-all bg-white border border-teal-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all shadow-sm text-gray-700"
                     />
                   </div>
                 </div>
@@ -1743,11 +1978,10 @@ export default function PresensiPage() {
 
                   <div className="relative m-6 flex min-h-[250px] flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#2B7A75] bg-[#F4F9F8]/60 px-5 py-6 text-center">
                     <div
-                      className={`relative z-10 flex flex-col items-center ${
-                        isCameraActive
-                          ? "px-6 py-5 bg-white/85 rounded-2xl backdrop-blur-sm"
-                          : ""
-                      }`}
+                      className={`relative z-10 flex flex-col items-center ${isCameraActive
+                        ? "px-6 py-5 bg-white/85 rounded-2xl backdrop-blur-sm"
+                        : ""
+                        }`}
                     >
                       {isCameraActive ? (
                         <Camera
@@ -1775,7 +2009,7 @@ export default function PresensiPage() {
                         <button
                           type="button"
                           onClick={stopCamera}
-                          className="inline-flex items-center justify-center mt-5 text-white transition-colors bg-red-500 rounded-full shadow-sm w-11 h-11 hover:bg-red-600 cursor-pointer"
+                          className="inline-flex items-center justify-center mt-5 text-white transition-colors bg-red-500 rounded-full shadow-sm cursor-pointer w-11 h-11 hover:bg-red-600"
                         >
                           <X className="w-5 h-5" strokeWidth={2.5} />
                         </button>
@@ -1801,7 +2035,7 @@ export default function PresensiPage() {
                   </div>
 
                   {/* Manual Token Input (QA / Testing / Simulation) */}
-                  <div className="mx-6 mb-6 p-4 bg-teal-50/40 border border-teal-100 rounded-2xl space-y-3">
+                  <div className="p-4 mx-6 mb-6 space-y-3 border border-teal-100 bg-teal-50/40 rounded-2xl">
                     <div className="flex items-center justify-between">
                       <label htmlFor="manual-token-input" className="text-xs font-extrabold text-[#1E5C58] flex items-center gap-1.5">
                         <ScanLine className="w-3.5 h-3.5" />
@@ -1831,9 +2065,16 @@ export default function PresensiPage() {
                       />
                       <button
                         type="submit"
-                        className="px-4 py-2 text-xs font-bold text-white bg-[#1E5C58] hover:bg-[#2B7A75] rounded-xl transition-colors cursor-pointer flex-none flex items-center gap-1"
+                        disabled={isProcessingScan}
+                        className="px-4 py-2 text-xs font-bold text-white bg-[#1E5C58] hover:bg-[#2B7A75] rounded-xl transition-colors cursor-pointer flex-none flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Submit Scan
+                        {isProcessingScan ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" /> Memproses...
+                          </>
+                        ) : (
+                          "Submit Scan"
+                        )}
                       </button>
                     </form>
                   </div>
@@ -1890,21 +2131,8 @@ export default function PresensiPage() {
                           </button>
                         </div>
                         <div className="p-6">
-                          <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 rounded-xl">
-                            <video
-                              ref={cameraVideoRef}
-                              muted
-                              playsInline
-                              autoPlay
-                              className="absolute inset-0 object-cover w-full h-full"
-                            />
-                            <div className="absolute inset-0 bg-black/25" />
-                            <div className="absolute top-1/2 left-1/2 w-[48%] max-w-[250px] aspect-square -translate-x-1/2 -translate-y-1/2 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]">
-                              <span className="absolute top-0 left-0 h-12 border-t-4 border-l-4 border-white w-14 rounded-tl-md" />
-                              <span className="absolute top-0 right-0 h-12 border-t-4 border-r-4 border-white w-14 rounded-tr-md" />
-                              <span className="absolute bottom-0 left-0 h-12 border-b-4 border-l-4 border-white w-14 rounded-bl-md" />
-                              <span className="absolute bottom-0 right-0 h-12 border-b-4 border-r-4 border-white w-14 rounded-br-md" />
-                            </div>
+                          <div className="relative overflow-hidden bg-gray-100 rounded-xl" id="qr-reader-container">
+                            <div id="qr-reader" className="w-full"></div>
                           </div>
                           <p className="mt-5 text-sm font-medium leading-relaxed text-center text-[#7184A0]">
                             Arahkan kamera ke QR Code presensi.
@@ -1968,6 +2196,7 @@ export default function PresensiPage() {
         initialValues={presensiInitialValues}
         mode={presensiMode}
         therapistsList={therapistsList}
+        allowReschedule={presensiMode === "create" || !presensiInitialValues?.reschedule}
       />
 
       {detailTarget && (
@@ -1982,6 +2211,31 @@ export default function PresensiPage() {
         onClose={() => setQrModalData(null)}
         sessionData={qrModalData}
       />
+
+      {/* Full-screen loading overlay for scan processing */}
+      <AnimatePresence>
+        {isProcessingScan &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm"
+            >
+              <div className="flex flex-col items-center justify-center px-8 py-6 bg-white shadow-2xl rounded-2xl">
+                <RefreshCw className="w-10 h-10 mb-4 text-[#2B7A75] animate-spin" />
+                <h3 className="text-base font-extrabold text-[#1E5C58]">
+                  Memproses Presensi...
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Mohon tunggu sebentar.
+                </p>
+              </div>
+            </motion.div>,
+            document.body
+          )}
+      </AnimatePresence>
     </div>
   );
 }

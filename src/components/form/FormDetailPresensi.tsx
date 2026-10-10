@@ -13,6 +13,7 @@ export type PresensiDetailStatus =
 export interface PresensiDetailData {
     id: string;
     pasienName: string;
+    medicalRecordNumber: string;
     waliName: string;
     tanggal: string;
     waktu: string;
@@ -77,6 +78,10 @@ export default function FormDetailPresensi({
                     <div>
                         <p className="text-[11px] font-semibold text-gray-400">Nama Anak</p>
                         <p className="mt-1 font-bold text-gray-700">{item.pasienName}</p>
+                    </div>
+                    <div>
+                        <p className="text-[11px] font-semibold text-gray-400">No. RM</p>
+                        <p className="mt-1 font-bold text-gray-700">{item.medicalRecordNumber}</p>
                     </div>
                     <div>
                         <p className="text-[11px] font-semibold text-gray-400">Wali</p>

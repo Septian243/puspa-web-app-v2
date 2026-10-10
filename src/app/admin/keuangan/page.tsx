@@ -1284,10 +1284,10 @@ function PratinjauInvoiceModal({
                       <td className="px-4 py-2.5 text-gray-700 font-medium">{row.jenis}</td>
                       <td className="px-4 py-2.5 text-gray-600">{row.jumlah_sesi} sesi</td>
                       <td className="px-4 py-2.5 text-gray-600">
-                        {formatRupiah(row.harga_sesi)}
+                        {formatRupiah(Number(row.harga_sesi) || 0)}
                       </td>
                       <td className="px-4 py-2.5 text-right font-semibold text-gray-800">
-                        {formatRupiah(row.jumlah_sesi * row.harga_sesi)}
+                        {formatRupiah((Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0))}
                       </td>
                     </tr>
                   ))}
@@ -1992,7 +1992,7 @@ function BuatTagihanForm({ onBack, onSave, initialData }: { onBack: () => void; 
             }),
             noInvoice: noInvoicePreview,
             rows: terapiRows,
-            potongan,
+            potongan: Number(potongan) || 0,
             totalSeharusnya,
             totalBayar,
           }}
