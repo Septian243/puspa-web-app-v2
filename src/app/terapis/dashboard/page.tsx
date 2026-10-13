@@ -3,8 +3,8 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -14,9 +14,9 @@ import {
 import {
   ClipboardCheck,
   FileSpreadsheet,
-  CheckCircle2,
   UserCheck,
   Calendar,
+  CalendarDays,
   Clock,
 } from "lucide-react";
 
@@ -27,31 +27,200 @@ import {
   getUpcomingSchedules,
 } from "@/lib/api/dashboardTerapis";
 
-/* ================= CUSTOM X AXIS TICK ================= */
-const CustomXAxisTick = ({ x, y, payload }: any) => {
-  const words = payload.value.split(" ");
-
-  return (
-    <g transform={`translate(${x},${y + 8})`}>
-      <text textAnchor="middle" fill="#1E5C58" fontSize={10} fontWeight={500}>
-        {words.map((word: string, index: number) => (
-          <tspan key={index} x="0" dy={index === 0 ? 0 : 12}>
-            {word}
-          </tspan>
-        ))}
-      </text>
-    </g>
-  );
+type TemporaryMetric = {
+  completed: number;
+  total: number;
+  changePercent: number;
 };
 
+type TemporaryDashboardMetrics = {
+  observations: TemporaryMetric;
+  assessments: TemporaryMetric;
+  therapies: TemporaryMetric;
+};
+
+type TrendMetric = "observations" | "assessments" | "therapies";
+type ScheduleFilter = "all" | "observation" | "assessment" | "therapy";
+
+const isAssessmentSchedule = (scheduleItem: any) =>
+  Array.isArray(scheduleItem.types) &&
+  scheduleItem.types.some((type: string) =>
+    type.toLowerCase().includes("assessment"),
+  );
+
+const isObservationSchedule = (scheduleItem: any) =>
+  Array.isArray(scheduleItem.types) &&
+  scheduleItem.types.some((type: string) =>
+    type.toLowerCase().includes("observasi"),
+  );
+
+const isTherapySchedule = (scheduleItem: any) =>
+  scheduleItem.source === "therapy" ||
+  (Array.isArray(scheduleItem.types) &&
+    scheduleItem.types.some((type: string) =>
+      type.toLowerCase().includes("terapi"),
+    ));
+
+function getTemporaryDashboardMetrics(
+  month: number,
+  year: number,
+): TemporaryDashboardMetrics {
+  const periodIndex = (year - 2020) * 12 + month;
+  const currentDate = new Date();
+  const currentPeriodIndex =
+    (currentDate.getFullYear() - 2020) * 12 + currentDate.getMonth() + 1;
+  const periodOffset = periodIndex - currentPeriodIndex;
+  const cycle = (value: number, length: number) =>
+    ((value % length) + length) % length;
+
+  const createMetric = (
+    completed: number,
+    total: number,
+    previousCompleted: number,
+  ): TemporaryMetric => ({
+    completed,
+    total,
+    changePercent:
+      previousCompleted === 0
+        ? 100
+        : Math.abs(
+          Math.round(
+            ((completed - previousCompleted) / previousCompleted) * 100,
+          ),
+        ),
+  });
+
+  const observationCompleted = 10 + cycle(periodOffset * 3, 7);
+  const assessmentCompleted = 10 + cycle(periodOffset * 2, 6);
+  const therapyCompleted = 30 + cycle(periodOffset * 5, 11);
+  const previousObservationCompleted =
+    periodOffset === 0 ? 5 : 10 + cycle((periodOffset - 1) * 3, 7);
+
+  return {
+    observations: createMetric(
+      observationCompleted,
+      40 + cycle(periodOffset * 5, 16),
+      previousObservationCompleted,
+    ),
+    assessments: createMetric(
+      assessmentCompleted,
+      30 + cycle(periodOffset * 4, 13),
+      10 + cycle((periodOffset - 1) * 2, 6),
+    ),
+    therapies: createMetric(
+      therapyCompleted,
+      60 + cycle(periodOffset * 7, 21),
+      30 + cycle((periodOffset - 1) * 5, 11),
+    ),
+  };
+}
+
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
-  const [trend, setTrend] = useState<any[]>([]);
   const [schedule, setSchedule] = useState<any[]>([]);
-  const [currentPeriod, setCurrentPeriod] = useState("");
+  const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("all");
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
+
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  const months = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+  const monthsShort = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+  ];
+
+  const years = Array.from(
+    { length: 5 },
+    (_, index) => new Date().getFullYear() - 2 + index,
+  );
+
+  const todayLabel = now.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  });
+
+  const isCurrentPeriod =
+    selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear();
+  const temporaryMetrics = getTemporaryDashboardMetrics(
+    selectedMonth,
+    selectedYear,
+  );
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>("observations");
+  const trendData = monthsShort.map((name, index) => {
+    const month = index + 1;
+    const isFuture =
+      selectedYear === now.getFullYear() && month > selectedMonth;
+    const monthMetrics = getTemporaryDashboardMetrics(month, selectedYear);
+
+    return {
+      name,
+      value: isFuture ? null : monthMetrics[trendMetric].completed,
+    };
+  });
+  const trendValues = trendData
+    .map((item) => item.value)
+    .filter((value): value is number => value !== null);
+  const trendMax = Math.max(...trendValues, 10);
+  const trendLabel =
+    trendMetric === "observations"
+      ? "Jumlah Observasi"
+      : trendMetric === "assessments"
+        ? "Jumlah Assessment"
+        : "Jumlah Terapi";
+  const lastTrendIndex =
+    selectedYear === now.getFullYear() ? selectedMonth - 1 : 11;
+  const lastTrendValue = trendData[lastTrendIndex]?.value ?? 0;
+  const previousTrendValue = trendData[lastTrendIndex - 1]?.value ?? lastTrendValue;
+  const trendIsRising = lastTrendValue > previousTrendValue;
+  const renderTrendEndLabel = (props: any) => {
+    if (props.index !== lastTrendIndex || props.value === null) return null;
+
+    const boxX = props.x - 20;
+    const boxY = trendIsRising ? props.y - 37 : props.y + 12;
+
+    return (
+      <g>
+        <rect
+          x={boxX}
+          y={boxY}
+          width={40}
+          height={25}
+          rx={8}
+          fill="#1E5C58"
+        />
+        <text
+          x={boxX + 20}
+          y={boxY + 12.5}
+          fill="#FFFFFF"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={12}
+          fontWeight={700}
+        >
+          {props.value}
+        </text>
+      </g>
+    );
+  };
 
   useEffect(() => {
     setRole(localStorage.getItem("role"));
@@ -59,34 +228,33 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
-        const dashboardRes = await getDashboardMetrics();
+        const dashboardRes = await getDashboardMetrics(
+          selectedMonth,
+          selectedYear,
+        );
         const upcomingRes = await getUpcomingSchedules();
 
         const d = dashboardRes.data;
 
-        setMetrics(d.metrics);
-
         setCategories(
-          (d.patient_categories ?? []).map((c: any) => ({
-            name: c.type,
-            value: Number(c.percentage),
-            count: Number(c.count),
-          })),
-        );
-
-        setTrend(
-          (d.trend_chart ?? []).map((t: any) => ({
-            name: t.label,
-            value: Number(t.value),
-          })),
+          (d.patient_categories ?? [])
+            .filter(
+              (c: any) =>
+                !String(c.type ?? "")
+                  .toLowerCase()
+                  .includes("umum"),
+            )
+            .map((c: any) => ({
+              name: c.type,
+              value: Number(c.percentage),
+              count: Number(c.count),
+            })),
         );
 
         setSchedule(upcomingRes.data ?? []);
 
-        if (d.period) {
-          setCurrentPeriod(d.period.month_name);
-        }
       } catch (error) {
         console.error("Dashboard error:", error);
       } finally {
@@ -95,19 +263,19 @@ export default function DashboardPage() {
     }
 
     load();
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   const filteredSchedule = schedule.filter((s: any) => {
-    if (role === "terapis") {
-      if (Array.isArray(s.types)) {
-        return !s.types.some((t: string) =>
-          t.toLowerCase().includes("assessment"),
-        );
-      }
-      return true;
-    }
+    if (role === "terapis" && isAssessmentSchedule(s)) return false;
+    if (scheduleFilter === "observation") return isObservationSchedule(s);
+    if (scheduleFilter === "assessment") return isAssessmentSchedule(s);
+    if (scheduleFilter === "therapy") return isTherapySchedule(s);
     return true;
   });
+  const showTherapistColumn =
+    scheduleFilter === "all" || scheduleFilter === "therapy";
+  const getTherapistName = (scheduleItem: any) =>
+    scheduleItem.therapist_name || scheduleItem.therapist || "-";
 
   if (loading || !role) {
     return (
@@ -125,11 +293,11 @@ export default function DashboardPage() {
       {/* ================= GREETING BANNER ================= */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1E5C58] to-[#2E8B83] p-6 md:p-8 text-white shadow-[0_10px_30px_rgba(30,92,88,0.15)]">
         <div className="relative z-10 space-y-2">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl font-extrabold tracking-tight md:text-3xl">
             Selamat Datang Kembali, {role === "terapis" ? "Terapis" : "Asesor"}{" "}
             PUSPA!
           </h1>
-          <p className="text-teal-50 max-w-xl text-sm md:text-base font-light">
+          <p className="max-w-xl text-sm font-light text-teal-50 md:text-base">
             Mari pantau perkembangan anak-anak dan kelola aktivitas hari ini
             dengan efisien dan penuh kepedulian.
           </p>
@@ -137,83 +305,117 @@ export default function DashboardPage() {
         <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent pointer-events-none" />
       </div>
 
+      {/* ================= DATE & PERIOD ================= */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-sm font-bold text-[#1E5C58]">
+          <CalendarDays className="h-5 w-5 text-[#2B7A75]" />
+          <span>
+            {isCurrentPeriod
+              ? `Data per ${todayLabel}`
+              : `Data per ${months[selectedMonth - 1]} ${selectedYear}`}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row sm:items-center">
+          <span className="text-sm font-bold text-[#1E5C58]">Pilih Periode:</span>
+          <div className="flex gap-2">
+            <select
+              value={selectedMonth}
+              onChange={(event) => setSelectedMonth(Number(event.target.value))}
+              className="min-w-28 rounded-xl border border-teal-100 bg-white px-2.5 py-1 text-sm font-semibold text-[#1E5C58] outline-none focus:ring-2 focus:ring-teal-100"
+              aria-label="Pilih bulan"
+            >
+              {months.map((month, index) => (
+                <option key={month} value={index + 1}>
+                  {month}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(event) => setSelectedYear(Number(event.target.value))}
+              className="min-w-24 rounded-xl border border-teal-100 bg-white px-2.5 py-1 text-sm font-semibold text-[#1E5C58] outline-none focus:ring-2 focus:ring-teal-100"
+              aria-label="Pilih tahun"
+            >
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* ================= METRIC CARDS ================= */}
       <div
-        className={`grid gap-6 ${role === "terapis" ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"}`}
+        className={`grid grid-cols-1 gap-6 ${role === "terapis" ? "md:grid-cols-2" : "md:grid-cols-3"}`}
       >
         <MetricCard
           label="Total Observasi"
-          value={metrics?.total_observations?.current}
-          percent={metrics?.total_observations?.change_percent}
+          completed={temporaryMetrics.observations.completed}
+          total={temporaryMetrics.observations.total}
+          percent={temporaryMetrics.observations.changePercent}
           icon={ClipboardCheck}
         />
 
         {role === "asesor" && (
           <MetricCard
             label="Total Assessment"
-            value={metrics?.total_assessments?.current}
-            percent={metrics?.total_assessments?.change_percent}
+            completed={temporaryMetrics.assessments.completed}
+            total={temporaryMetrics.assessments.total}
+            percent={temporaryMetrics.assessments.changePercent}
             icon={FileSpreadsheet}
           />
         )}
 
         <MetricCard
-          label="Tingkat Penyelesaian"
-          value={metrics?.completion_rate?.current}
-          percent={metrics?.completion_rate?.change_percent}
-          icon={CheckCircle2}
+          label="Total Terapi"
+          completed={temporaryMetrics.therapies.completed}
+          total={temporaryMetrics.therapies.total}
+          percent={temporaryMetrics.therapies.changePercent}
+          icon={UserCheck}
         />
-
-        {role === "terapis" ? (
-          <MetricCard
-            label="Total Terapis"
-            value={metrics?.total_therapists?.current}
-            percent={metrics?.total_therapists?.change_percent}
-            icon={UserCheck}
-          />
-        ) : (
-          <MetricCard
-            label="Total Asesor"
-            value={metrics?.total_assessors?.current}
-            percent={metrics?.total_assessors?.change_percent}
-            icon={UserCheck}
-          />
-        )}
       </div>
 
       {/* ================= CHART SECTION ================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="bg-white rounded-2xl p-6 border border-teal-50/50 shadow-[0_4px_20px_rgba(30,92,88,0.04)] hover:shadow-[0_10px_30px_rgba(30,92,88,0.08)] transition-all duration-300">
           <PasienChart apiData={categories} />
         </div>
 
         <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-teal-50/50 shadow-[0_4px_20px_rgba(30,92,88,0.04)] hover:shadow-[0_10px_30px_rgba(30,92,88,0.08)] transition-all duration-300">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-bold text-lg text-[#1E5C58]">
+              <h3 className="text-lg font-bold text-[#1E5C58]">
                 Trend Bulanan
               </h3>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Jumlah pasien terdaftar per bulan
+              <p className="mt-0.5 text-xs text-gray-400">
+                {trendLabel} per bulan
               </p>
             </div>
-            <span className="px-3 py-1 rounded-full bg-teal-50 text-xs font-semibold text-[#1E5C58]">
-              {currentPeriod}
-            </span>
+            <select
+              value={trendMetric}
+              onChange={(event) =>
+                setTrendMetric(event.target.value as TrendMetric)
+              }
+              className="rounded-full border border-teal-100 bg-teal-50 px-4 py-2 text-xs font-semibold text-[#1E5C58] outline-none focus:ring-2 focus:ring-teal-100"
+              aria-label="Pilih data trend bulanan"
+            >
+              <option value="observations">Total Observasi</option>
+              {role === "asesor" && (
+                <option value="assessments">Total Assessment</option>
+              )}
+              <option value="therapies">Total Terapi</option>
+            </select>
           </div>
 
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={trend}
+              <LineChart
+                data={trendData}
                 margin={{ top: 10, right: 10, left: -20, bottom: 10 }}
               >
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1E5C58" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#1E5C58" stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
@@ -222,14 +424,14 @@ export default function DashboardPage() {
                 <XAxis
                   dataKey="name"
                   interval={0}
-                  height={44}
-                  tick={<CustomXAxisTick />}
+                  height={30}
+                  tick={{ fill: "#1E5C58", fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  domain={[0, 100]}
-                  ticks={[0, 20, 40, 60, 80, 100]}
+                  domain={[0, Math.ceil(trendMax / 5) * 5 + 5]}
+                  allowDecimals={false}
                   tickLine={false}
                   axisLine={false}
                   tick={{ fill: "#718096", fontSize: 11 }}
@@ -243,23 +445,31 @@ export default function DashboardPage() {
                     fontFamily: "inherit",
                     color: "#1E5C58",
                   }}
+                  formatter={(value) => [value, trendLabel]}
                 />
-                <Area
+                <Line
                   type="monotone"
                   dataKey="value"
                   stroke="#1E5C58"
                   strokeWidth={3}
-                  fill="url(#colorValue)"
+                  dot={{ r: 4, fill: "#FFFFFF", stroke: "#1E5C58", strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: "#1E5C58" }}
+                  connectNulls={false}
+                  label={renderTrendEndLabel}
                 />
-              </AreaChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
+          <p className="mt-2 text-xs font-medium text-gray-400">
+            Data tampil sampai {months[selectedYear === now.getFullYear() ? selectedMonth - 1 : 11]} {selectedYear}
+            {selectedYear === now.getFullYear() ? " (bulan berjalan)" : ""}
+          </p>
         </div>
       </div>
 
       {/* ================= UPCOMING SCHEDULE ================= */}
       <div className="bg-white rounded-2xl p-6 border border-teal-50/50 shadow-[0_4px_20px_rgba(30,92,88,0.04)] hover:shadow-[0_10px_30px_rgba(30,92,88,0.08)] transition-all duration-300">
-        <div className="flex justify-between items-center mb-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="font-bold text-lg text-[#1E5C58]">
               Jadwal Mendatang
@@ -268,23 +478,50 @@ export default function DashboardPage() {
               Daftar agenda janji temu pasien yang akan datang
             </p>
           </div>
-          <span className="flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-teal-50 text-[#1E5C58]">
-            <span>{filteredSchedule.length}</span>
-            <span> Agenda</span>
-          </span>
+
+          <div className="flex w-full max-w-xl items-center gap-1 rounded-xl bg-[#F4F9F8] p-1 sm:max-w-md">
+          {(
+            [
+              ["all", "Semua"],
+              ["observation", "Observasi"],
+                ...(role === "asesor"
+                  ? [["assessment", "Assessment"]]
+                  : []),
+              ["therapy", "Terapi"],
+            ] as [ScheduleFilter, string][]
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setScheduleFilter(value)}
+              className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+                scheduleFilter === value
+                  ? "bg-[#2B7A75] text-white shadow-sm"
+                  : "text-gray-500 hover:bg-white hover:text-[#1E5C58]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          </div>
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-gray-400 font-semibold">
+              <tr className="font-semibold text-gray-400 border-b border-gray-100">
                 <th className="py-4 text-left font-semibold text-xs uppercase tracking-wider w-[25%] pb-3">
                   Nama Pasien
                 </th>
                 <th className="py-4 text-left font-semibold text-xs uppercase tracking-wider w-[30%] pb-3">
                   Jenis Layanan
                 </th>
+                {showTherapistColumn && (
+                  <th className="py-4 text-left font-semibold text-xs uppercase tracking-wider w-[15%] pb-3">
+                    Terapis
+                  </th>
+                )}
                 <th className="py-4 text-center font-semibold text-xs uppercase tracking-wider w-[15%] pb-3">
                   Status
                 </th>
@@ -300,7 +537,10 @@ export default function DashboardPage() {
               {/* EMPTY STATE */}
               {filteredSchedule.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-10 text-gray-400">
+                  <td
+                    colSpan={showTherapistColumn ? 6 : 5}
+                    className="py-10 text-center text-gray-400"
+                  >
                     <div className="flex flex-col items-center gap-2">
                       <Calendar className="w-8 h-8 text-gray-300" />
                       <span className="text-sm font-medium">
@@ -314,7 +554,7 @@ export default function DashboardPage() {
               {filteredSchedule.map((s: any, index: number) => (
                 <tr
                   key={`${s.id}-${s.date}-${s.time}-${index}`}
-                  className="hover:bg-teal-50/10 transition-colors"
+                  className="transition-colors hover:bg-teal-50/10"
                 >
                   <td className="py-4 font-semibold text-gray-700">
                     {s.child_name}
@@ -335,24 +575,28 @@ export default function DashboardPage() {
                       <span className="text-gray-400">-</span>
                     )}
                   </td>
+                  {showTherapistColumn && (
+                    <td className="py-4 font-medium text-gray-500">
+                      {getTherapistName(s)}
+                    </td>
+                  )}
                   <td className="py-4 text-center">
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        s.status.toLowerCase() === "selesai"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                          : "bg-amber-50 text-amber-700 border border-amber-100"
-                      }`}
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.status.toLowerCase() === "selesai"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                        : "bg-amber-50 text-amber-700 border border-amber-100"
+                        }`}
                     >
                       {s.status}
                     </span>
                   </td>
-                  <td className="py-4 text-center text-gray-500 font-medium">
+                  <td className="py-4 font-medium text-center text-gray-500">
                     <div className="inline-flex items-center gap-1.5 justify-center">
                       <Calendar className="w-3.5 h-3.5 text-gray-400" />
                       <span>{s.date}</span>
                     </div>
                   </td>
-                  <td className="py-4 text-center text-gray-500 font-medium">
+                  <td className="py-4 font-medium text-center text-gray-500">
                     <div className="inline-flex items-center gap-1.5 justify-center">
                       <Clock className="w-3.5 h-3.5 text-gray-400" />
                       <span>{s.time}</span>
@@ -365,9 +609,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Mobile Card View */}
-        <div className="block md:hidden space-y-4">
+        <div className="block space-y-4 md:hidden">
           {filteredSchedule.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 bg-gray-50/55 rounded-2xl border border-dashed border-teal-100/60">
+            <div className="py-10 text-center text-gray-400 border border-dashed bg-gray-50/55 rounded-2xl border-teal-100/60">
               <div className="flex flex-col items-center gap-2">
                 <Calendar className="w-8 h-8 text-gray-300" />
                 <span className="text-sm font-medium">
@@ -381,7 +625,7 @@ export default function DashboardPage() {
                 key={`${s.id}-${s.date}-${s.time}-${index}`}
                 className="bg-[#F8FBFB] border border-teal-100/50 rounded-2xl p-4 space-y-3.5 shadow-xs text-left"
               >
-                <div className="flex justify-between items-start gap-4">
+                <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
                     <p className="text-sm font-bold text-[#1E5C58] capitalize">
                       {s.child_name}
@@ -398,17 +642,22 @@ export default function DashboardPage() {
                           </span>
                         ))
                       ) : (
-                        <span className="text-gray-400 text-xs">-</span>
+                        <span className="text-xs text-gray-400">-</span>
                       )}
                     </div>
+
+                    {showTherapistColumn && (
+                      <p className="text-xs font-medium text-gray-500">
+                        Terapis: {getTherapistName(s)}
+                      </p>
+                    )}
                   </div>
 
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
-                      s.status.toLowerCase() === "selesai"
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                        : "bg-amber-50 text-amber-700 border border-amber-100"
-                    }`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${s.status.toLowerCase() === "selesai"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                      : "bg-amber-50 text-amber-700 border border-amber-100"
+                      }`}
                   >
                     {s.status}
                   </span>
@@ -436,24 +685,26 @@ export default function DashboardPage() {
 /* ================= METRIC CARD ================= */
 function MetricCard({
   label,
-  value,
+  completed,
+  total,
   percent,
   icon: Icon,
 }: {
   label: string;
-  value: any;
+  completed: number;
+  total: number;
   percent: number;
   icon: React.ComponentType<any>;
 }) {
   return (
     <div className="relative overflow-hidden bg-white rounded-2xl p-6 border border-teal-50/55 shadow-[0_4px_20px_rgba(30,92,88,0.03)] hover:shadow-[0_10px_30px_rgba(30,92,88,0.09)] transition-all duration-300 hover:-translate-y-1">
-      <div className="flex justify-between items-start">
+      <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+          <span className="text-xs font-bold tracking-wider text-gray-400 uppercase">
             {label}
           </span>
-          <div className="text-3xl font-extrabold text-[#1E5C58] tracking-tight">
-            {value ?? 0}
+          <div className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
+            {completed}/{total}
           </div>
         </div>
         <div className="p-3 bg-teal-50/60 rounded-xl text-[#1E5C58]">
@@ -461,17 +712,16 @@ function MetricCard({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center">
+      <div className="flex items-center mt-4">
         <span
-          className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold ${
-            percent >= 0
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-red-50 text-red-700"
-          }`}
+          className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold ${percent >= 0
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-red-50 text-red-700"
+            }`}
         >
           {percent >= 0 ? "↑" : "↓"} {Math.abs(percent)}%
         </span>
-        <span className="text-xs text-gray-400 ml-2">vs bulan lalu</span>
+        <span className="ml-2 text-xs text-gray-400">vs bulan lalu</span>
       </div>
     </div>
   );
