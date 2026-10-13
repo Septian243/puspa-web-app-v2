@@ -27,7 +27,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import TabPembayaran, { PotonganData } from "@/components/keuangan/TabPembayaran";
+import TabPembayaran, { PotonganData, RiwayatPembayaran } from "@/components/keuangan/TabPembayaran";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type InvoiceStatus =
@@ -86,7 +86,7 @@ const dummyInvoices: Invoice[] = [
     periode: "Agustus 2026",
     total: 1200000,
     tanggal_terbit: "25 Agu 2026",
-    status: "DIKEMBALIKAN",
+    status: "LUNAS",
     pembayaran: { tanggal: "26 Agu 2026", metode: "Transfer bank", noResi: "" },
     pengembalian: { tanggal: "10 Sep 2026", jumlah: 150000 },
   },
@@ -99,7 +99,7 @@ const dummyInvoices: Invoice[] = [
     periode: "Agustus 2026",
     total: 700000,
     tanggal_terbit: "25 Agu 2026",
-    status: "PERIODE BERIKUTNYA",
+    status: "LUNAS",
     pembayaran: { tanggal: "26 Agu 2026", metode: "Tunai", noResi: "" },
     periodeBerikutnya: { tanggal: "6 Sep 2026", jumlah: 175000 },
   },
@@ -165,7 +165,7 @@ const dummyInvoices: Invoice[] = [
     periode: "Agustus 2026",
     total: 1200000,
     tanggal_terbit: "25 Agu 2026",
-    status: "PERIODE BERIKUTNYA",
+    status: "LUNAS",
     pembayaran: { tanggal: "26 Agu 2026", metode: "Transfer bank", noResi: "" },
     periodeBerikutnya: { tanggal: "5 Sep 2026", jumlah: 300000 },
   },
@@ -217,6 +217,32 @@ function genId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
+// Helper: konversi "30 Nov 2025" → "2025-11-30" (untuk input type="date")
+function tanggalToISO(tanggal: string): string {
+  if (!tanggal) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) return tanggal;
+  const monthMap: Record<string, string> = {
+    Jan: "01", Feb: "02", Mar: "03", Apr: "04", Mei: "05", Jun: "06",
+    Jul: "07", Agu: "08", Sep: "09", Okt: "10", Nov: "11", Des: "12",
+  };
+  const parts = tanggal.trim().split(/\s+/);
+  if (parts.length === 3) {
+    const d = parts[0].padStart(2, "0");
+    const m = monthMap[parts[1]] ?? "01";
+    const y = parts[2];
+    return `${y}-${m}-${d}`;
+  }
+  return "";
+}
+
+// Helper: konversi "2025-11-30" → "30 Nov 2025" (untuk tampilan & simpan)
+function isoToDisplayDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+}
+
 // ── Status Badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: InvoiceStatus }) {
   const config: Record<
@@ -266,10 +292,22 @@ function PengembalianDanaModal({
   invoice,
   lunasInvoices,
   onClose,
+  onSave,
 }: {
   invoice: Invoice;
   lunasInvoices: Invoice[];
   onClose: () => void;
+  onSave?: (
+    invoiceId: string,
+    mode: "dikembalikan" | "catat",
+    data: {
+      tanggal: string;
+      jumlah: number;
+      metode?: string;
+      noResi?: string;
+      bukti?: string;
+    }
+  ) => void;
 }) {
   const [selectedInvId, setSelectedInvId] = useState(invoice.id);
   const selectedInv = lunasInvoices.find((i) => i.id === selectedInvId) ?? invoice;
@@ -557,7 +595,19 @@ function PengembalianDanaModal({
             <button
               id="btn-catat-pengembalian"
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                const displayTanggal = isoToDisplayDate(tanggal) || tanggal;
+                if (onSave) {
+                  onSave(selectedInv.id, modeSisi, {
+                    tanggal: displayTanggal,
+                    jumlah: nilaiSisaSesi,
+                    metode: modeSisi === "dikembalikan" ? metodePengembalian : "-",
+                    noResi: modeSisi === "dikembalikan" ? noResi : undefined,
+                    bukti: modeSisi === "dikembalikan" && fileName !== "Tidak ada File yang dipilih" ? fileName : "-",
+                  });
+                }
+                onClose();
+              }}
               className="cursor-pointer w-full py-3 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors"
             >
               {modeSisi === "dikembalikan"
@@ -703,31 +753,6 @@ function CatatBayarModal({
 // ── LIHAT DETAIL MODAL ────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Helper: konversi "30 Nov 2025" → "2025-11-30" (untuk date input)
-function tanggalToISO(tanggal: string): string {
-  if (!tanggal) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) return tanggal; // sudah ISO
-  const monthMap: Record<string, string> = {
-    Jan: "01", Feb: "02", Mar: "03", Apr: "04", Mei: "05", Jun: "06",
-    Jul: "07", Agu: "08", Sep: "09", Okt: "10", Nov: "11", Des: "12",
-  };
-  const parts = tanggal.trim().split(/\s+/);
-  if (parts.length === 3) {
-    const d = parts[0].padStart(2, "0");
-    const m = monthMap[parts[1]] ?? "01";
-    const y = parts[2];
-    return `${y}-${m}-${d}`;
-  }
-  return "";
-}
-
-// Helper: konversi "2025-11-30" → "30 Nov 2025" (untuk tampilan & simpan)
-function isoToDisplayDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso + "T00:00:00");
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-}
 function LihatDetailModal({
   invoice,
   onClose,
@@ -828,24 +853,139 @@ function LihatDetailModal({
 
             {/* Riwayat transaksi */}
             <div>
-
               <p className="text-sm font-extrabold text-[#1E5C58] mb-2">Riwayat transaksi</p>
-              {invoice.pembayaran ? (
-                <div className="p-3.5 bg-[#F4F9F8] rounded-xl space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="font-medium text-gray-500">Tanggal</span><span className="font-semibold text-gray-800">{invoice.pembayaran.tanggal}</span></div>
-                  <div className="flex justify-between"><span className="font-medium text-gray-500">Metode</span><span className="font-semibold text-gray-800">{invoice.pembayaran.metode}</span></div>
-                  {invoice.pembayaran.noResi && (
-                    <div className="flex justify-between"><span className="font-medium text-gray-500">No. resi</span><span className="font-semibold text-gray-800">{invoice.pembayaran.noResi}</span></div>
+              {invoice.pembayaran || invoice.pengembalian || invoice.periodeBerikutnya ? (
+                <div className="p-3.5 bg-[#F4F9F8] rounded-xl space-y-3 text-sm">
+                  {/* ── Baris Pembayaran ── */}
+                  {invoice.pembayaran && (
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{invoice.pembayaran.tanggal}</p>
+                          <p className="text-xs text-gray-400 font-medium mt-0.5">
+                            Pembayaran ({invoice.pembayaran.metode})
+                            {invoice.pembayaran.noResi ? ` • Resi: ${invoice.pembayaran.noResi}` : ""}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-extrabold text-teal-600">
+                            + {formatRupiah(invoice.total)}
+                          </span>
+                          {!editMode && !showCancelConfirm && (
+                            <div className="flex items-center justify-end gap-3 mt-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditTanggal(tanggalToISO(invoice.pembayaran?.tanggal ?? ""));
+                                  setEditMetode(invoice.pembayaran?.metode ?? "Transfer bank");
+                                  setEditNoResi(invoice.pembayaran?.noResi ?? "");
+                                  setEditMode(true);
+                                }}
+                                className="cursor-pointer text-xs font-bold text-[#1E5C58] hover:underline"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowCancelConfirm(true)}
+                                className="cursor-pointer text-xs font-bold text-red-600 hover:underline"
+                              >
+                                Batalkan
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Panel Konfirmasi Batal */}
+                      {showCancelConfirm && (
+                        <div className="p-3 mt-2 bg-red-50/70 border border-red-100 rounded-xl space-y-2">
+                          <p className="text-xs font-semibold text-gray-700">
+                            Batalkan pencatatan ini? Tagihan kembali ke Belum dibayar.
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleBatalkanPembayaran}
+                              className="cursor-pointer px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-colors"
+                            >
+                              Ya, batalkan
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowCancelConfirm(false)}
+                              className="cursor-pointer px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors"
+                            >
+                              Tidak
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Form Edit Pembayaran */}
+                      {editMode && (
+                        <div className="p-3.5 mt-2 bg-white border border-teal-100 rounded-xl space-y-3">
+                          <p className="text-xs font-extrabold text-[#1E5C58]">Edit Pembayaran</p>
+                          <div className="space-y-2">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-500 mb-1">Tanggal Bayar</label>
+                              <input
+                                type="date"
+                                value={editTanggal}
+                                onChange={(e) => setEditTanggal(e.target.value)}
+                                className={inputCls}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-500 mb-1">Metode</label>
+                              <div className="relative">
+                                <select
+                                  value={editMetode}
+                                  onChange={(e) => setEditMetode(e.target.value)}
+                                  className={selectCls}
+                                >
+                                  <option>Transfer bank</option>
+                                  <option>Tunai</option>
+                                  <option>QRIS</option>
+                                </select>
+                                <ChevronDown size={14} className="absolute text-gray-400 right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-500 mb-1">No. Resi (Opsional)</label>
+                              <input
+                                type="text"
+                                value={editNoResi}
+                                onChange={(e) => setEditNoResi(e.target.value)}
+                                placeholder="Opsional"
+                                className={inputCls}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={handleSaveEdit}
+                              className="cursor-pointer px-3 py-1.5 bg-[#1E5C58] text-white rounded-lg text-xs font-bold hover:bg-[#174d49] transition-colors"
+                            >
+                              Simpan
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditMode(false)}
+                              className="cursor-pointer px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors"
+                            >
+                              Batal
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <div className="flex justify-between pt-1.5 border-t border-[#2B7A75]/10">
-                    <span className="font-extrabold text-[#1E5C58]">Jumlah dibayar</span>
-                    <span className="font-extrabold text-[#1E5C58]">{formatRupiah(invoice.total)}</span>
 
-                  </div>
-
-                  {/* ── Baris pengembalian dana (hanya DIKEMBALIKAN) ── */}
-                  {invoice.status === "DIKEMBALIKAN" && invoice.pengembalian && (
-                    <div className="flex items-start justify-between px-4 py-3">
+                  {/* ── Baris pengembalian dana ── */}
+                  {invoice.pengembalian && (
+                    <div className="flex items-start justify-between pt-2 border-t border-gray-200/50">
                       <div>
                         <p className="text-sm font-semibold text-gray-800">{invoice.pengembalian.tanggal}</p>
                         <p className="text-xs text-gray-400 font-medium mt-0.5">Pengembalian dana</p>
@@ -856,9 +996,9 @@ function LihatDetailModal({
                     </div>
                   )}
 
-                  {/* ── Baris dicatat ke periode berikutnya (hanya PERIODE BERIKUTNYA) ── */}
-                  {invoice.status === "PERIODE BERIKUTNYA" && invoice.periodeBerikutnya && (
-                    <div className="flex items-start justify-between px-4 py-3">
+                  {/* ── Baris dicatat ke periode berikutnya ── */}
+                  {invoice.periodeBerikutnya && (
+                    <div className="flex items-start justify-between pt-2 border-t border-gray-200/50">
                       <div>
                         <p className="text-sm font-semibold text-gray-800">{invoice.periodeBerikutnya.tanggal}</p>
                         <p className="text-xs text-gray-400 font-medium mt-0.5">Dicatat ke periode berikutnya</p>
@@ -868,61 +1008,61 @@ function LihatDetailModal({
                       </span>
                     </div>
                   )}
-
                 </div>
               ) : (
                 <p className="text-sm italic font-medium text-gray-400">Belum ada pembayaran.</p>
               )}
             </div>
 
-            {/* Invoice preview */}
-            <div>
-              <p className="text-sm font-extrabold text-[#1E5C58] mb-3">Invoice</p>
-              <div className="overflow-hidden border border-gray-100 shadow-sm rounded-xl" style={{ fontFamily: "'Inter', sans-serif" }}>
+            {/* Invoice preview (disembunyikan saat mode edit) */}
+            {!editMode && (
+              <div>
+                <p className="text-sm font-extrabold text-[#1E5C58] mb-3">Invoice</p>
+                <div className="overflow-hidden border border-gray-100 shadow-sm rounded-xl" style={{ fontFamily: "'Inter', sans-serif" }}>
 
-                <div className="p-5 bg-white">
-                  <div className="flex items-start justify-between mb-4">
-                    <div><p className="text-base font-extrabold text-gray-900">Puspa</p><p className="text-[10px] text-gray-400 font-medium">Holistic Integrative Care</p></div>
-                    <div className="text-right"><p className="text-lg font-extrabold text-[#1E5C58]">Invoice</p><p className="text-[11px] text-gray-500 font-semibold">{invoice.no_invoice}</p></div>
-                  </div>
-                  <div className="h-px bg-[#2B7A75] mb-4" />
-                  <div className="grid grid-cols-2 mb-4 gap-x-3 gap-y-2">
-                    {[{ l: "Ditagihkan kepada", v: invoice.wali }, { l: "Nama anak", v: invoice.anak }, { l: "Periode", v: invoice.periode }, { l: "Tanggal terbit", v: invoice.tanggal_terbit }].map(({ l, v }) => (
-                      <div key={l}><p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{l}</p><p className="text-xs font-semibold text-gray-800">{v}</p></div>
-                    ))}
-                  </div>
-                  {rows.length > 0 && (
-                    <div className="mb-3 overflow-hidden border border-gray-100 rounded-lg">
-                      <table className="w-full">
-                        <thead><tr className="bg-[#EAF4F3]">
-                          {["Terapi", "Jumlah sesi", "Harga", "Jumlah"].map((h, i) => (<th key={h} className={`px-3 py-2 text-[9px] font-extrabold text-[#1E5C58] uppercase ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>))}
-                        </tr></thead>
-                        <tbody>
-                          {rows.map((row, i) => (
-                            <tr key={row.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
-                              <td className="px-3 py-2 text-[11px] text-gray-700 font-medium">{row.jenis}</td>
-                              <td className="px-3 py-2 text-[11px] text-gray-600">{row.jumlah_sesi} sesi</td>
-                              <td className="px-3 py-2 text-[11px] text-gray-600">{formatRupiah(Number(row.harga_sesi))}/sesi</td>
-                              <td className="px-3 py-2 text-right text-[11px] font-semibold text-gray-800">{formatRupiah((Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0))}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  <div className="p-5 bg-white">
+                    <div className="flex items-start justify-between mb-4">
+                      <div><p className="text-base font-extrabold text-gray-900">Puspa</p><p className="text-[10px] text-gray-400 font-medium">Holistic Integrative Care</p></div>
+                      <div className="text-right"><p className="text-lg font-extrabold text-[#1E5C58]">Invoice</p><p className="text-[11px] text-gray-500 font-semibold">{invoice.no_invoice}</p></div>
                     </div>
-                  )}
-                  <div className="space-y-1 text-xs">
-                    {rows.length > 0 && (<><div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-700">{formatRupiah(totalSeharusnya || invoice.total)}</span></div><div className="flex justify-between"><span className="text-gray-500">Potongan</span><span className="font-semibold text-gray-700">- {formatRupiah(potonganVal)}</span></div></>)}
-                    <div className="h-px bg-[#2B7A75] my-1.5" />
-                    <div className="flex items-center justify-between"><span className="text-sm font-extrabold text-gray-800">Total tagihan</span><span className="text-sm font-extrabold text-[#1E5C58]">{formatRupiah(invoice.total)}</span></div>
-                    <div className="flex items-center justify-between pt-0.5"><span className="text-gray-500">Status</span><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${statusClassMap[invoice.status]}`}>{statusLabelMap[invoice.status]}</span></div>
-                  </div>
-                  <div className="flex items-end justify-between pt-3 mt-3 border-t border-gray-100">
-                    <div className="text-[10px] text-gray-400 leading-relaxed"><p>Pembayaran dilakukan di awal periode.</p><p>Rek. BCA 000-000-0000 a.n. Puspa</p></div>
-                    <div className="text-right"><div className="w-20 mb-1 border-t border-gray-400" /><p className="text-[10px] text-gray-500 font-semibold">Admin Puspa</p></div>
+                    <div className="h-px bg-[#2B7A75] mb-4" />
+                    <div className="grid grid-cols-2 mb-4 gap-x-3 gap-y-2">
+                      {[{ l: "Ditagihkan kepada", v: invoice.wali }, { l: "Nama anak", v: invoice.anak }, { l: "Periode", v: invoice.periode }, { l: "Tanggal terbit", v: invoice.tanggal_terbit }].map(({ l, v }) => (
+                        <div key={l}><p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{l}</p><p className="text-xs font-semibold text-gray-800">{v}</p></div>
+                      ))}
+                    </div>
+                    {rows.length > 0 && (
+                      <div className="mb-3 overflow-hidden border border-gray-100 rounded-lg">
+                        <table className="w-full">
+                          <thead><tr className="bg-[#EAF4F3]">
+                            {["Terapi", "Jumlah sesi", "Harga", "Jumlah"].map((h, i) => (<th key={h} className={`px-3 py-2 text-[9px] font-extrabold text-[#1E5C58] uppercase ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>))}
+                          </tr></thead>
+                          <tbody>
+                            {rows.map((row, i) => (
+                              <tr key={row.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
+                                <td className="px-3 py-2 text-[11px] text-gray-700 font-medium">{row.jenis}</td>
+                                <td className="px-3 py-2 text-[11px] text-gray-600">{row.jumlah_sesi} sesi</td>
+                                <td className="px-3 py-2 text-[11px] text-gray-600">{formatRupiah(Number(row.harga_sesi))}/sesi</td>
+                                <td className="px-3 py-2 text-right text-[11px] font-semibold text-gray-800">{formatRupiah((Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0))}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div className="space-y-1 text-xs">
+                      {rows.length > 0 && (<><div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-700">{formatRupiah(totalSeharusnya || invoice.total)}</span></div><div className="flex justify-between"><span className="text-gray-500">Potongan</span><span className="font-semibold text-gray-700">- {formatRupiah(potonganVal)}</span></div></>)}
+                      <div className="h-px bg-[#2B7A75] my-1.5" />
+                      <div className="flex items-center justify-between"><span className="text-sm font-extrabold text-gray-800">Total tagihan</span><span className="text-sm font-extrabold text-[#1E5C58]">{formatRupiah(invoice.total)}</span></div>
+                      <div className="flex items-center justify-between pt-0.5"><span className="text-gray-500">Status</span><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${statusClassMap[invoice.status]}`}>{statusLabelMap[invoice.status]}</span></div>
+                    </div>
+                    <div className="flex items-end justify-between pt-3 mt-3 border-t border-gray-100">
+                      <div className="text-[10px] text-gray-400 leading-relaxed"><p>Pembayaran dilakukan di awal periode.</p><p>Rek. BCA 000-000-0000 a.n. Puspa</p></div>
+                      <div className="text-right"><div className="w-20 mb-1 border-t border-gray-400" /><p className="text-[10px] text-gray-500 font-semibold">Admin Puspa</p></div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             )}
           </div>
 
@@ -2249,6 +2389,8 @@ function BuatTagihanForm({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function KeuanganPage() {
   const [invoices, setInvoices] = useState<Invoice[]>(dummyInvoices);
+  const [riwayatList, setRiwayatList] = useState<RiwayatPembayaran[] | undefined>(undefined);
+  const [potonganList, setPotonganList] = useState<PotonganData[]>(DUMMY_POTONGAN);
   const [isLoaded, setIsLoaded] = useState(false);
   const [mainTab, setMainTab] = useState<MainTab>("Tagihan");
   const [pageView, setPageView] = useState<PageView>("list");
@@ -2295,7 +2437,15 @@ export default function KeuanganPage() {
     const saved = localStorage.getItem("puspa_invoices");
     if (saved) {
       try {
-        setInvoices(JSON.parse(saved));
+        const parsed: Invoice[] = JSON.parse(saved);
+        // Migrasi status agar "DIKEMBALIKAN" dan "PERIODE BERIKUTNYA" menjadi "LUNAS" di Tagihan
+        const migrated = parsed.map((inv) => {
+          if (inv.status === "DIKEMBALIKAN" || inv.status === "PERIODE BERIKUTNYA") {
+            return { ...inv, status: "LUNAS" as InvoiceStatus };
+          }
+          return inv;
+        });
+        setInvoices(migrated);
       } catch (e) {
         console.error("Failed to parse invoices from localStorage", e);
       }
@@ -2348,10 +2498,10 @@ export default function KeuanganPage() {
       (activeTab === "Periode berakhir" &&
         inv.tipe === "Bulanan" &&
         inv.status === "LUNAS") ||
-      // Selesai = DIKEMBALIKAN atau PERIODE BERIKUTNYA (sisa sesi dilanjutkan/dikembalikan)
+      // Selesai = tagihan LUNAS yang memiliki pengembalian atau periode berikutnya
       (activeTab === "Selesai" &&
-        (inv.status === "DIKEMBALIKAN" ||
-          inv.status === "PERIODE BERIKUTNYA"));
+        inv.status === "LUNAS" &&
+        Boolean(inv.pengembalian || inv.periodeBerikutnya));
 
     return matchSearch && matchTipe && matchTahun && matchBulan && matchTab;
   });
@@ -2368,7 +2518,7 @@ export default function KeuanganPage() {
     .filter((i) => i.status === "BELUM DIBAYAR")
     .reduce((sum, i) => sum + i.total, 0);
   const periodeBerikutnya = invoices.filter(
-    (i) => i.status === "PERIODE BERIKUTNYA"
+    (i) => Boolean(i.periodeBerikutnya)
   ).length;
   // Potongan berikutnya: nilai tetap Rp 300.000 (sesuai gambar referensi — potongan sisa sesi)
   const potonganBerikutnya = 300000;
@@ -2866,10 +3016,11 @@ export default function KeuanganPage() {
             </motion.div>
           ) : (
             <TabPembayaran
-              data={DUMMY_POTONGAN}
+              data={potonganList}
+              riwayatList={riwayatList}
               onBuatTagihan={(anak, wali) => {
                 setPreviousTab("Pembayaran");
-                const potItem = DUMMY_POTONGAN.find((p) => p.anak === anak);
+                const potItem = potonganList.find((p) => p.anak === anak);
                 setPrefillData({ anak, wali, potongan: potItem?.jumlah });
                 setEditingInvoice(null);
                 setPageView("buat-tagihan");
@@ -2888,6 +3039,64 @@ export default function KeuanganPage() {
           invoice={pengembalianInvoice}
           lunasInvoices={lunasInvoices}
           onClose={() => setPengembalianInvoice(null)}
+          onSave={(invId, mode, data) => {
+            const targetInv = invoices.find((i) => i.id === invId) || pengembalianInvoice;
+            setInvoices((prev) =>
+              prev.map((inv) => {
+                if (inv.id !== invId) return inv;
+                if (mode === "dikembalikan") {
+                  return {
+                    ...inv,
+                    pengembalian: { tanggal: data.tanggal, jumlah: data.jumlah },
+                  };
+                } else {
+                  return {
+                    ...inv,
+                    periodeBerikutnya: { tanggal: data.tanggal, jumlah: data.jumlah },
+                  };
+                }
+              })
+            );
+
+            // Tambahkan catatan transaksi ke Riwayat Transaksi
+            const newRiwayat: RiwayatPembayaran = {
+              id: `riwayat-${Date.now()}`,
+              tanggal: data.tanggal,
+              noInvoice: targetInv.no_invoice,
+              anak: targetInv.anak,
+              wali: targetInv.wali,
+              status: mode === "dikembalikan" ? "Dikembalikan" : "Periode selanjutnya",
+              metode: (data.metode as any) || "-",
+              bukti: data.bukti || "-",
+              jumlah: data.jumlah,
+            };
+            setRiwayatList((prev) => [newRiwayat, ...(prev ?? [])]);
+
+            // Jika dialihkan ke periode berikutnya -> tambahkan ke potongan untuk tagihan berikutnya
+            if (mode === "catat") {
+              setPotonganList((prev) => {
+                const existingIndex = prev.findIndex((p) => p.anak === targetInv.anak);
+                if (existingIndex >= 0) {
+                  const updated = [...prev];
+                  updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    jumlah: updated[existingIndex].jumlah + data.jumlah,
+                  };
+                  return updated;
+                } else {
+                  return [
+                    {
+                      id: `pot-${Date.now()}`,
+                      anak: targetInv.anak,
+                      wali: targetInv.wali,
+                      jumlah: data.jumlah,
+                    },
+                    ...prev,
+                  ];
+                }
+              });
+            }
+          }}
         />
       )}
 

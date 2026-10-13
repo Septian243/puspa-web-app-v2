@@ -151,7 +151,7 @@ export default function PasienChartAdmin({ data, loading }: PasienChartProps) {
                         const radius =
                           (innerRadius as number) +
                           ((outerRadius as number) - (innerRadius as number)) *
-                            0.5;
+                          0.5;
                         const x =
                           (cx as number) +
                           radius * Math.cos(-midAngle * RADIAN);
@@ -228,18 +228,16 @@ export default function PasienChartAdmin({ data, loading }: PasienChartProps) {
                     onClick={() =>
                       setActiveIndex(activeIndex === index ? null : index)
                     }
-                    className={`flex items-center gap-2 group cursor-pointer p-2 rounded-lg transition-all duration-150 ${
-                      activeIndex === index
+                    className={`flex items-center gap-2 group cursor-pointer p-2 rounded-lg transition-all duration-150 ${activeIndex === index
                         ? "bg-teal-50 shadow-sm translate-x-1"
                         : "hover:bg-teal-50/50"
-                    }`}
+                      }`}
                   >
                     <div
-                      className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-sm transition-all duration-150 ${
-                        activeIndex === index
+                      className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-sm transition-all duration-150 ${activeIndex === index
                           ? "scale-150"
                           : "group-hover:scale-125"
-                      }`}
+                        }`}
                       style={{ backgroundColor: COLORS[index % COLORS.length] }}
                     />
                     <div className="flex flex-col text-left">
@@ -247,7 +245,7 @@ export default function PasienChartAdmin({ data, loading }: PasienChartProps) {
                         {item.name}
                       </span>
                       <span className="text-[10px] text-gray-400 font-semibold uppercase">
-                        {item.value} Anak
+                        {item.value}% ({item.count || 0} Anak)
                       </span>
                     </div>
                   </div>

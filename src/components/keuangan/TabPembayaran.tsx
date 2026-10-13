@@ -9,7 +9,12 @@ export interface RiwayatPembayaran {
   noInvoice: string;
   anak: string;
   wali: string;
-  status: "Pemasukan" | "Ke periode berikutnya" | "Pengembalian dana";
+  status:
+    | "Pemasukan"
+    | "Ke periode berikutnya"
+    | "Pengembalian dana"
+    | "Dikembalikan"
+    | "Periode selanjutnya";
   metode: "Transfer bank" | "Tunai" | "QRIS" | "-";
   bukti: string;
   jumlah: number;
@@ -33,7 +38,7 @@ const DUMMY_RIWAYAT: RiwayatPembayaran[] = [
     noInvoice: "INV/2026/08/0007",
     anak: "Kenzo",
     wali: "Ibu Rina Wulandari",
-    status: "Ke periode berikutnya",
+    status: "Periode selanjutnya",
     metode: "-",
     bukti: "-",
     jumlah: 300000,
@@ -41,18 +46,40 @@ const DUMMY_RIWAYAT: RiwayatPembayaran[] = [
   {
     id: "3",
     tanggal: "28 Sep 2026",
-    noInvoice: "INV/2026/09/0003",
+    noInvoice: "INV/2026/08/0001",
     anak: "Alya",
     wali: "Bpk. Andi Pratama",
-    status: "Pengembalian dana",
+    status: "Dikembalikan",
     metode: "Transfer bank",
     bukti: "bukti_transfer.jpg",
     jumlah: 150000,
   },
+  {
+    id: "4",
+    tanggal: "28 Sep 2026",
+    noInvoice: "INV/2026/08/0002",
+    anak: "Raka",
+    wali: "Bpk. Andi Pratama",
+    status: "Periode selanjutnya",
+    metode: "-",
+    bukti: "-",
+    jumlah: 175000,
+  },
+  {
+    id: "5",
+    tanggal: "28 Sep 2026",
+    noInvoice: "INV/2026/09/0003",
+    anak: "Zahra",
+    wali: "Ibu Siti Nurhaliza",
+    status: "Pemasukan",
+    metode: "QRIS",
+    bukti: "-",
+    jumlah: 1600000,
+  },
 ];
 for (let i = 0; i < 15; i++) {
   DUMMY_RIWAYAT.push({
-    id: `dummy-${i + 4}`,
+    id: `dummy-${i + 6}`,
     tanggal: "25 Sep 2026",
     noInvoice: `INV/2026/09/001${i}`,
     anak: "Dummy Anak " + i,
@@ -80,14 +107,17 @@ function formatRupiah(amount: number) {
 
 export default function TabPembayaran({
   data,
+  riwayatList,
   onBuatTagihan,
 }: {
   data: PotonganData[];
+  riwayatList?: RiwayatPembayaran[];
   onBuatTagihan: (anak: string, wali: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const activeList = riwayatList ?? DUMMY_RIWAYAT;
   const currentYear = new Date().getFullYear();
   const [riwayatSearch, setRiwayatSearch] = useState("");
   const [filterMetode, setFilterMetode] = useState("Semua metode");
@@ -102,7 +132,7 @@ export default function TabPembayaran({
   ];
   const YEARS = Array.from(new Set([
     currentYear,
-    ...DUMMY_RIWAYAT.map(item => {
+    ...activeList.map(item => {
       const match = item.tanggal.match(/\d{4}/);
       return match ? parseInt(match[0], 10) : currentYear;
     })
@@ -297,7 +327,7 @@ export default function TabPembayaran({
             <tbody>
               {(() => {
                 // Filtering
-                let filteredData = DUMMY_RIWAYAT.filter(item => {
+                let filteredData = activeList.filter(item => {
                   const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
                                       item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
                                       item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
@@ -330,19 +360,19 @@ export default function TabPembayaran({
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {row.status === "Pemasukan" && (
+                      {(row.status === "Pemasukan" || (row.status as any) === "Lunas") && (
                         <span className="inline-flex px-3 py-1 bg-teal-50 text-teal-700 text-xs font-extrabold rounded-lg">
                           Pemasukan
                         </span>
                       )}
-                      {row.status === "Ke periode berikutnya" && (
+                      {(row.status === "Ke periode berikutnya" || row.status === "Periode selanjutnya") && (
                         <span className="inline-flex px-3 py-1 bg-[#FFF7ED] text-orange-600 text-xs font-extrabold rounded-lg">
-                          Ke periode berikutnya
+                          Periode selanjutnya
                         </span>
                       )}
-                      {row.status === "Pengembalian dana" && (
+                      {(row.status === "Pengembalian dana" || row.status === "Dikembalikan") && (
                         <span className="inline-flex px-3 py-1 bg-red-50 text-red-600 text-xs font-extrabold rounded-lg">
-                          Pengembalian dana
+                          Dikembalikan
                         </span>
                       )}
                     </td>
@@ -360,13 +390,13 @@ export default function TabPembayaran({
                       )}
                     </td>
                     <td className="py-4 pl-4 text-right whitespace-nowrap">
-                      {row.status === "Pemasukan" && (
+                      {(row.status === "Pemasukan" || (row.status as any) === "Lunas") && (
                         <span className="text-sm font-extrabold text-teal-600">+ {formatRupiah(row.jumlah)}</span>
                       )}
-                      {row.status === "Ke periode berikutnya" && (
+                      {(row.status === "Ke periode berikutnya" || row.status === "Periode selanjutnya") && (
                         <span className="text-sm font-extrabold text-orange-600">{formatRupiah(row.jumlah)}</span>
                       )}
-                      {row.status === "Pengembalian dana" && (
+                      {(row.status === "Pengembalian dana" || row.status === "Dikembalikan") && (
                         <span className="text-sm font-extrabold text-red-500">- {formatRupiah(row.jumlah)}</span>
                       )}
                     </td>
@@ -400,7 +430,7 @@ export default function TabPembayaran({
 
             <div className="flex items-center gap-4">
               {(() => {
-                let filteredData = DUMMY_RIWAYAT.filter(item => {
+                let filteredData = activeList.filter(item => {
                   const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
                                       item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
                                       item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
@@ -445,23 +475,29 @@ export default function TabPembayaran({
           </div>
 
           {/* Footer Summary */}
-          <div className="bg-[#EAF4F3] rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mt-2">
+          <div className="bg-[#EAF4F3] rounded-2xl p-5 sm:p-6 grid grid-cols-2 lg:grid-cols-4 items-start sm:items-center justify-between gap-6 mt-2">
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Jumlah Transaksi</p>
               <p className="text-xl font-extrabold text-[#1E5C58]">
-                {DUMMY_RIWAYAT.length}
+                {activeList.length}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Total Pemasukan</p>
               <p className="text-xl font-extrabold text-[#1E5C58]">
-                {formatRupiah(DUMMY_RIWAYAT.filter(x => x.status === "Pemasukan").reduce((acc, curr) => acc + curr.jumlah, 0))}
+                {formatRupiah(activeList.filter(x => x.status === "Pemasukan" || (x.status as any) === "Lunas").reduce((acc, curr) => acc + curr.jumlah, 0))}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Pengembalian Dana</p>
               <p className="text-xl font-extrabold text-[#1E5C58]">
-                {formatRupiah(DUMMY_RIWAYAT.filter(x => x.status === "Pengembalian dana").reduce((acc, curr) => acc + curr.jumlah, 0))}
+                {formatRupiah(activeList.filter(x => x.status === "Pengembalian dana" || x.status === "Dikembalikan").reduce((acc, curr) => acc + curr.jumlah, 0))}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Periode Selanjutnya</p>
+              <p className="text-xl font-extrabold text-[#1E5C58]">
+                {formatRupiah(activeList.filter(x => x.status === "Ke periode berikutnya" || x.status === "Periode selanjutnya").reduce((acc, curr) => acc + curr.jumlah, 0))}
               </p>
             </div>
           </div>
