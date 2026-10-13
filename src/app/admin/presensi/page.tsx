@@ -22,6 +22,7 @@ import {
   Camera,
   RefreshCw,
   QrCode,
+  Loader2,
 } from "lucide-react";
 import QrCodeViewerModal from "@/components/modal/QrCodeViewerModal";
 import { motion, AnimatePresence } from "framer-motion";
@@ -807,6 +808,7 @@ function RekapKehadiran() {
   const [previewItems, setPreviewItems] = useState<SessionAttendanceItem[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [totalFiltered, setTotalFiltered] = useState(0);
+  const [exportingFormat, setExportingFormat] = useState<"excel" | "pdf" | null>(null);
 
   // Compute date_from and date_to based on current periode state
   const computedDateRange = useMemo(() => {
@@ -869,6 +871,8 @@ function RekapKehadiran() {
   }, [anakId, terapisId, jenisTerapi, computedDateRange]);
 
   const handleExportClick = async (format: "excel" | "pdf") => {
+    if (exportingFormat) return;
+    setExportingFormat(format);
     try {
       await exportAttendance({
         date_from: computedDateRange.dateFrom || undefined,
@@ -884,6 +888,8 @@ function RekapKehadiran() {
       );
     } catch (err: any) {
       handleApiError(err, "Gagal meng-export rekap kehadiran");
+    } finally {
+      setExportingFormat(null);
     }
   };
 
@@ -1072,20 +1078,32 @@ function RekapKehadiran() {
         <button
           type="button"
           onClick={() => handleExportClick("excel")}
-          disabled={totalFiltered === 0}
-          className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={totalFiltered === 0 || exportingFormat !== null}
+          className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+            exportingFormat === "excel" ? "cursor-wait" : "cursor-pointer"
+          }`}
         >
-          <Download className="w-4 h-4" strokeWidth={2.5} />
-          Export Excel (.xlsx)
+          {exportingFormat === "excel" ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" strokeWidth={2.5} />
+          )}
+          {exportingFormat === "excel" ? "Mengekspor Excel..." : "Export Excel (.xlsx)"}
         </button>
         <button
           type="button"
           onClick={() => handleExportClick("pdf")}
-          disabled={totalFiltered === 0}
-          className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl shadow-sm hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={totalFiltered === 0 || exportingFormat !== null}
+          className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl shadow-sm hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+            exportingFormat === "pdf" ? "cursor-wait" : "cursor-pointer"
+          }`}
         >
-          <Download className="w-4 h-4" strokeWidth={2.5} />
-          Export PDF
+          {exportingFormat === "pdf" ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" strokeWidth={2.5} />
+          )}
+          {exportingFormat === "pdf" ? "Mengekspor PDF..." : "Export PDF"}
         </button>
       </div>
 

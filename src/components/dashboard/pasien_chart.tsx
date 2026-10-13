@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 type CategoryItem = {
@@ -10,107 +11,143 @@ type CategoryItem = {
 };
 
 export default function PasienChart({ apiData }: { apiData: CategoryItem[] }) {
-  const COLORS = [
-    "#06B6D4", // Vibrant Cyan
-    "#6366F1", // Indigo / Blue-Purple
-    "#F43F5E", // Rose / Red-Pink
-    "#F59E0B", // Amber / Warm Orange
-    "#10B981", // Emerald Green
-  ];
-
+  const COLORS = ["#38A3A5", "#4ADE80", "#FFB703", "#F472B6", "#F4A261"];
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const hasData = apiData && apiData.length > 0;
-
+  const chartData = hasData
+    ? apiData.map((item) => ({
+        name: item.name,
+        value: item.count || 0,
+        percentage: item.value,
+      }))
+    : [];
   const dataToUse = hasData
-    ? apiData
-    : [{ name: "Tidak ada data", value: 100, count: 0 }];
+    ? chartData
+    : [{ name: "Tidak ada data", value: 100, percentage: 100 }];
 
-  const totalPatients = hasData
-    ? apiData.reduce((sum, item) => sum + (item.count || 0), 0)
-    : 0;
+  const renderLabel = (props: any) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, payload } = props;
+    if (!payload?.percentage || payload.percentage === 0) return null;
+
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const radians = Math.PI / 180;
+    const x = cx + radius * Math.cos(-midAngle * radians);
+    const y = cy + radius * Math.sin(-midAngle * radians);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="white"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={11}
+        fontWeight="bold"
+        style={{ pointerEvents: "none" }}
+      >
+        {`${Number(payload.percentage).toFixed(0)}%`}
+      </text>
+    );
+  };
 
   return (
     <div className="text-[#1E5C58]">
       <div className="mb-4">
-        <h3 className="font-bold text-lg">Kategori Pasien</h3>
-        <p className="text-xs text-gray-400 mt-0.5">Distribusi jenis terapi pasien aktif</p>
+        <h3 className="text-lg font-bold">Kategori Pasien</h3>
+        <p className="mt-0.5 text-xs text-gray-400">
+          Distribusi jenis terapi pasien aktif
+        </p>
       </div>
 
-      <div className="relative w-full h-48 flex items-center justify-center">
-        {/* DONUT CHART */}
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={dataToUse}
-              dataKey="value"
-              nameKey="name"
-              outerRadius="90%"
-              innerRadius="72%"
-              paddingAngle={hasData ? 4 : 0}
-              startAngle={90}
-              endAngle={-270}
-            >
-              {dataToUse.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={hasData ? COLORS[index % COLORS.length] : "#E2E8F0"}
-                  className="outline-none focus:outline-none"
+      <div className="relative flex flex-col items-center justify-center rounded-2xl border border-gray-100/50 bg-gray-50/50 p-4">
+        <div className="h-[220px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={dataToUse}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={85}
+                innerRadius={50}
+                paddingAngle={hasData ? 4 : 0}
+                stroke="none"
+                label={hasData ? renderLabel : false}
+                labelLine={false}
+              >
+                {dataToUse.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={hasData ? COLORS[index % COLORS.length] : "#E2E8F0"}
+                    className="outline-none"
+                    style={{
+                      opacity:
+                        activeIndex === null || activeIndex === index ? 1 : 0.6,
+                      transform:
+                        activeIndex === index ? "scale(1.05)" : "scale(1)",
+                      transformOrigin: "center",
+                      transition: "all 150ms ease",
+                    }}
+                  />
+                ))}
+              </Pie>
+
+              {hasData && (
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "12px",
+                    border: "none",
+                    boxShadow: "0 4px 20px -5px rgba(0,0,0,0.1)",
+                    fontWeight: "bold",
+                    fontSize: "12px",
+                  }}
+                  itemStyle={{ color: "#1E5C58" }}
+                  formatter={(value: any, name: any, props: any) => [
+                    `${value} pasien (${props?.payload?.percentage ?? 0}%)`,
+                    name,
+                  ]}
                 />
-              ))}
-            </Pie>
-
-            {hasData && (
-              <Tooltip
-                formatter={(value: any, name: any, props: any) => [
-                  `${value}% (${props.payload.count} pasien)`,
-                  name,
-                ]}
-                contentStyle={{
-                  backgroundColor: "#FFFFFF",
-                  borderRadius: "12px",
-                  border: "1px solid #E6F2F0",
-                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05)",
-                  fontFamily: "inherit",
-                  color: "#1E5C58",
-                  fontSize: "12px"
-                }}
-              />
-            )}
-          </PieChart>
-        </ResponsiveContainer>
-
-        {/* CENTER LABELS */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
-            {totalPatients}
-          </span>
-          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">
-            Pasien
-          </span>
+              )}
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
-      {/* CUSTOM LEGEND */}
-      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+      <div className="mt-4 grid grid-cols-2 gap-x-2 gap-y-3 px-2">
         {hasData ? (
           apiData.map((entry, index) => (
-            <div 
-              key={entry.name} 
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-teal-50/30 transition-colors"
+            <div
+              key={entry.name}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+              onClick={() =>
+                setActiveIndex(activeIndex === index ? null : index)
+              }
+              className={`group flex cursor-pointer items-center gap-2 rounded-lg p-2 transition-all duration-150 ${
+                activeIndex === index
+                  ? "translate-x-1 bg-teal-50 shadow-sm"
+                  : "hover:bg-teal-50/50"
+              }`}
             >
-              <span 
-                className="w-2.5 h-2.5 rounded-full shrink-0" 
-                style={{ backgroundColor: COLORS[index % COLORS.length] }} 
+              <div
+                className={`h-3.5 w-3.5 shrink-0 rounded-full shadow-sm transition-all duration-150 ${
+                  activeIndex === index ? "scale-150" : "group-hover:scale-125"
+                }`}
+                style={{ backgroundColor: COLORS[index % COLORS.length] }}
               />
-              <div className="min-w-0">
-                <p className="font-semibold text-gray-700 truncate text-[11px]">{entry.name}</p>
-                <p className="text-[10px] text-gray-400 font-medium">
+              <div className="flex min-w-0 flex-col text-left">
+                <span className="line-clamp-1 text-xs font-bold leading-tight text-gray-700">
+                  {entry.name}
+                </span>
+                <span className="text-[10px] font-semibold uppercase text-gray-400">
                   {entry.value}% ({entry.count || 0} Anak)
-                </p>
+                </span>
               </div>
             </div>
           ))
         ) : (
-          <div className="col-span-2 text-center text-xs text-gray-400 py-2">
+          <div className="col-span-2 py-2 text-center text-xs text-gray-400">
             Belum ada data kategori pasien
           </div>
         )}
