@@ -15,8 +15,6 @@ export interface RiwayatPembayaran {
     | "Pengembalian dana"
     | "Dikembalikan"
     | "Periode selanjutnya";
-  metode: "Transfer bank" | "Tunai" | "QRIS" | "-";
-  status: "Pemasukan" | "Ke periode berikutnya" | "Pengembalian dana";
   metode: string;
   bukti: string;
   jumlah: number;
@@ -110,15 +108,12 @@ function formatRupiah(amount: number) {
 }
 
 export default function TabPembayaran({
-  data,
-  riwayatList,
   data: propData,
+  riwayatList,
   onBuatTagihan,
 }: {
-  data: PotonganData[];
-  riwayatList?: RiwayatPembayaran[];
-  onBuatTagihan: (anak: string, wali: string) => void;
   data?: PotonganData[];
+  riwayatList?: RiwayatPembayaran[];
   onBuatTagihan: (anak: string, wali: string, childId?: string, guardianId?: string) => void;
 }) {
   const [credits, setCredits] = useState<PotonganData[]>(propData || []);
@@ -144,12 +139,13 @@ export default function TabPembayaran({
   ];
   const YEARS = Array.from(new Set([
     currentYear,
+    currentYear - 1,
+    currentYear - 2,
     ...activeList.map(item => {
       const match = item.tanggal.match(/\d{4}/);
       return match ? parseInt(match[0], 10) : currentYear;
     })
   ])).sort((a, b) => b - a);
-  const YEARS = [currentYear, currentYear - 1, currentYear - 2];
 
   // Fetch Credits
   const fetchCreditsData = async () => {
@@ -392,24 +388,6 @@ export default function TabPembayaran({
               </tr>
             </thead>
             <tbody>
-              {(() => {
-                // Filtering
-                let filteredData = activeList.filter(item => {
-                  const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                                      item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                                      item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
-                  const matchMetode = filterMetode === "Semua metode" || item.metode === filterMetode;
-                  const matchBulan = filterBulan === "Semua bulan" || item.tanggal.toLowerCase().includes(filterBulan.substring(0,3).toLowerCase());
-                  const matchTahun = filterTahun === "Semua tahun" || item.tanggal.includes(filterTahun.replace("Tahun ", ""));
-                  return matchSearch && matchMetode && matchBulan && matchTahun;
-                });
-
-                // Pagination
-                const totalData = filteredData.length;
-                const startIndex = (riwayatPage - 1) * itemsPerPage;
-                const currentData = filteredData.slice(startIndex, startIndex + itemsPerPage);
-
-                return currentData.map((row) => (
               {transactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-sm font-semibold text-gray-400">
@@ -455,7 +433,7 @@ export default function TabPembayaran({
                       {row.metode}
                     </td>
                     <td className="px-4 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
-                      {row.bukti !== "-" ? (
+                      {row.bukti && row.bukti !== "-" ? (
                         <a
                           href={`${process.env.NEXT_PUBLIC_STORAGE_URL || "http://localhost:8000/storage"}/${row.bukti}`}
                           target="_blank"
@@ -508,48 +486,6 @@ export default function TabPembayaran({
             </div>
 
             <div className="flex items-center gap-4">
-              {(() => {
-                let filteredData = activeList.filter(item => {
-                  const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                                      item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                                      item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
-                  const matchMetode = filterMetode === "Semua metode" || item.metode === filterMetode;
-                  const matchBulan = filterBulan === "Semua bulan" || item.tanggal.toLowerCase().includes(filterBulan.substring(0,3).toLowerCase());
-                  const matchTahun = filterTahun === "Semua tahun" || item.tanggal.includes(filterTahun.replace("Tahun ", ""));
-                  return matchSearch && matchMetode && matchBulan && matchTahun;
-                });
-                const totalData = filteredData.length;
-                const totalPages = Math.ceil(totalData / itemsPerPage) || 1;
-                const startIndex = (riwayatPage - 1) * itemsPerPage;
-                const endIndex = Math.min(startIndex + itemsPerPage, totalData);
-                
-                return (
-                  <>
-                    <span className="text-[13px] text-gray-500 font-medium hidden sm:inline-block">
-                      Menampilkan <span className="font-extrabold text-[#1E5C58]">{totalData === 0 ? 0 : startIndex + 1} - {endIndex}</span> dari <span className="font-extrabold text-[#1E5C58]">{totalData}</span> data
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setRiwayatPage(p => Math.max(1, p - 1))}
-                        disabled={riwayatPage === 1}
-                        className="px-2.5 py-1.5 text-[13px] font-bold border border-gray-200 rounded-lg text-gray-400 disabled:opacity-50 hover:bg-gray-50 transition-colors"
-                      >
-                        Prev
-                      </button>
-                      <div className="px-3.5 py-1.5 text-[13px] font-bold text-white bg-[#2B7A75] rounded-lg shadow-sm">
-                        {riwayatPage} / {totalPages}
-                      </div>
-                      <button
-                        onClick={() => setRiwayatPage(p => Math.min(totalPages, p + 1))}
-                        disabled={riwayatPage === totalPages}
-                        className="px-2.5 py-1.5 text-[13px] font-bold border border-gray-200 rounded-lg text-gray-500 disabled:opacity-50 hover:bg-gray-50 transition-colors"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </>
-                );
-              })()}
               <span className="text-[13px] text-gray-500 font-medium hidden sm:inline-block">
                 Halaman <span className="font-extrabold text-[#1E5C58]">{trxMeta.current_page}</span> dari <span className="font-extrabold text-[#1E5C58]">{trxMeta.last_page}</span>
               </span>
@@ -580,28 +516,25 @@ export default function TabPembayaran({
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Jumlah Transaksi</p>
               <p className="text-xl font-extrabold text-[#1E5C58]">
-                {activeList.length}
                 {summaryData.jumlah_transaksi}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Total Pemasukan</p>
               <p className="text-xl font-extrabold text-[#1E5C58]">
-                {formatRupiah(activeList.filter(x => x.status === "Pemasukan" || (x.status as any) === "Lunas").reduce((acc, curr) => acc + curr.jumlah, 0))}
                 {formatRupiah(summaryData.total_pemasukan)}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Pengembalian Dana</p>
               <p className="text-xl font-extrabold text-[#1E5C58]">
-                {formatRupiah(activeList.filter(x => x.status === "Pengembalian dana" || x.status === "Dikembalikan").reduce((acc, curr) => acc + curr.jumlah, 0))}
+                {formatRupiah(summaryData.total_pengembalian)}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">Periode Selanjutnya</p>
               <p className="text-xl font-extrabold text-[#1E5C58]">
                 {formatRupiah(activeList.filter(x => x.status === "Ke periode berikutnya" || x.status === "Periode selanjutnya").reduce((acc, curr) => acc + curr.jumlah, 0))}
-                {formatRupiah(summaryData.total_pengembalian)}
               </p>
             </div>
           </div>
