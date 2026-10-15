@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { getUmumParentAnswer } from "@/lib/api/riwayatAsesmentOrtu";
+import { getParentAnswer } from "@/lib/api/riwayatAsesmentOrtu";
 
 /* ===================== TYPES ===================== */
 type AnswerItem = {
@@ -26,14 +26,14 @@ const parentGeneralRanges = [
 
 /* ===================== STEPPER ===================== */
 const steps = [
-  "Data Umum",
+  "Data ",
   "Data Fisioterapi",
   "Data Terapi Okupasi",
   "Data Terapi Wicara",
   "Data Paedagog",
 ];
 
-export default function RiwayatJawabanUmum() {
+export default function RiwayatJawaban() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("assessment_id");
@@ -44,7 +44,7 @@ export default function RiwayatJawabanUmum() {
   const [activeAspekIndex, setActiveAspekIndex] = useState(0);
 
   const activeAspek = parentGeneralRanges[activeAspekIndex];
-  const activeStep = 0; // Data Umum
+  const activeStep = 0; // Data 
 
   /* ===================== FETCH ===================== */
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function RiwayatJawabanUmum() {
 
     const fetchData = async () => {
       try {
-        const res = await getUmumParentAnswer(assessmentId);
+        const res = await getParentAnswer(assessmentId);
         setItems(res?.data || []);
       } catch (err) {
         console.error(err);
@@ -145,7 +145,7 @@ export default function RiwayatJawabanUmum() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 text-[#36315B]">
-     
+
 
       <div className="flex-1 flex flex-col ml-2">
 
@@ -167,18 +167,16 @@ export default function RiwayatJawabanUmum() {
                 <div key={i} className="flex items-center">
                   <div className="flex flex-col items-center space-y-2">
                     <div
-                      className={`w-9 h-9 flex items-center justify-center rounded-full border-2 text-sm font-semibold ${
-                        i === activeStep
+                      className={`w-9 h-9 flex items-center justify-center rounded-full border-2 text-sm font-semibold ${i === activeStep
                           ? "bg-[#6BB1A0] border-[#6BB1A0] text-white"
                           : "bg-gray-100 border-gray-300 text-gray-500"
-                      }`}
+                        }`}
                     >
                       {i + 1}
                     </div>
                     <span
-                      className={`text-sm ${
-                        i === activeStep ? "font-semibold" : "text-gray-500"
-                      }`}
+                      className={`text-sm ${i === activeStep ? "font-semibold" : "text-gray-500"
+                        }`}
                     >
                       {label}
                     </span>
