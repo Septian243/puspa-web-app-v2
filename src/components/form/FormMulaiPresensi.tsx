@@ -8,8 +8,10 @@ import {
     CheckCircle2,
     CalendarClock,
     ChevronDown,
+    Loader2,
 } from "lucide-react";
 import { getTherapists } from "@/lib/api/jadwal_terapi";
+import FormKonfirmasiReschedule from "./FormKonfirmasiReschedule";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type StatusKehadiran = "Hadir" | "Tidak Hadir" | "Izin" | "Sakit";
@@ -18,8 +20,8 @@ export interface PresensiManualTarget {
     id: string;
     pasienName: string;
     terapisName: string;
-    tanggal: string; // "25/09/2026"
-    waktu: string; // "Pukul 15.41 - 15.42" atau "15.41 - 15.42"
+    tanggal: string;
+    waktu: string;
     therapyType?: string;
 }
 
@@ -43,6 +45,12 @@ export interface PresensiManualInitialValues {
     tanggalBaru?: string;
     jamMulaiBaru?: string;
     jamSelesaiBaru?: string;
+    rescheduleInfo?: {
+        tanggal?: string;
+        waktu?: string;
+        terapis?: string;
+        alasan?: string;
+    };
 }
 
 type FormErrors = Partial<{
@@ -59,12 +67,6 @@ const statusOptions: StatusKehadiran[] = [
     "Tidak Hadir",
     "Izin",
     "Sakit",
-];
-
-const terapisOptions = [
-    "Alief Arifun",
-    "Nindya Zahri",
-    "Siti Aisyah",
 ];
 
 function TerapisSelect({
@@ -200,7 +202,7 @@ function TerapisSelect({
                     <div className="p-1.5" role="listbox">
                         {filteredOptions.map((option, index) => (
                             <button
-                                key={option.id}
+                                key={`${option.id || option.name}-${index}`}
                                 type="button"
                                 role="option"
                                 aria-selected={value === option.name}
@@ -224,9 +226,33 @@ function TerapisSelect({
     );
 }
 
-// Format "Pukul 15.41 - 15.42" -> "15.41 - 15.42" (biar muat di subheader)
 function formatWaktuSingkat(waktu: string) {
     return waktu.replace(/^Pukul\s*/i, "");
+}
+
+function getTherapyTimeRange(waktu: string) {
+    const match = waktu.match(/(\d{1,2})[.:](\d{2})\s*-\s*(\d{1,2})[.:](\d{2})/);
+    if (!match) return null;
+
+    return {
+        start: Number(match[1]) * 60 + Number(match[2]),
+        end: Number(match[3]) * 60 + Number(match[4]),
+        label: `${match[1].padStart(2, "0")}.${match[2]} - ${match[3].padStart(2, "0")}.${match[4]}`,
+    };
+}
+
+function isWithinTherapyTime(tanggal: string, waktu: string): boolean {
+    const [day, month, year] = tanggal.split("/").map(Number);
+    const now = new Date();
+    const isSameDate =
+        now.getFullYear() === year &&
+        now.getMonth() + 1 === month &&
+        now.getDate() === day;
+    const range = getTherapyTimeRange(waktu);
+    if (!isSameDate || !range) return false;
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return currentMinutes >= range.start && currentMinutes <= range.end;
 }
 
 export default function FormCatatKehadiran({
@@ -237,6 +263,7 @@ export default function FormCatatKehadiran({
     initialValues,
     mode = "create",
     therapistsList = [],
+    allowReschedule = true,
 }: {
     open: boolean;
     onCloseAction: () => void;
@@ -245,6 +272,7 @@ export default function FormCatatKehadiran({
     initialValues?: PresensiManualInitialValues;
     mode?: "create" | "edit";
     therapistsList?: { id: string; name: string }[];
+    allowReschedule?: boolean;
 }) {
     const [status, setStatus] = useState<StatusKehadiran | null>(null);
     const [keterangan, setKeterangan] = useState("");
@@ -255,6 +283,8 @@ export default function FormCatatKehadiran({
     const [jamMulaiBaru, setJamMulaiBaru] = useState("");
     const [jamSelesaiBaru, setJamSelesaiBaru] = useState("");
     const [errors, setErrors] = useState<FormErrors>({});
+    const [pendingPayload, setPendingPayload] = useState<PresensiManualPayload | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [sectionTherapists, setSectionTherapists] = useState<{ id: string; name: string }[]>([]);
     const modalRef = useRef<HTMLDivElement>(null);
 
@@ -265,8 +295,8 @@ export default function FormCatatKehadiran({
                 if (Array.isArray(res) && res.length > 0) {
                     setSectionTherapists(
                         res.map((t: any) => ({
-                            id: t.id,
-                            name: t.therapist_name,
+                            id: String(t.therapist_id ?? t.id ?? ""),
+                            name: t.therapist_name || t.name || "",
                         }))
                     );
                 } else {
@@ -289,6 +319,7 @@ export default function FormCatatKehadiran({
             setJamMulaiBaru(initialValues?.jamMulaiBaru ?? "");
             setJamSelesaiBaru(initialValues?.jamSelesaiBaru ?? "");
             setErrors({});
+            setPendingPayload(null);
         }
     }, [open, target?.id, target?.terapisName, initialValues]);
 
@@ -320,11 +351,18 @@ export default function FormCatatKehadiran({
             return newErrors;
         }
 
+        // if (status === "Hadir" && !isWithinTherapyTime(target.tanggal, target.waktu)) {
+        //     const range = getTherapyTimeRange(target.waktu);
+        //     newErrors.status = range
+        //         ? `Presensi hadir hanya dapat dicatat pada jam terapi ${range.label}.`
+        //         : "Presensi hadir hanya dapat dicatat pada jam terapi yang sesuai.";
+        // }
+
         if (butuhKeterangan && !keterangan.trim()) {
             newErrors.keterangan = "Keterangan wajib diisi";
         }
 
-        if (reschedule) {
+        if (reschedule && allowReschedule) {
             if (!terapisBaru) newErrors.terapisBaru = "Pilih terapis untuk jadwal baru";
             if (!tanggalBaru) newErrors.tanggalBaru = "Tanggal baru wajib diisi";
             if (!jamMulaiBaru) newErrors.jamMulaiBaru = "Jam mulai wajib diisi";
@@ -341,22 +379,34 @@ export default function FormCatatKehadiran({
         return newErrors;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const validationErrors = validate();
         setErrors(validationErrors);
         if (Object.keys(validationErrors).length > 0) return;
 
-        onSaveAction({
+        const payload: PresensiManualPayload = {
             id: target.id,
             status: status as StatusKehadiran,
             keterangan: keterangan.trim(),
-            reschedule,
-            ...(reschedule
+            reschedule: allowReschedule && reschedule,
+            ...(allowReschedule && reschedule
                 ? { terapisBaru, terapisBaruId, tanggalBaru, jamMulaiBaru, jamSelesaiBaru }
                 : {}),
-        });
+        };
+
+        if (payload.reschedule) {
+            setPendingPayload(payload);
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await onSaveAction(payload);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -477,7 +527,7 @@ export default function FormCatatKehadiran({
                                         </div>
 
                                         {/* Reschedule toggle */}
-                                        <label className="flex items-center gap-2.5 px-4 py-3 bg-teal-50/50 border border-teal-100 rounded-xl cursor-pointer select-none">
+                                        {allowReschedule && <label className="flex items-center gap-2.5 px-4 py-3 bg-teal-50/50 border border-teal-100 rounded-xl cursor-pointer select-none">
                                             <input
                                                 type="checkbox"
                                                 checked={reschedule}
@@ -488,11 +538,11 @@ export default function FormCatatKehadiran({
                                             <span className="text-sm font-semibold text-[#1E5C58]">
                                                 Alihkan jadwal ini (Reschedule)
                                             </span>
-                                        </label>
+                                        </label>}
 
                                         {/* Field reschedule */}
                                         <AnimatePresence initial={false}>
-                                            {reschedule && (
+                                            {reschedule && allowReschedule && (
                                                 <motion.div
                                                     key="reschedule-fields"
                                                     initial={{ opacity: 0, height: 0 }}
@@ -604,6 +654,30 @@ export default function FormCatatKehadiran({
                                 )}
                             </AnimatePresence>
 
+                            {!allowReschedule && initialValues?.reschedule && (
+                                <div className="flex items-center gap-2.5 px-4 py-3 bg-teal-50/50 border border-teal-100 rounded-xl text-[#2B7A75]">
+                                    <input
+                                        type="checkbox"
+                                        checked
+                                        disabled
+                                        readOnly
+                                        aria-label="Jadwal sudah di-reschedule"
+                                        className="w-4 h-4 rounded border-gray-300 accent-[#2B7A75] cursor-not-allowed"
+                                    />
+                                    <CalendarClock className="w-5 h-5" />
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold leading-tight">Jadwal ini sudah di-reschedule</p>
+                                        {initialValues.rescheduleInfo && (
+                                            <div className="mt-1.5 text-xs font-medium text-[#2B7A75]/75">
+                                                {initialValues.rescheduleInfo.tanggal && (
+                                                    <p>Tanggal baru: {initialValues.rescheduleInfo.tanggal.split("-").reverse().join("/")}</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                         </form>
                     </div>
 
@@ -619,13 +693,35 @@ export default function FormCatatKehadiran({
                         <button
                             type="submit"
                             form="presensi-form"
-                            className="cursor-pointer px-5 py-2.5 rounded-xl bg-[#1E5C58] text-white font-bold hover:bg-[#164945] shadow-md shadow-teal-500/20 active:scale-95 transition-all flex items-center gap-2"
+                            disabled={isSubmitting}
+                            className={`px-5 py-2.5 rounded-xl bg-[#1E5C58] text-white font-bold hover:bg-[#164945] shadow-md shadow-teal-500/20 active:scale-95 transition-all flex items-center gap-2 ${isSubmitting ? "opacity-75 cursor-not-allowed" : "cursor-pointer"}`}
                         >
-                            <CheckCircle2 className="w-4 h-4" />
-                            {mode === "edit" ? "Simpan Perubahan" : "Simpan Presensi"}
+                            {isSubmitting ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="w-4 h-4" />
+                            )}
+                            {isSubmitting ? "Menyimpan..." : mode === "edit" ? "Simpan Perubahan" : "Simpan Presensi"}
                         </button>
                     </div>
                 </motion.div>
+                {pendingPayload && (
+                    <FormKonfirmasiReschedule
+                        payload={pendingPayload}
+                        isSubmitting={isSubmitting}
+                        onCancelAction={() => !isSubmitting && setPendingPayload(null)}
+                        onConfirmAction={async () => {
+                            if (isSubmitting) return;
+                            try {
+                                setIsSubmitting(true);
+                                await onSaveAction(pendingPayload);
+                                setPendingPayload(null);
+                            } finally {
+                                setIsSubmitting(false);
+                            }
+                        }}
+                    />
+                )}
             </div>
         </AnimatePresence>
     );

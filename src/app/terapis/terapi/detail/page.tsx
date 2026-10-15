@@ -123,25 +123,34 @@ function DetailJadwalContent() {
 
       {/* ── Identitas Anak & Orang Tua ── */}
       <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-teal-50 relative overflow-hidden">
-        <Badge title="IDENTITAS ANAK & ORANG TUA" />
+        <Badge title="IDENTITAS ANAK" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-y-6 gap-x-8 mt-6">
-          {/* Kolom 1 */}
           <div className="space-y-6">
             <InfoItem label="NAMA LENGKAP" value={namaPasien} />
+            <InfoItem label="NOMOR REKAM MEDIS" value={nomorRM} />
             <InfoItem label="USIA" value={usia} />
+          </div>
+          <div className="space-y-6">
+            <InfoItem label="JENIS KELAMIN" value={jenisKelamin} />
+            <InfoItem label="TEMPAT & TANGGAL LAHIR" value={tempatTglLahir} />
+            <InfoItem label="SEKOLAH" value={asalSekolah} />
+          </div>
+          <div className="space-y-6">
             <InfoItem label="ALAMAT TEMPAT TINGGAL" value={alamat} />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-teal-50 relative overflow-hidden">
+        <Badge title="IDENTITAS ORANG TUA / WALI" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-y-6 gap-x-8 mt-6">
+          <div className="space-y-6">
             <InfoItem label="NAMA ORANG TUA" value={namaOrangTua} />
           </div>
-          {/* Kolom 2 */}
           <div className="space-y-6">
-            <InfoItem label="NOMOR REKAM MEDIS" value={nomorRM} />
-            <InfoItem label="JENIS KELAMIN" value={jenisKelamin} />
-            <InfoItem label="SEKOLAH" value={asalSekolah} />
             <InfoItem label="HUBUNGAN ORANG TUA" value={hubunganWali} />
           </div>
-          {/* Kolom 3 */}
           <div className="space-y-6">
-            <InfoItem label="TEMPAT & TANGGAL LAHIR" value={tempatTglLahir} />
             <InfoItem label="NOMOR TELEPON" value={telepon} />
           </div>
         </div>

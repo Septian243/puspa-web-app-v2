@@ -99,19 +99,26 @@ input[type="password"]::-ms-clear {
   display: none;
 }
 
-/* SEMBUNYIKAN ICON DATE BAWAAN & BUAT FULL WIDTH AGAR BISA DI-KLIK */
-input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="month"]::-webkit-calendar-picker-indicator {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  opacity: 0;
-  cursor: pointer;
+/* Samakan warna placeholder date/month input dengan gray agar tidak terlihat garis putih */
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field,
+input[type="month"]::-webkit-datetime-edit-text,
+input[type="month"]::-webkit-datetime-edit-month-field,
+input[type="month"]::-webkit-datetime-edit-year-field {
+  color: #9ca3af;
 }
+input[type="date"]:valid::-webkit-datetime-edit-text,
+input[type="date"]:valid::-webkit-datetime-edit-month-field,
+input[type="date"]:valid::-webkit-datetime-edit-day-field,
+input[type="date"]:valid::-webkit-datetime-edit-year-field,
+input[type="month"]:valid::-webkit-datetime-edit-text,
+input[type="month"]:valid::-webkit-datetime-edit-month-field,
+input[type="month"]:valid::-webkit-datetime-edit-year-field {
+  color: #374151;
+}
+
 
 /* ================= COLLAPSIBLE SIDEBAR ================= */
 
