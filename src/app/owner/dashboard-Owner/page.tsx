@@ -40,6 +40,7 @@ interface AccountMetric {
 }
 
 interface CategoryItem {
+  [key: string]: any;
   name: string;
   count: number;
   percentage: number;
