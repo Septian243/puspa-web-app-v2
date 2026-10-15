@@ -1,11 +1,17 @@
 "use client";
 
-import { Suspense, useState, useMemo } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { User, Users, Calendar, ArrowLeft } from "lucide-react";
-import { showSuccessToast } from "@/lib/api-error";
+import { User, Users, Calendar, ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
+import { showSuccessToast, showErrorToast } from "@/lib/toast";
+import {
+  getTherapySessionDetail,
+  createTherapySoap,
+  TherapySessionDetail,
+  CreateTherapySoapPayload,
+} from "@/lib/api/terapiTerapis";
 
-interface JadwalDetail {
+interface StoredJadwal {
   id: string;
   namaPasien: string;
   namaOrangTua: string;
@@ -34,6 +40,33 @@ const formatTanggal = (yyyyMmDd: string) => {
   return yyyyMmDd;
 };
 
+const formatGender = (gender?: string | null) => {
+  if (!gender) return "—";
+  const lower = gender.toLowerCase();
+  if (lower === "laki-laki" || lower === "l") return "Laki-laki";
+  if (lower === "perempuan" || lower === "p") return "Perempuan";
+  return gender;
+};
+
+const getCurrentDateTimeLocal = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const formatPerformedAtForApi = (dateTimeLocal: string): string => {
+  if (!dateTimeLocal) return "";
+  const formatted = dateTimeLocal.replace("T", " ");
+  if (formatted.length === 16) {
+    return `${formatted}:00`;
+  }
+  return formatted;
+};
+
 export default function IsiSoapPage() {
   return (
     <Suspense
@@ -56,9 +89,12 @@ function IsiSoapContent() {
   const params = useSearchParams();
   const jadwalId = params.get("jadwal_id") || params.get("id");
 
-  // Ambil detail jadwal berdasarkan ID (dari sessionStorage sebelum tersambung ke API).
-  // TODO: Saat endpoint API backend sudah tersedia, ganti baris ini dengan query/fetch API.
-  const jadwal = useMemo<JadwalDetail | null>(() => {
+  const [sessionDetail, setSessionDetail] = useState<TherapySessionDetail | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fallback cache dari sessionStorage jika ada
+  const storedJadwal = useMemo<StoredJadwal | null>(() => {
     if (typeof window === "undefined" || !jadwalId) return null;
     try {
       const stored = sessionStorage.getItem(`terapi_selected_${jadwalId}`);
@@ -69,25 +105,72 @@ function IsiSoapContent() {
     return null;
   }, [jadwalId]);
 
-  // Data pasien (didapat dari jadwal by ID, atau fallback ke params jika ada)
-  const namaPasien = jadwal?.namaPasien ?? params.get("namaPasien") ?? "—";
-  const namaOrangTua = jadwal?.namaOrangTua ?? params.get("namaOrangTua") ?? "—";
-  const telepon = jadwal?.telepon ?? params.get("telepon") ?? "—";
-  const tipeTerapi = jadwal?.tipeTerapi ?? params.get("tipeTerapi") ?? "—";
-  const terapis = jadwal?.terapis ?? params.get("terapis") ?? "—";
-  const tanggalTerapi = (jadwal?.tanggal ? formatTanggal(jadwal.tanggal) : null) ?? params.get("tanggalTerapi") ?? "—";
-  const waktu = jadwal?.waktu ?? params.get("waktu") ?? "—";
-  const hubunganWali = jadwal?.hubunganWali ?? params.get("hubunganWali") ?? "—";
-  const nomorRM = jadwal?.nomorRM ?? params.get("nomorRM") ?? "—";
-  const usia = jadwal?.usia ?? params.get("usia") ?? "—";
-  const jenisKelamin = jadwal?.jenisKelamin ?? params.get("jenisKelamin") ?? "—";
-  const tempatTglLahir = jadwal?.tempatTglLahir ?? params.get("tempatTglLahir") ?? "—";
-  const asalSekolah = jadwal?.asalSekolah ?? params.get("asalSekolah") ?? "—";
-  const alamat = jadwal?.alamat ?? params.get("alamat") ?? "—";
+  // Fetch detail jadwal dari API backend
+  useEffect(() => {
+    if (!jadwalId) {
+      setIsLoadingSession(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingSession(true);
+
+    getTherapySessionDetail(jadwalId)
+      .then((data) => {
+        if (isMounted) {
+          setSessionDetail(data);
+          setIsLoadingSession(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Gagal mengambil detail jadwal dari API:", err);
+        if (isMounted) {
+          setIsLoadingSession(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [jadwalId]);
+
+  const namaPasien = sessionDetail?.child_name ?? storedJadwal?.namaPasien ?? params.get("namaPasien") ?? "—";
+  const namaOrangTua = sessionDetail?.guardian_name ?? storedJadwal?.namaOrangTua ?? params.get("namaOrangTua") ?? "—";
+  const telepon = sessionDetail?.guardian_phone ?? storedJadwal?.telepon ?? params.get("telepon") ?? "—";
+  const tipeTerapi = sessionDetail?.therapy_type_label ?? storedJadwal?.tipeTerapi ?? params.get("tipeTerapi") ?? "—";
+  const terapis = sessionDetail?.therapist_name ?? storedJadwal?.terapis ?? params.get("terapis") ?? "—";
+  const tanggalTerapi =
+    sessionDetail?.session_date_formatted ||
+    (sessionDetail?.session_date ? formatTanggal(sessionDetail.session_date) : null) ||
+    (storedJadwal?.tanggal ? formatTanggal(storedJadwal.tanggal) : null) ||
+    params.get("tanggalTerapi") ||
+    "—";
+  const waktu = sessionDetail
+    ? `${sessionDetail.start_time} - ${sessionDetail.end_time}`
+    : storedJadwal?.waktu ?? params.get("waktu") ?? "—";
+  const hubunganWali = sessionDetail?.relationship_with_child ?? storedJadwal?.hubunganWali ?? params.get("hubunganWali") ?? "—";
+  const nomorRM = sessionDetail?.medical_record_number ?? storedJadwal?.nomorRM ?? params.get("nomorRM") ?? "—";
+  const usia =
+    (sessionDetail?.child_age ? `${sessionDetail.child_age} Tahun` : null) ??
+    storedJadwal?.usia ??
+    params.get("usia") ??
+    "—";
+  const jenisKelamin = sessionDetail?.child_gender
+    ? formatGender(sessionDetail.child_gender)
+    : storedJadwal?.jenisKelamin ?? params.get("jenisKelamin") ?? "—";
+  const tempatTglLahir =
+    (sessionDetail?.child_birth_place && sessionDetail?.child_birth_date_formatted
+      ? `${sessionDetail.child_birth_place}, ${sessionDetail.child_birth_date_formatted}`
+      : null) ??
+    storedJadwal?.tempatTglLahir ??
+    params.get("tempatTglLahir") ??
+    "—";
+  const asalSekolah = sessionDetail?.child_school ?? storedJadwal?.asalSekolah ?? params.get("asalSekolah") ?? "—";
+  const alamat = sessionDetail?.child_address ?? storedJadwal?.alamat ?? params.get("alamat") ?? "—";
 
   // State form
   const [formData, setFormData] = useState({
-    tanggalJam: "",
+    tanggalJam: getCurrentDateTimeLocal(),
     diagnosis: "",
     tindakan: "",
     subjektif: "",
@@ -105,19 +188,109 @@ function IsiSoapContent() {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSimpan = () => {
-    console.log("Simpan SOAP:", formData);
+  const handleSimpan = async () => {
+    if (!jadwalId) {
+      showErrorToast("ID sesi terapi tidak ditemukan. Pastikan Anda membuka form melalui jadwal yang valid.");
+      return;
+    }
 
-    const getTargetType = () => {
-      const lower = tipeTerapi.toLowerCase();
-      if (lower.includes("okupasi")) return "okupasi";
-      if (lower.includes("wicara")) return "wicara";
-      if (lower.includes("fisio")) return "fisio";
-      return "paedagog";
+    if (!formData.tanggalJam) {
+      showErrorToast("Tanggal & jam pelaksanaan terapi wajib diisi.");
+      return;
+    }
+
+    if (!formData.diagnosis.trim()) {
+      showErrorToast("Diagnosis terapi wajib diisi.");
+      return;
+    }
+
+    if (!formData.tindakan.trim()) {
+      showErrorToast("Tindakan terapi wajib diisi.");
+      return;
+    }
+
+    if (!formData.subjektif.trim()) {
+      showErrorToast("Catatan Subjektif (S) wajib diisi.");
+      return;
+    }
+
+    if (!formData.objektif.trim()) {
+      showErrorToast("Catatan Objektif (O) wajib diisi.");
+      return;
+    }
+
+    if (!formData.assessment.trim()) {
+      showErrorToast("Catatan Assessment (A) wajib diisi.");
+      return;
+    }
+
+    if (!formData.plan.trim()) {
+      showErrorToast("Catatan Plan (P) wajib diisi.");
+      return;
+    }
+
+    if (!formData.implementasi.trim()) {
+      showErrorToast("Catatan Implementasi (I) wajib diisi.");
+      return;
+    }
+
+    if (!formData.assessmentLanjutan.trim()) {
+      showErrorToast("Catatan Assessment Lanjutan wajib diisi.");
+      return;
+    }
+
+    if (!formData.planLanjutan.trim()) {
+      showErrorToast("Catatan Plan Lanjutan wajib diisi.");
+      return;
+    }
+
+    const performedAt = formatPerformedAtForApi(formData.tanggalJam);
+    const payload: CreateTherapySoapPayload = {
+      therapy_session_id: jadwalId,
+      performed_at: performedAt,
+      therapy_diagnosis: formData.diagnosis.trim(),
+      interventions: formData.tindakan.trim(),
+      subjective: formData.subjektif.trim(),
+      objective: formData.objektif.trim(),
+      assessment: formData.assessment.trim(),
+      plan: formData.plan.trim(),
+      implementation: formData.implementasi.trim(),
+      advanced_assessment: formData.assessmentLanjutan.trim(),
+      advanced_plan: formData.planLanjutan.trim(),
     };
 
-    showSuccessToast("SOAP berhasil disimpan! ✅");
-    router.push(`/terapis/terapi?type=${getTargetType()}&status=completed`);
+    setIsSubmitting(true);
+    const result = await createTherapySoap(payload);
+    setIsSubmitting(false);
+
+    if (result.success) {
+      showSuccessToast(result.message || "SOAP berhasil disimpan! ✅");
+
+      const getTargetType = () => {
+        const rawType = (sessionDetail?.therapy_type || tipeTerapi || "").toLowerCase();
+        if (rawType.includes("okupasi")) return "okupasi";
+        if (rawType.includes("wicara")) return "wicara";
+        if (rawType.includes("fisio")) return "fisio";
+        return "paedagog";
+      };
+
+      router.push(`/terapis/terapi?type=${getTargetType()}&status=completed`);
+    } else {
+      showErrorToast(result.message);
+    }
+  };
+
+  const handleKembali = () => {
+    const rawType =
+      params.get("type") ||
+      (sessionDetail?.therapy_type || tipeTerapi || "").toLowerCase();
+    let targetType = "paedagog";
+    if (rawType.includes("okupasi")) targetType = "okupasi";
+    else if (rawType.includes("wicara")) targetType = "wicara";
+    else if (rawType.includes("fisio")) targetType = "fisio";
+
+    const targetStatus = params.get("status") || "scheduled";
+    router.push(`/terapis/terapi?type=${targetType}&status=${targetStatus}`);
   };
 
   return (
@@ -145,7 +318,7 @@ function IsiSoapContent() {
           </div>
         </div>
         <button
-          onClick={() => history.back()}
+          onClick={handleKembali}
           className="cursor-pointer inline-flex items-center gap-2 bg-[#1E5C58] hover:bg-[#2E8B83] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all shadow-md shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -153,11 +326,44 @@ function IsiSoapContent() {
         </button>
       </div>
 
+      {/* ── Peringatan jika sesi sudah memiliki SOAP ── */}
+      {sessionDetail?.has_soap && (
+        <div className="flex items-start gap-3 p-4 text-sm border shadow-xs bg-amber-50 border-amber-200 rounded-2xl text-amber-800">
+          <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="font-bold">Sesi Terapi Ini Sudah Memiliki Catatan SOAP</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Catatan SOAP untuk sesi terapi ini sudah pernah dibuat sebelumnya. Anda dapat melihat hasil rekaman SOAP melalui riwayat terapi selesai.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Peringatan jika status kehadiran bukan present ── */}
+      {sessionDetail && sessionDetail.status !== "present" && (
+        <div className="flex items-start gap-3 p-4 text-sm border shadow-xs bg-amber-50 border-amber-200 rounded-2xl text-amber-800">
+          <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="font-bold">Perhatian: Status Kehadiran Bukan Hadir</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Status kehadiran sesi ini tercatat sebagai <strong className="capitalize">{sessionDetail.status}</strong>. Pengisian SOAP umumnya dilakukan saat pasien hadir dalam sesi terapi.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Informasi Pasien ── */}
       <div className="p-6 space-y-4 bg-white border shadow-sm rounded-2xl border-teal-50">
-        <h2 className="text-lg font-extrabold text-[#1E5C58]">
-          Informasi Pasien Anak
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-extrabold text-[#1E5C58]">
+            Informasi Pasien Anak
+          </h2>
+          {isLoadingSession && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-[#1E5C58] font-medium">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Memuat data...
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
           <InfoItem label="Nama lengkap" value={namaPasien} />
           <InfoItem label="Nomor rekam medis" value={nomorRM} />
@@ -219,7 +425,7 @@ function IsiSoapContent() {
       {/* ── Form SOAP ── */}
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <InputCard label="Tanggal & jam *">
+          <InputCard label="Tanggal & jam pelaksanaan *">
             <div className="relative">
               <input
                 type="datetime-local"
@@ -252,7 +458,7 @@ function IsiSoapContent() {
         </InputCard>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <InputCard label={<SoapLabel initial="S" text="Subjektif" />}>
+          <InputCard label={<SoapLabel initial="S" text="Subjektif *" />}>
             <TextArea
               name="subjektif"
               value={formData.subjektif}
@@ -260,7 +466,7 @@ function IsiSoapContent() {
               placeholder="Sebutkan keluhan subjektif pasien..."
             />
           </InputCard>
-          <InputCard label={<SoapLabel initial="O" text="Objektif" />}>
+          <InputCard label={<SoapLabel initial="O" text="Objektif *" />}>
             <TextArea
               name="objektif"
               value={formData.objektif}
@@ -268,7 +474,7 @@ function IsiSoapContent() {
               placeholder="Sebutkan hasil observasi objektif..."
             />
           </InputCard>
-          <InputCard label={<SoapLabel initial="A" text="Assessment" />}>
+          <InputCard label={<SoapLabel initial="A" text="Assessment *" />}>
             <TextArea
               name="assessment"
               value={formData.assessment}
@@ -276,7 +482,7 @@ function IsiSoapContent() {
               placeholder="Tuliskan assessment..."
             />
           </InputCard>
-          <InputCard label={<SoapLabel initial="P" text="Plan" />}>
+          <InputCard label={<SoapLabel initial="P" text="Plan *" />}>
             <TextArea
               name="plan"
               value={formData.plan}
@@ -284,7 +490,7 @@ function IsiSoapContent() {
               placeholder="Tuliskan plan..."
             />
           </InputCard>
-          <InputCard label={<SoapLabel initial="I" text="Implementasi" />}>
+          <InputCard label={<SoapLabel initial="I" text="Implementasi *" />}>
             <TextArea
               name="implementasi"
               value={formData.implementasi}
@@ -293,7 +499,7 @@ function IsiSoapContent() {
             />
           </InputCard>
           <InputCard
-            label={<SoapLabel initial="A" text="Assessment lanjutan" />}
+            label={<SoapLabel initial="A" text="Assessment lanjutan *" />}
           >
             <TextArea
               name="assessmentLanjutan"
@@ -304,7 +510,7 @@ function IsiSoapContent() {
           </InputCard>
         </div>
 
-        <InputCard label={<SoapLabel initial="P" text="Plan lanjutan" />}>
+        <InputCard label={<SoapLabel initial="P" text="Plan lanjutan *" />}>
           <TextArea
             name="planLanjutan"
             value={formData.planLanjutan}
@@ -318,16 +524,27 @@ function IsiSoapContent() {
       <div className="sticky bottom-0 -mx-6 md:-mx-8 -mb-6 md:-mb-8 mt-6 bg-[#F8FBFB]/90 backdrop-blur-md border-t border-teal-100/50 p-4 md:px-8 z-50">
         <div className="max-w-[1920px] mx-auto flex justify-end gap-3">
           <button
+            type="button"
             onClick={() => history.back()}
-            className="cursor-pointer px-6 py-2.5 rounded-full text-sm font-bold border border-teal-100 text-[#1E5C58] hover:bg-teal-50 transition-colors"
+            disabled={isSubmitting}
+            className="cursor-pointer px-6 py-2.5 rounded-full text-sm font-bold border border-teal-100 text-[#1E5C58] hover:bg-teal-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Batal
           </button>
           <button
+            type="button"
             onClick={handleSimpan}
-            className="cursor-pointer px-6 py-2.5 rounded-full text-sm font-bold bg-[#1E5C58] text-white hover:bg-[#2B7A75] shadow-md shadow-teal-800/20 transition-all active:scale-95"
+            disabled={isSubmitting}
+            className="cursor-pointer px-6 py-2.5 rounded-full text-sm font-bold bg-[#1E5C58] text-white hover:bg-[#2B7A75] shadow-md shadow-teal-800/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
           >
-            Simpan SOAP
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Menyimpan...</span>
+              </>
+            ) : (
+              <span>Simpan SOAP</span>
+            )}
           </button>
         </div>
       </div>
