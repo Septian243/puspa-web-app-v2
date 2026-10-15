@@ -187,11 +187,10 @@ function ConfirmDialogModal({
               type="button"
               onClick={onConfirm}
               id="btn-confirm-action"
-              className={`cursor-pointer flex-1 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-colors ${
-                confirmVariant === "danger"
+              className={`cursor-pointer flex-1 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-colors ${confirmVariant === "danger"
                   ? "bg-red-600 hover:bg-red-700 shadow-red-700/20"
                   : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"
-              }`}
+                }`}
             >
               {confirmText}
             </button>
@@ -291,7 +290,7 @@ function PengembalianDanaModal({
 }) {
   const [selectedInvId, setSelectedInvId] = useState(invoice.id);
   const selectedInv = lunasInvoices.find((i) => i.id === selectedInvId) ?? invoice;
-  
+
   const [totalSesi, setTotalSesi] = useState(8);
   const [kehadiran, setKehadiran] = useState(8);
   const [hargaPerSesi, setHargaPerSesi] = useState(selectedInv.total / 8);
@@ -459,9 +458,8 @@ function PengembalianDanaModal({
                   id="mode-dikembalikan"
                   type="button"
                   onClick={() => setModeSisi("dikembalikan")}
-                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${
-                    modeSisi === "dikembalikan" ? "bg-[#1E5C58] text-white shadow-sm" : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
-                  }`}
+                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${modeSisi === "dikembalikan" ? "bg-[#1E5C58] text-white shadow-sm" : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
+                    }`}
                 >
                   Dikembalikan ke orang tua
                 </button>
@@ -469,9 +467,8 @@ function PengembalianDanaModal({
                   id="mode-catat"
                   type="button"
                   onClick={() => setModeSisi("catat")}
-                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${
-                    modeSisi === "catat" ? "bg-[#1E5C58] text-white shadow-sm" : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
-                  }`}
+                  className={`flex-1 px-3 py-2.5 text-xs font-bold transition-all ${modeSisi === "catat" ? "bg-[#1E5C58] text-white shadow-sm" : "bg-[#F4F9F8] text-gray-500 hover:text-[#2B7A75]"
+                    }`}
                 >
                   Catat ke periode setelahnya
                 </button>
@@ -849,7 +846,7 @@ function LihatDetailModal({
                   </div>
                   <div className="h-px bg-[#2B7A75] mb-4" />
                   <div className="grid grid-cols-2 mb-4 gap-x-3 gap-y-2">
-                    {[{l:"Ditagihkan kepada",v:invoice.wali},{l:"Nama anak",v:invoice.anak},{l:"Periode",v:invoice.periode},{l:"Tanggal terbit",v:invoice.tanggal_terbit}].map(({l,v})=>(
+                    {[{ l: "Ditagihkan kepada", v: invoice.wali }, { l: "Nama anak", v: invoice.anak }, { l: "Periode", v: invoice.periode }, { l: "Tanggal terbit", v: invoice.tanggal_terbit }].map(({ l, v }) => (
                       <div key={l}><p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{l}</p><p className="text-xs font-semibold text-gray-800">{v}</p></div>
                     ))}
                   </div>
@@ -857,15 +854,15 @@ function LihatDetailModal({
                     <div className="mb-3 overflow-hidden border border-gray-100 rounded-lg">
                       <table className="w-full">
                         <thead><tr className="bg-[#EAF4F3]">
-                          {["Terapi","Jumlah sesi","Harga","Jumlah"].map((h,i)=>(<th key={h} className={`px-3 py-2 text-[9px] font-extrabold text-[#1E5C58] uppercase ${i===3?"text-right":"text-left"}`}>{h}</th>))}
+                          {["Terapi", "Jumlah sesi", "Harga", "Jumlah"].map((h, i) => (<th key={h} className={`px-3 py-2 text-[9px] font-extrabold text-[#1E5C58] uppercase ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>))}
                         </tr></thead>
                         <tbody>
                           {rows.map((row, i) => (
-                            <tr key={row.id} className={i%2===0?"bg-white":"bg-gray-50/60"}>
+                            <tr key={row.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
                               <td className="px-3 py-2 text-[11px] text-gray-700 font-medium">{row.jenis}</td>
                               <td className="px-3 py-2 text-[11px] text-gray-600">{row.jumlah_sesi} sesi</td>
                               <td className="px-3 py-2 text-[11px] text-gray-600">{formatRupiah(Number(row.harga_sesi))}/sesi</td>
-                              <td className="px-3 py-2 text-right text-[11px] font-semibold text-gray-800">{formatRupiah((Number(row.jumlah_sesi)||0)*(Number(row.harga_sesi)||0))}</td>
+                              <td className="px-3 py-2 text-right text-[11px] font-semibold text-gray-800">{formatRupiah((Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0))}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -873,7 +870,7 @@ function LihatDetailModal({
                     </div>
                   )}
                   <div className="space-y-1 text-xs">
-                    {rows.length > 0 && (<><div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-700">{formatRupiah(totalSeharusnya||invoice.total)}</span></div><div className="flex justify-between"><span className="text-gray-500">Potongan</span><span className="font-semibold text-gray-700">- {formatRupiah(potonganVal)}</span></div></>)}
+                    {rows.length > 0 && (<><div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-700">{formatRupiah(totalSeharusnya || invoice.total)}</span></div><div className="flex justify-between"><span className="text-gray-500">Potongan</span><span className="font-semibold text-gray-700">- {formatRupiah(potonganVal)}</span></div></>)}
                     <div className="h-px bg-[#2B7A75] my-1.5" />
                     <div className="flex items-center justify-between"><span className="text-sm font-extrabold text-gray-800">Total tagihan</span><span className="text-sm font-extrabold text-[#1E5C58]">{formatRupiah(invoice.total)}</span></div>
                     <div className="flex items-center justify-between pt-0.5"><span className="text-gray-500">Status</span><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${statusClassMap[invoice.status] || ""}`}>{statusLabelMap[invoice.status] || invoice.status}</span></div>
@@ -905,7 +902,7 @@ function CetakInvoiceModal({
   onClose: () => void;
 }) {
   const rows = invoice.terapiRows ?? [];
-  const totalSeharusnya = rows.reduce((sum, r) => sum + (Number(r.jumlah_sesi)||0)*(Number(r.harga_sesi)||0), 0);
+  const totalSeharusnya = rows.reduce((sum, r) => sum + (Number(r.jumlah_sesi) || 0) * (Number(r.harga_sesi) || 0), 0);
   const potonganVal = invoice.potongan ?? 0;
   const statusColorMap: Record<InvoiceStatus, string> = {
     LUNAS: "#059669", "BELUM DIBAYAR": "#ef4444",
@@ -953,9 +950,9 @@ function CetakInvoiceModal({
             <div id="receipt-print-inner" className="bg-white border border-dashed border-gray-300 rounded-xl p-5 mx-auto shadow-sm"
               style={{ maxWidth: 290, fontFamily: "'Courier New', Courier, monospace" }}>
               <div className="text-center mb-3">
-                <p className="text-base font-black text-gray-900 tracking-wide" style={{fontFamily:"sans-serif"}}>PUSPA</p>
-                <p className="text-[9px] text-gray-500" style={{fontFamily:"sans-serif"}}>Holistic Integrative Care</p>
-                <p className="text-[9px] text-gray-400 mt-0.5" style={{fontFamily:"sans-serif"}}>Rek. BCA 000-000-0000 a.n. Puspa</p>
+                <p className="text-base font-black text-gray-900 tracking-wide" style={{ fontFamily: "sans-serif" }}>PUSPA</p>
+                <p className="text-[9px] text-gray-500" style={{ fontFamily: "sans-serif" }}>Holistic Integrative Care</p>
+                <p className="text-[9px] text-gray-400 mt-0.5" style={{ fontFamily: "sans-serif" }}>Rek. BCA 000-000-0000 a.n. Puspa</p>
               </div>
               <div className="border-t border-dashed border-gray-300 my-2.5" />
               <div className="text-center mb-2">
@@ -964,10 +961,10 @@ function CetakInvoiceModal({
               </div>
               <div className="border-t border-dashed border-gray-300 my-2.5" />
               <div className="space-y-1 mb-2">
-                {[{label:"Anak",value:invoice.anak},{label:"Wali",value:invoice.wali},{label:"Periode",value:invoice.periode},{label:"Terbit",value:invoice.tanggal_terbit}].map(({label,value})=>(
+                {[{ label: "Anak", value: invoice.anak }, { label: "Wali", value: invoice.wali }, { label: "Periode", value: invoice.periode }, { label: "Terbit", value: invoice.tanggal_terbit }].map(({ label, value }) => (
                   <div key={label} className="flex justify-between text-[10px]">
                     <span className="text-gray-400">{label}</span>
-                    <span className="font-bold text-gray-800 text-right" style={{maxWidth:170}}>{value}</span>
+                    <span className="font-bold text-gray-800 text-right" style={{ maxWidth: 170 }}>{value}</span>
                   </div>
                 ))}
               </div>
@@ -980,7 +977,7 @@ function CetakInvoiceModal({
                         <p className="text-[10px] font-bold text-gray-800">{row.jenis}</p>
                         <div className="flex justify-between text-[10px]">
                           <span className="text-gray-400">{row.jumlah_sesi} sesi × {formatRupiah(Number(row.harga_sesi))}</span>
-                          <span className="font-semibold text-gray-700">{formatRupiah((Number(row.jumlah_sesi)||0)*(Number(row.harga_sesi)||0))}</span>
+                          <span className="font-semibold text-gray-700">{formatRupiah((Number(row.jumlah_sesi) || 0) * (Number(row.harga_sesi) || 0))}</span>
                         </div>
                       </div>
                     ))}
@@ -1359,9 +1356,8 @@ function BuatTagihanForm({
                     type="button"
                     onClick={() => { setTipeTagihan(t); setErrors({}); }}
                     id={`tipe-${t.toLowerCase().replace(" ", "-")}`}
-                    className={`flex-1 px-6 py-2.5 text-sm font-bold transition-all ${
-                      tipeTagihan === t ? "bg-[#1E5C58] text-white shadow-sm" : "text-gray-500 hover:text-[#2B7A75]"
-                    }`}
+                    className={`flex-1 px-6 py-2.5 text-sm font-bold transition-all ${tipeTagihan === t ? "bg-[#1E5C58] text-white shadow-sm" : "text-gray-500 hover:text-[#2B7A75]"
+                      }`}
                   >
                     {t}
                   </button>
@@ -1415,7 +1411,7 @@ function BuatTagihanForm({
                     id="input-periode-bulan"
                     type="month"
                     value={periode}
-                    onChange={(e) => { setPeriode(e.target.value); setErrors(prev => ({...prev, periode: false})); }}
+                    onChange={(e) => { setPeriode(e.target.value); setErrors(prev => ({ ...prev, periode: false })); }}
                     className={`${inputClass} cursor-pointer pr-10 ${!periode ? "text-transparent" : ""} ${errors.periode ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                   />
                   {!periode && (
@@ -1435,7 +1431,7 @@ function BuatTagihanForm({
                       id="input-tanggal-mulai"
                       type="date"
                       value={tanggalMulai}
-                      onChange={(e) => { setTanggalMulai(e.target.value); setErrors(prev => ({...prev, tanggalMulai: false})); }}
+                      onChange={(e) => { setTanggalMulai(e.target.value); setErrors(prev => ({ ...prev, tanggalMulai: false })); }}
                       className={`${inputClass} cursor-pointer pr-10 ${errors.tanggalMulai ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                     />
                   </div>
@@ -1448,7 +1444,7 @@ function BuatTagihanForm({
                       type="date"
                       value={tanggalSelesai}
                       min={tanggalMulai || undefined}
-                      onChange={(e) => { setTanggalSelesai(e.target.value); setErrors(prev => ({...prev, tanggalSelesai: false})); }}
+                      onChange={(e) => { setTanggalSelesai(e.target.value); setErrors(prev => ({ ...prev, tanggalSelesai: false })); }}
                       className={`${inputClass} cursor-pointer pr-10 ${errors.tanggalSelesai ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                     />
                   </div>
@@ -1833,18 +1829,16 @@ export default function KeuanganPage() {
             <button
               onClick={() => { setMainTab("Tagihan"); setPageView("list"); }}
               id="tab-tagihan"
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${
-                mainTab === "Tagihan" ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20" : "bg-transparent text-gray-400 hover:bg-gray-50"
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Tagihan" ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20" : "bg-transparent text-gray-400 hover:bg-gray-50"
+                }`}
             >
               <FileText size={16} /> Tagihan
             </button>
             <button
               onClick={() => { setMainTab("Pembayaran"); setPageView("list"); }}
               id="tab-pembayaran"
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${
-                mainTab === "Pembayaran" ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20" : "bg-transparent text-gray-400 hover:bg-gray-50"
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all ${mainTab === "Pembayaran" ? "bg-[#1E5C58] text-white shadow-md shadow-teal-700/20" : "bg-transparent text-gray-400 hover:bg-gray-50"
+                }`}
             >
               <CreditCard size={16} /> Pembayaran
             </button>
@@ -1876,9 +1870,8 @@ export default function KeuanganPage() {
                     key={tab}
                     onClick={() => { setActiveTab(tab); setCurrentPage(1); }}
                     id={`status-tab-${tab.toLowerCase().replace(/ /g, "-")}`}
-                    className={`cursor-pointer whitespace-nowrap px-4 py-3 text-sm font-semibold transition-all border-b-2 ${
-                      activeTab === tab ? "border-[#2B7A75] text-[#1E5C58] font-bold" : "border-transparent text-gray-400 hover:text-[#2B7A75]"
-                    }`}
+                    className={`cursor-pointer whitespace-nowrap px-4 py-3 text-sm font-semibold transition-all border-b-2 ${activeTab === tab ? "border-[#2B7A75] text-[#1E5C58] font-bold" : "border-transparent text-gray-400 hover:text-[#2B7A75]"
+                      }`}
                   >
                     {tab}
                   </button>

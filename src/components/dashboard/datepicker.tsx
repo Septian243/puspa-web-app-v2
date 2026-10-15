@@ -8,9 +8,9 @@ import { updateObservationSchedule } from "@/lib/api/jadwal_observasi";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
 
 interface DatePickerProps {
-  pasien: { 
-    id: number; 
-    nama: string; 
+  pasien: {
+    id: number;
+    nama: string;
     observation_id?: string; // ✅ dibuat opsional agar aman di semua page
   };
   initialDate?: string;
@@ -86,9 +86,8 @@ export default function DatePicker({
           <button
             onClick={handleSave}
             disabled={saving}
-            className={`px-4 py-2 rounded bg-[#81B7A9] text-white hover:bg-[#5f9d8f] ${
-              saving ? "opacity-60" : ""
-            }`}
+            className={`px-4 py-2 rounded bg-[#81B7A9] text-white hover:bg-[#5f9d8f] ${saving ? "opacity-60" : ""
+              }`}
           >
             {saving ? "Menyimpan..." : "Simpan"}
           </button>
