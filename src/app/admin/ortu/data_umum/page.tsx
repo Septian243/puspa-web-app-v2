@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { getParentAnswer } from "@/lib/api/riwayatAsesmentOrtu";
+import { getUmumParentAnswer } from "@/lib/api/riwayatAsesmentOrtu";
 
 /* ===================== TYPES ===================== */
 type AnswerItem = {
@@ -56,7 +56,7 @@ export default function RiwayatJawaban() {
 
     const fetchData = async () => {
       try {
-        const res = await getParentAnswer(assessmentId);
+        const res = await getUmumParentAnswer(assessmentId);
         setItems(res?.data || []);
       } catch (err) {
         console.error(err);
