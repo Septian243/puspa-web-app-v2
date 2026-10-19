@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, Suspense, useMemo, useRef } from "react";
+import React, { useEffect, useState, Suspense, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
 import {
@@ -21,6 +21,14 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTherapistProfile } from "@/context/ProfileTerapisContext";
+import {
+  getTherapySessions,
+  getPendingSessionsCount,
+  TherapyType,
+  VirtualStatus,
+  DbSessionStatus,
+  TherapySessionItem,
+} from "@/lib/api/terapiTerapis";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type TerapiTab =
@@ -36,12 +44,14 @@ export interface JadwalRow {
   telepon: string;
   tipeTerapi: string;
   terapis: string;
-  tanggal: string; // YYYY-MM-DD
-  waktu: string;   // "09.35 - 10.35"
+  tanggal: string;
+  waktu: string;
   status: "Terjadwal" | "Selesai";
+  dbStatus: DbSessionStatus;
+  hasSoap: boolean;
+  isRescheduled: boolean;
   tanggal_lama?: string | null;
   waktu_lama?: string | null;
-  kategori_alasan?: "Sakit" | "Izin" | "Tidak Hadir" | null;
   alasan?: string | null;
   nomorRM?: string;
   usia?: string;
@@ -50,450 +60,104 @@ export interface JadwalRow {
   asalSekolah?: string;
   alamat?: string;
   hubunganWali?: string;
+  notes?: string | null;
 }
-
-const getTodayDateStr = () => {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
-};
-
-const getTomorrowDateStr = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
-};
-
-const getYesterdayDateStr = () => {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
-};
-
-const getWeekRangeStr = () => {
-  const d = new Date();
-  const day = d.getDay() || 7;
-  const start = new Date(d);
-  start.setDate(d.getDate() - day + 1);
-  const end = new Date(d);
-  end.setDate(d.getDate() - day + 7);
-  return {
-    start: start.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
-    end: end.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
-  };
-};
-
-const getMonthRangeStr = () => {
-  const d = new Date();
-  const start = new Date(d.getFullYear(), d.getMonth(), 1);
-  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return {
-    start: start.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
-    end: end.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" }),
-  };
-};
-
-const formatTanggal = (yyyyMmDd: string) => {
-  if (!yyyyMmDd) return "";
-  const [y, m, d] = yyyyMmDd.split("-");
-  return `${d}/${m}/${y}`;
-};
-
-// ── Dummy data sederhana ─────────────────────────────────────────────────────
-const dummyJadwalData: JadwalRow[] = [
-  // 1. Kasus Normal Terjadwal
-  {
-    id: "1",
-    namaPasien: "Zefanya Lidia",
-    namaOrangTua: "Alief Arifin Mahardiko",
-    telepon: "085922002245",
-    tipeTerapi: "Terapi Okupasi",
-    terapis: "Alief Arifun",
-    tanggal: getTodayDateStr(),
-    waktu: "10.00 - 11.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000101",
-    usia: "6 Tahun 2 Bulan",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Surakarta, 12 Maret 2020",
-    asalSekolah: "TK Pertiwi",
-    alamat: "Jl. Slamet Riyadi No. 45, Surakarta",
-    hubunganWali: "Ayah",
-  },
-  // 2. Kasus Normal Selesai
-  {
-    id: "2",
-    namaPasien: "Kenzi",
-    namaOrangTua: "Budi Santoso",
-    telepon: "081234567890",
-    tipeTerapi: "Terapi Okupasi",
-    terapis: "Alief Arifun",
-    tanggal: getTodayDateStr(),
-    waktu: "11.00 - 12.00",
-    status: "Selesai",
-    nomorRM: "RM-000102",
-    usia: "6 Tahun 5 Bulan",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Solo, 10 Mei 2020",
-    asalSekolah: "TK Pembina",
-    alamat: "Jl. Veteran No. 23, Surakarta",
-    hubunganWali: "Ayah",
-  },
-  // 3. Kasus Reschedule (Sakit) - Diterapi Hari Ini
-  {
-    id: "3",
-    namaPasien: "Caca",
-    namaOrangTua: "Lina",
-    telepon: "085566778899",
-    tipeTerapi: "Terapi Okupasi",
-    terapis: "Dr. Tirta",
-    tanggal: getTodayDateStr(),
-    waktu: "09.00 - 10.00",
-    status: "Terjadwal",
-    tanggal_lama: getYesterdayDateStr(),
-    waktu_lama: "09.00 - 10.00",
-    kategori_alasan: "Sakit",
-    alasan: "Anak demam kemarin, dipindah ke hari ini.",
-    nomorRM: "RM-000103",
-    usia: "7 Tahun 4 Bulan",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Surakarta, 03 Mei 2019",
-    asalSekolah: "TK Tunas Bangsa",
-    alamat: "Surakarta",
-    hubunganWali: "Ibu",
-  },
-  // 4. Kasus Reschedule (Izin)
-  {
-    id: "4",
-    namaPasien: "Dian Sastro",
-    namaOrangTua: "Rina Kusuma",
-    telepon: "089876543210",
-    tipeTerapi: "Terapi Okupasi",
-    terapis: "Sus Rini",
-    tanggal: getTomorrowDateStr(),
-    waktu: "13.00 - 14.00",
-    status: "Terjadwal",
-    tanggal_lama: getTodayDateStr(),
-    waktu_lama: "13.00 - 14.00",
-    kategori_alasan: "Izin",
-    alasan: "Acara keluarga mendadak ke luar kota.",
-    nomorRM: "RM-000104",
-    usia: "5 Tahun 3 Bulan",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 22 Juni 2021",
-    asalSekolah: "TK Kemala",
-    alamat: "Jl. Monginsidi No. 7, Surakarta",
-    hubunganWali: "Ibu",
-  },
-  // 5. Kasus Tertunda (Jadwal Terlewat Hari Sebelumnya)
-  {
-    id: "5",
-    namaPasien: "Gibran",
-    namaOrangTua: "Jokowi",
-    telepon: "082233445566",
-    tipeTerapi: "Terapi Okupasi",
-    terapis: "Suster M",
-    tanggal: getYesterdayDateStr(), // Agar masuk tab Tertunda
-    waktu: "15.00 - 16.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000105",
-    usia: "4 Tahun 6 Bulan",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Surakarta, 30 Maret 2022",
-    asalSekolah: "PAUD Melati",
-    alamat: "Jl. Manahan No. 1, Solo",
-    hubunganWali: "Ayah",
-  },
-  // 6. Kasus Reschedule (Tidak Hadir)
-  {
-    id: "6",
-    namaPasien: "Rara",
-    namaOrangTua: "Siti Nurhaliza",
-    telepon: "081122334455",
-    tipeTerapi: "Terapi Okupasi",
-    terapis: "Dr. Tirta",
-    tanggal: getTomorrowDateStr(),
-    waktu: "08.00 - 09.00",
-    status: "Terjadwal",
-    tanggal_lama: getTodayDateStr(),
-    waktu_lama: "08.00 - 09.00",
-    kategori_alasan: "Tidak Hadir",
-    alasan: "Pasien tidak hadir tanpa keterangan.",
-    nomorRM: "RM-000106",
-    usia: "6 Tahun",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 14 April 2020",
-    asalSekolah: "TK Bintang",
-    alamat: "Mojosongo, Solo",
-    hubunganWali: "Ibu",
-  },
-  // 7. Kasus Normal Selesai Tambahan
-  {
-    id: "7",
-    namaPasien: "Bima",
-    namaOrangTua: "Arjuna",
-    telepon: "081999888777",
-    tipeTerapi: "Terapi Okupasi",
-    terapis: "Suster M",
-    tanggal: getTodayDateStr(),
-    waktu: "14.00 - 15.00",
-    status: "Selesai",
-    nomorRM: "RM-000107",
-    usia: "8 Tahun 1 Bulan",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Semarang, 22 Agustus 2018",
-    asalSekolah: "SD Pelita Harapan",
-    alamat: "Banjarsari, Solo",
-    hubunganWali: "Ayah",
-  },
-
-  // ==========================================
-  // TAMBAHAN DATA UNTUK TIPE TERAPI LAIN (4 kasus x 3 tipe)
-  // ==========================================
-
-  // --- PLB (Paedagog) ---
-  {
-    id: "8",
-    namaPasien: "Andi",
-    namaOrangTua: "Bapak Andi",
-    telepon: "08111222333",
-    tipeTerapi: "PLB (Paedagog)",
-    terapis: "Alief Arifun",
-    tanggal: getTodayDateStr(),
-    waktu: "09.00 - 10.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000108",
-    usia: "6 Tahun",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Solo, 10 Januari 2020",
-    asalSekolah: "TK A",
-    alamat: "Solo",
-    hubunganWali: "Ayah",
-  },
-  {
-    id: "9",
-    namaPasien: "Sita",
-    namaOrangTua: "Ibu Sita",
-    telepon: "08111222444",
-    tipeTerapi: "PLB (Paedagog)",
-    terapis: "Alief Arifun",
-    tanggal: getTodayDateStr(),
-    waktu: "10.00 - 11.00",
-    status: "Selesai",
-    nomorRM: "RM-000109",
-    usia: "5 Tahun",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 15 Februari 2021",
-    asalSekolah: "TK B",
-    alamat: "Solo",
-    hubunganWali: "Ibu",
-  },
-  {
-    id: "10",
-    namaPasien: "Rudi",
-    namaOrangTua: "Bapak Rudi",
-    telepon: "08111222555",
-    tipeTerapi: "PLB (Paedagog)",
-    terapis: "Alief Arifun",
-    tanggal: getTomorrowDateStr(),
-    waktu: "11.00 - 12.00",
-    status: "Terjadwal",
-    tanggal_lama: getTodayDateStr(),
-    waktu_lama: "11.00 - 12.00",
-    kategori_alasan: "Sakit",
-    alasan: "Anak demam",
-    nomorRM: "RM-000110",
-    usia: "7 Tahun",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Solo, 20 Maret 2019",
-    asalSekolah: "SD 1",
-    alamat: "Solo",
-    hubunganWali: "Ayah",
-  },
-  {
-    id: "11",
-    namaPasien: "Nina",
-    namaOrangTua: "Ibu Nina",
-    telepon: "08111222666",
-    tipeTerapi: "PLB (Paedagog)",
-    terapis: "Alief Arifun",
-    tanggal: getYesterdayDateStr(), // Tertunda
-    waktu: "13.00 - 14.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000111",
-    usia: "4 Tahun",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 25 April 2022",
-    asalSekolah: "PAUD",
-    alamat: "Solo",
-    hubunganWali: "Ibu",
-  },
-
-  // --- Terapi Wicara ---
-  {
-    id: "12",
-    namaPasien: "Tono",
-    namaOrangTua: "Bapak Tono",
-    telepon: "08222333444",
-    tipeTerapi: "Terapi Wicara",
-    terapis: "Sus Rini",
-    tanggal: getTodayDateStr(),
-    waktu: "09.00 - 10.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000112",
-    usia: "6 Tahun",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Solo, 05 Mei 2020",
-    asalSekolah: "TK A",
-    alamat: "Solo",
-    hubunganWali: "Ayah",
-  },
-  {
-    id: "13",
-    namaPasien: "Mila",
-    namaOrangTua: "Ibu Mila",
-    telepon: "08222333555",
-    tipeTerapi: "Terapi Wicara",
-    terapis: "Sus Rini",
-    tanggal: getTodayDateStr(),
-    waktu: "10.00 - 11.00",
-    status: "Selesai",
-    nomorRM: "RM-000113",
-    usia: "5 Tahun",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 10 Juni 2021",
-    asalSekolah: "TK B",
-    alamat: "Solo",
-    hubunganWali: "Ibu",
-  },
-  {
-    id: "14",
-    namaPasien: "Luki",
-    namaOrangTua: "Bapak Luki",
-    telepon: "08222333666",
-    tipeTerapi: "Terapi Wicara",
-    terapis: "Sus Rini",
-    tanggal: getTomorrowDateStr(),
-    waktu: "11.00 - 12.00",
-    status: "Terjadwal",
-    tanggal_lama: getTodayDateStr(),
-    waktu_lama: "11.00 - 12.00",
-    kategori_alasan: "Izin",
-    alasan: "Ke luar kota",
-    nomorRM: "RM-000114",
-    usia: "7 Tahun",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Solo, 15 Juli 2019",
-    asalSekolah: "SD 1",
-    alamat: "Solo",
-    hubunganWali: "Ayah",
-  },
-  {
-    id: "15",
-    namaPasien: "Santi",
-    namaOrangTua: "Ibu Santi",
-    telepon: "08222333777",
-    tipeTerapi: "Terapi Wicara",
-    terapis: "Sus Rini",
-    tanggal: getYesterdayDateStr(), // Tertunda
-    waktu: "13.00 - 14.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000115",
-    usia: "4 Tahun",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 20 Agustus 2022",
-    asalSekolah: "PAUD",
-    alamat: "Solo",
-    hubunganWali: "Ibu",
-  },
-
-  // --- Fisioterapi ---
-  {
-    id: "16",
-    namaPasien: "Bowo",
-    namaOrangTua: "Bapak Bowo",
-    telepon: "08333444555",
-    tipeTerapi: "Fisioterapi",
-    terapis: "Suster M",
-    tanggal: getTodayDateStr(),
-    waktu: "09.00 - 10.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000116",
-    usia: "6 Tahun",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Solo, 01 September 2020",
-    asalSekolah: "TK A",
-    alamat: "Solo",
-    hubunganWali: "Ayah",
-  },
-  {
-    id: "17",
-    namaPasien: "Rina",
-    namaOrangTua: "Ibu Rina",
-    telepon: "08333444666",
-    tipeTerapi: "Fisioterapi",
-    terapis: "Suster M",
-    tanggal: getTodayDateStr(),
-    waktu: "10.00 - 11.00",
-    status: "Selesai",
-    nomorRM: "RM-000117",
-    usia: "5 Tahun",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 05 Oktober 2021",
-    asalSekolah: "TK B",
-    alamat: "Solo",
-    hubunganWali: "Ibu",
-  },
-  {
-    id: "18",
-    namaPasien: "Doni",
-    namaOrangTua: "Bapak Doni",
-    telepon: "08333444777",
-    tipeTerapi: "Fisioterapi",
-    terapis: "Suster M",
-    tanggal: getTomorrowDateStr(),
-    waktu: "11.00 - 12.00",
-    status: "Terjadwal",
-    tanggal_lama: getTodayDateStr(),
-    waktu_lama: "11.00 - 12.00",
-    kategori_alasan: "Tidak Hadir",
-    alasan: "Tanpa keterangan",
-    nomorRM: "RM-000118",
-    usia: "7 Tahun",
-    jenisKelamin: "Laki-laki",
-    tempatTglLahir: "Solo, 10 November 2019",
-    asalSekolah: "SD 1",
-    alamat: "Solo",
-    hubunganWali: "Ayah",
-  },
-  {
-    id: "19",
-    namaPasien: "Vira",
-    namaOrangTua: "Ibu Vira",
-    telepon: "08333444888",
-    tipeTerapi: "Fisioterapi",
-    terapis: "Suster M",
-    tanggal: getYesterdayDateStr(), // Tertunda
-    waktu: "13.00 - 14.00",
-    status: "Terjadwal",
-    nomorRM: "RM-000119",
-    usia: "4 Tahun",
-    jenisKelamin: "Perempuan",
-    tempatTglLahir: "Solo, 15 Desember 2022",
-    asalSekolah: "PAUD",
-    alamat: "Solo",
-    hubunganWali: "Ibu",
-  }
-];
 
 type StatusFilter = "Terjadwal" | "Selesai" | "Reschedule" | "Tertunda";
 type DateRangeFilter = "hari-ini" | "besok" | "minggu-ini" | "bulan-ini" | "custom";
+type ScheduleScope = "mine" | "all";
 
-const getBadgeStyles = (kategori?: "Sakit" | "Izin" | "Tidak Hadir" | null) => {
-  switch (kategori) {
-    case "Sakit": return "bg-blue-50 text-blue-500 border-blue-200";
-    case "Izin": return "bg-orange-50 text-orange-500 border-orange-200";
-    case "Tidak Hadir": return "bg-red-50 text-red-600 border-red-200";
-    default: return "bg-gray-50 text-gray-500 border-gray-200";
+const formatTanggal = (yyyyMmDd: string) => {
+  if (!yyyyMmDd) return "";
+  const parts = yyyyMmDd.split("-");
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
   }
+  return yyyyMmDd;
+};
+
+const checkIsMySpecialty = (tab: TerapiTab, therapistSection?: string | null): boolean => {
+  if (!therapistSection) return false;
+  const section = therapistSection.toLowerCase();
+  const tabLower = tab.toLowerCase();
+  return tabLower.includes(section) || (section.includes("plb") && tab === "PLB (Paedagog)");
+};
+
+const mapTabToTherapyType = (tab: TerapiTab): TherapyType => {
+  switch (tab) {
+    case "Terapi Okupasi": return "okupasi";
+    case "Terapi Wicara": return "wicara";
+    case "Fisioterapi": return "fisio";
+    default: return "paedagog";
+  }
+};
+
+const mapFilterToVirtualStatus = (filter: StatusFilter): VirtualStatus => {
+  switch (filter) {
+    case "Selesai": return "completed";
+    case "Reschedule": return "rescheduled";
+    case "Tertunda": return "pending";
+    default: return "scheduled";
+  }
+};
+
+const transformSessionItemToRow = (
+  item: TherapySessionItem,
+  activeFilter: StatusFilter
+): JadwalRow => {
+  let tanggalLama: string | null = null;
+  let waktuLama: string | null = null;
+  let alasan: string | null = null;
+  let tanggal = item.session_date;
+  const waktu = `${item.start_time} - ${item.end_time}`;
+
+  if (activeFilter === "Reschedule") {
+    tanggalLama = item.session_date;
+    waktuLama = `${item.start_time} - ${item.end_time}`;
+    tanggal = item.reschedule_info?.new_session_date || item.session_date;
+    alasan = item.reschedule_info?.reason || item.notes || null;
+  } else {
+    if (item.notes && item.notes.includes("Reschedule dari sesi tanggal")) {
+      const match = item.notes.match(
+        /Reschedule dari sesi tanggal\s+([^\s]+)(?:\s+pukul\s+(.+))?/i
+      );
+      if (match) {
+        tanggalLama = match[1];
+        if (match[2]) {
+          waktuLama = match[2].trim();
+        }
+      } else {
+        const oldDate = item.notes.replace("Reschedule dari sesi tanggal", "").trim();
+        tanggalLama = oldDate;
+      }
+    }
+  }
+
+  return {
+    id: item.id,
+    namaPasien: item.child_name,
+    namaOrangTua: item.guardian_name,
+    telepon: item.guardian_phone || "-",
+    tipeTerapi: item.therapy_type_label,
+    terapis: item.therapist_name,
+    tanggal,
+    waktu,
+    status: item.has_soap ? "Selesai" : "Terjadwal",
+    dbStatus: item.status,
+    hasSoap: item.has_soap,
+    isRescheduled: Boolean(
+      item.is_rescheduled ||
+      item.is_reschedule ||
+      (item.notes && item.notes.includes("Reschedule dari sesi tanggal"))
+    ),
+    tanggal_lama: tanggalLama,
+    waktu_lama: waktuLama,
+    alasan,
+    nomorRM: item.medical_record_number,
+    hubunganWali: item.guardian_type,
+    notes: item.notes,
+  };
 };
 
 // ── Wrapper dengan Suspense ───────────────────────────────────────────────────
@@ -522,6 +186,7 @@ function ActionDropdown({
   statusFilter,
   mySection,
   currentTab,
+  canEdit,
   onIsiSoap,
   onDetail,
   onLihatHasil,
@@ -532,6 +197,7 @@ function ActionDropdown({
   statusFilter: StatusFilter;
   mySection: string;
   currentTab: string;
+  canEdit: boolean;
   onIsiSoap: (item: JadwalRow) => void;
   onDetail: (item: JadwalRow) => void;
   onLihatHasil: (item: JadwalRow) => void;
@@ -539,30 +205,33 @@ function ActionDropdown({
   const isOpen = openDropdownId === item.id;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left: number;
     openUpward: boolean;
-  }>({ top: 0, left: 0, openUpward: false });
+  }>({ left: 0, openUpward: false });
 
-  const MENU_WIDTH = 192;
-  const MENU_HEIGHT_EST = statusFilter === "Terjadwal" ? 140 : 52;
+  const MENU_WIDTH = 200;
 
   const isMySpecialty =
     currentTab.toLowerCase().includes(mySection.toLowerCase()) ||
-    mySection.toLowerCase().includes("plb") && currentTab === "PLB (Paedagog)";
+    (mySection.toLowerCase().includes("plb") && currentTab === "PLB (Paedagog)");
+
+  const isPresent = item.dbStatus === "present";
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      const openUpward = spaceBelow < MENU_HEIGHT_EST + 12;
+      const openUpward = spaceBelow < 110;
       let left = rect.right - MENU_WIDTH;
       if (left < 8) left = 8;
       if (left + MENU_WIDTH > window.innerWidth - 8)
         left = window.innerWidth - MENU_WIDTH - 8;
       setMenuPos({
-        top: openUpward ? rect.top - MENU_HEIGHT_EST - 8 : rect.bottom + 8,
+        top: openUpward ? undefined : rect.bottom + 8,
+        bottom: openUpward ? window.innerHeight - rect.top + 8 : undefined,
         left,
         openUpward,
       });
@@ -602,27 +271,37 @@ function ActionDropdown({
                   transition={{ duration: 0.15 }}
                   style={{
                     position: "fixed",
-                    top: menuPos.top,
+                    ...(menuPos.openUpward
+                      ? { bottom: menuPos.bottom }
+                      : { top: menuPos.top }),
                     left: menuPos.left,
                     width: MENU_WIDTH,
                   }}
                   className="z-[101] rounded-xl bg-white shadow-[0_10px_30px_rgba(0,0,0,0.12)] border border-teal-50/80 overflow-hidden py-1 text-[#1E5C58]"
                 >
-                  {/* Status: Terjadwal / Reschedule / Tertunda */}
-                  {(statusFilter === "Terjadwal" || statusFilter === "Reschedule" || statusFilter === "Tertunda") && isMySpecialty && (
+                  {/* Status: Terjadwal / Tertunda & cocok keahlian & canEdit */}
+                  {(statusFilter === "Terjadwal" || statusFilter === "Tertunda") && isMySpecialty && canEdit && (
                     <>
                       <button
-                        onClick={() => { setOpenDropdownId(null); onIsiSoap(item); }}
-                        disabled={statusFilter === "Reschedule"}
-                        className={`flex items-center w-full px-4 py-2.5 text-xs font-semibold text-gray-700 transition-colors ${statusFilter === "Reschedule" ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-teal-50/30 hover:text-[#1E5C58]"}`}
+                        onClick={() => {
+                          if (isPresent) {
+                            setOpenDropdownId(null);
+                            onIsiSoap(item);
+                          }
+                        }}
+                        disabled={!isPresent}
+                        title={!isPresent ? "Presensi anak harus Hadir terlebih dahulu untuk mengisi SOAP" : undefined}
+                        className={`flex items-center w-full px-4 py-2.5 text-xs font-semibold transition-colors ${!isPresent
+                          ? "opacity-50 cursor-not-allowed text-gray-400 bg-gray-50/40"
+                          : "cursor-pointer hover:bg-teal-50/30 hover:text-[#1E5C58] text-gray-700"
+                          }`}
                       >
-                        <FileText size={16} className="mr-2 text-[#81B7A9]" />
-                        Isi SOAP
+                        <FileText size={16} className={`mr-2 ${isPresent ? "text-[#81B7A9]" : "text-gray-400"}`} />
+                        <span>Isi SOAP {!isPresent && <span className="text-[10px] text-amber-600 block">(Belum Hadir)</span>}</span>
                       </button>
                       <button
                         onClick={() => { setOpenDropdownId(null); onDetail(item); }}
-                        disabled={statusFilter === "Reschedule"}
-                        className={`flex items-center w-full px-4 py-2.5 text-xs font-semibold text-gray-700 transition-colors ${statusFilter === "Reschedule" ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-teal-50/30 hover:text-[#1E5C58]"}`}
+                        className="cursor-pointer flex items-center w-full px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-teal-50/30 hover:text-[#1E5C58] transition-colors"
                       >
                         <Eye size={16} className="mr-2 text-[#81B7A9]" />
                         Detail
@@ -630,12 +309,11 @@ function ActionDropdown({
                     </>
                   )}
 
-                  {/* Status: Terjadwal / Reschedule / Tertunda — bukan keahliannya */}
-                  {(statusFilter === "Terjadwal" || statusFilter === "Reschedule" || statusFilter === "Tertunda") && !isMySpecialty && (
+                  {/* Status: Terjadwal / Tertunda — bukan keahliannya / tidak canEdit */}
+                  {(statusFilter === "Terjadwal" || statusFilter === "Tertunda") && (!isMySpecialty || !canEdit) && (
                     <button
                       onClick={() => { setOpenDropdownId(null); onDetail(item); }}
-                      disabled={statusFilter === "Reschedule"}
-                      className={`flex items-center w-full px-4 py-2.5 text-xs font-semibold text-gray-700 transition-colors ${statusFilter === "Reschedule" ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-teal-50/30 hover:text-[#1E5C58]"}`}
+                      className="cursor-pointer flex items-center w-full px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-teal-50/30 hover:text-[#1E5C58] transition-colors"
                     >
                       <Eye size={16} className="mr-2 text-[#81B7A9]" />
                       Detail
@@ -662,13 +340,13 @@ function ActionDropdown({
   );
 }
 
-
 // ── Mobile Card ───────────────────────────────────────────────────────────────
 function MobileJadwalCard({
   item,
   statusFilter,
   mySection,
   currentTab,
+  canEdit,
   onIsiSoap,
   onDetail,
   onLihatHasil,
@@ -677,6 +355,7 @@ function MobileJadwalCard({
   statusFilter: StatusFilter;
   mySection: string;
   currentTab: string;
+  canEdit: boolean;
   onIsiSoap: (item: JadwalRow) => void;
   onDetail: (item: JadwalRow) => void;
   onLihatHasil: (item: JadwalRow) => void;
@@ -684,6 +363,8 @@ function MobileJadwalCard({
   const isMySpecialty =
     currentTab.toLowerCase().includes(mySection.toLowerCase()) ||
     (mySection.toLowerCase().includes("plb") && currentTab === "PLB (Paedagog)");
+
+  const isPresent = item.dbStatus === "present";
 
   return (
     <div className="bg-[#F4F9F8]/40 border border-teal-50 rounded-2xl p-4 space-y-3 shadow-xs text-left">
@@ -727,21 +408,14 @@ function MobileJadwalCard({
               <span className="text-[10px] text-[#1E5C58] font-semibold">Pukul {item.waktu || "-"}</span>
             </div>
 
-            {(item.kategori_alasan || item.alasan) && (
+            {item.alasan && (
               <div className="col-span-2 pt-3 mt-1 border-t border-teal-50/50">
                 <span className="flex items-center gap-1 text-[10px] text-gray-400 uppercase mb-1.5 font-bold">
                   ALASAN
                 </span>
-                {item.kategori_alasan && (
-                  <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold border ${getBadgeStyles(item.kategori_alasan)}`}>
-                    {item.kategori_alasan}
-                  </span>
-                )}
-                {item.alasan && (
-                  <p className="mt-2 text-xs font-medium leading-relaxed text-gray-600">
-                    {item.alasan}
-                  </p>
-                )}
+                <p className="mt-1 text-xs font-medium leading-relaxed text-gray-600">
+                  {item.alasan}
+                </p>
               </div>
             )}
           </>
@@ -764,7 +438,7 @@ function MobileJadwalCard({
                 <Calendar size={9} /> Tanggal
               </span>
               <span>{formatTanggal(item.tanggal)}</span>
-              {statusFilter === "Terjadwal" && item.tanggal_lama && item.tanggal_lama !== item.tanggal && (
+              {item.tanggal_lama && (
                 <div className="mt-0.5 flex flex-col items-start gap-1">
                   <span className="inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
                     Reschedule
@@ -780,7 +454,7 @@ function MobileJadwalCard({
                 <Clock size={9} /> Waktu
               </span>
               <span>{item.waktu || "-"}</span>
-              {statusFilter === "Terjadwal" && item.waktu_lama && item.waktu_lama !== item.waktu && (
+              {item.waktu_lama && item.waktu_lama !== item.waktu && (
                 <div className="mt-0.5 flex flex-col items-start gap-1">
                   <span className="inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
                     Reschedule
@@ -795,18 +469,39 @@ function MobileJadwalCard({
         )}
       </div>
 
-      <div className="flex gap-2 pt-3 border-t border-teal-50/50">
-        {/* Terjadwal / Reschedule + keahlian cocok */}
-        {/* Terjadwal + keahlian cocok */}
-        {statusFilter === "Terjadwal" && isMySpecialty && (
-          <>
-            <button
-              onClick={() => onIsiSoap(item)}
-              className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold py-2 rounded-lg shadow-sm transition-colors"
-            >
-              <FileText size={13} />
-              Isi SOAP
-            </button>
+      {statusFilter !== "Reschedule" && (
+        <div className="flex gap-2 pt-3 border-t border-teal-50/50">
+          {(statusFilter === "Terjadwal" || statusFilter === "Tertunda") && isMySpecialty && canEdit && (
+            <>
+              {isPresent ? (
+                <button
+                  onClick={() => onIsiSoap(item)}
+                  className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold py-2 rounded-lg shadow-sm transition-colors"
+                >
+                  <FileText size={13} />
+                  Isi SOAP
+                </button>
+              ) : (
+                <button
+                  disabled
+                  title="Presensi anak harus Hadir terlebih dahulu untuk mengisi SOAP"
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-gray-400 text-xs font-semibold py-2 rounded-lg cursor-not-allowed border border-gray-200"
+                >
+                  <FileText size={13} />
+                  Isi SOAP (Belum Hadir)
+                </button>
+              )}
+              <button
+                onClick={() => onDetail(item)}
+                className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-white border border-teal-100 text-[#1E5C58] hover:bg-teal-50/20 text-xs font-semibold py-2 rounded-lg transition-colors"
+              >
+                <Eye size={13} />
+                Detail
+              </button>
+            </>
+          )}
+
+          {(statusFilter === "Terjadwal" || statusFilter === "Tertunda") && (!isMySpecialty || !canEdit) && (
             <button
               onClick={() => onDetail(item)}
               className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-white border border-teal-100 text-[#1E5C58] hover:bg-teal-50/20 text-xs font-semibold py-2 rounded-lg transition-colors"
@@ -814,29 +509,19 @@ function MobileJadwalCard({
               <Eye size={13} />
               Detail
             </button>
-          </>
-        )}
-        {/* Terjadwal + bukan keahliannya */}
-        {statusFilter === "Terjadwal" && !isMySpecialty && (
-          <button
-            onClick={() => onDetail(item)}
-            className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-white border border-teal-100 text-[#1E5C58] hover:bg-teal-50/20 text-xs font-semibold py-2 rounded-lg transition-colors"
-          >
-            <Eye size={13} />
-            Detail
-          </button>
-        )}
-        {/* Selesai → Lihat Hasil */}
-        {statusFilter === "Selesai" && (
-          <button
-            onClick={() => onLihatHasil(item)}
-            className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-white border border-teal-100 text-[#1E5C58] hover:bg-teal-50/20 text-xs font-semibold py-2 rounded-lg transition-colors"
-          >
-            <Eye size={13} />
-            Lihat Hasil
-          </button>
-        )}
-      </div>
+          )}
+
+          {statusFilter === "Selesai" && (
+            <button
+              onClick={() => onLihatHasil(item)}
+              className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-white border border-teal-100 text-[#1E5C58] hover:bg-teal-50/20 text-xs font-semibold py-2 rounded-lg transition-colors"
+            >
+              <Eye size={13} />
+              Lihat Hasil
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -856,8 +541,6 @@ function PaginationFooter({
   onPageSizeChange: (size: number) => void;
 }) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-
-  // Calculate displayed range
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalItems);
 
@@ -923,20 +606,61 @@ function JadwalContent() {
     }
   });
 
-  const profileApplied = useRef(false);
+  const profileApplied = useRef(Boolean(urlType));
 
   useEffect(() => {
-    // Memastikan saat halaman di-refresh (mount awal), tab kembali ke keahlian aslinya
     if (profile?.therapist_section && !profileApplied.current) {
-      const section = profile.therapist_section.toLowerCase();
-      if (section.includes("okupasi")) setActiveTab("Terapi Okupasi");
-      else if (section.includes("wicara")) setActiveTab("Terapi Wicara");
-      else if (section.includes("fisio")) setActiveTab("Fisioterapi");
-      else setActiveTab("PLB (Paedagog)");
-
+      if (!urlType) {
+        const section = profile.therapist_section.toLowerCase();
+        let targetTab: TerapiTab = "PLB (Paedagog)";
+        if (section.includes("okupasi")) targetTab = "Terapi Okupasi";
+        else if (section.includes("wicara")) targetTab = "Terapi Wicara";
+        else if (section.includes("fisio")) targetTab = "Fisioterapi";
+        setActiveTab(targetTab);
+        setScheduleScope("mine");
+      } else {
+        const isSpecialty = checkIsMySpecialty(activeTab, profile.therapist_section);
+        setScheduleScope(isSpecialty ? "mine" : "all");
+      }
       profileApplied.current = true;
     }
-  }, [profile]);
+  }, [profile, urlType, activeTab]);
+
+  useEffect(() => {
+    if (urlType) {
+      const mappedTab: TerapiTab = (() => {
+        switch (urlType) {
+          case "okupasi": return "Terapi Okupasi";
+          case "wicara": return "Terapi Wicara";
+          case "fisio": return "Fisioterapi";
+          default: return "PLB (Paedagog)";
+        }
+      })();
+
+      setActiveTab((prev) => {
+        if (prev !== mappedTab) {
+          const isSpecialty = checkIsMySpecialty(mappedTab, profile?.therapist_section);
+          setScheduleScope(isSpecialty ? "mine" : "all");
+          return mappedTab;
+        }
+        return prev;
+      });
+    }
+  }, [urlType, profile?.therapist_section]);
+
+  useEffect(() => {
+    if (urlStatus) {
+      if (urlStatus === "completed" || urlStatus === "selesai") {
+        setActiveFilter("Selesai");
+      } else if (urlStatus === "reschedule") {
+        setActiveFilter("Reschedule");
+      } else if (urlStatus === "pending" || urlStatus === "tertunda") {
+        setActiveFilter("Tertunda");
+      } else if (urlStatus === "scheduled" || urlStatus === "terjadwal") {
+        setActiveFilter("Terjadwal");
+      }
+    }
+  }, [urlStatus]);
 
   const [activeFilter, setActiveFilter] = useState<StatusFilter>(
     urlStatus === "completed" || urlStatus === "selesai"
@@ -947,18 +671,48 @@ function JadwalContent() {
           ? "Tertunda"
           : "Terjadwal"
   );
+  const [scheduleScope, setScheduleScope] = useState<ScheduleScope>("mine");
 
   const isMySpecialtyTab = useMemo(() => {
-    if (!profile?.therapist_section) return false;
-    const section = profile.therapist_section.toLowerCase();
-    const tabLower = activeTab.toLowerCase();
-    return tabLower.includes(section) || (section.includes("plb") && activeTab === "PLB (Paedagog)");
+    return checkIsMySpecialty(activeTab, profile?.therapist_section);
   }, [profile, activeTab]);
 
-  const [jadwalData] = useState<JadwalRow[]>(dummyJadwalData);
+  const prevTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    if (prevTabRef.current !== activeTab) {
+      prevTabRef.current = activeTab;
+      if (isMySpecialtyTab) {
+        setScheduleScope("mine");
+      } else {
+        setScheduleScope("all");
+      }
+      setDateRangeMode("hari-ini");
+      setDateFilter("");
+    }
+  }, [activeTab, isMySpecialtyTab]);
+
+  const prevFilterRef = useRef(activeFilter);
+
+  useEffect(() => {
+    if (prevFilterRef.current !== activeFilter) {
+      prevFilterRef.current = activeFilter;
+      setDateRangeMode("hari-ini");
+      setDateFilter("");
+    }
+  }, [activeFilter]);
+
+  const activeRequestIdRef = useRef(0);
+
+  const [items, setItems] = useState<JadwalRow[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pendingSessionsCount, setPendingSessionsCount] = useState(0);
+
   const [dateRangeMode, setDateRangeMode] = useState<DateRangeFilter>("hari-ini");
   const [dateFilter, setDateFilter] = useState("");
   const [searchName, setSearchName] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   // Pagination states
@@ -985,14 +739,26 @@ function JadwalContent() {
 
   // Sync URL params
   useEffect(() => {
-    router.replace(`?type=${getType()}&status=${getMappedStatus()}`);
+    const currentType = getType();
+    const currentStatus = getMappedStatus();
+    if (urlType !== currentType || urlStatus !== currentStatus) {
+      router.replace(`?type=${currentType}&status=${currentStatus}`);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilter, activeTab]);
+  }, [activeFilter, activeTab, urlType, urlStatus]);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchName);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchName]);
 
   // Reset page on filter change
   useEffect(() => {
     setPage(1);
-  }, [activeTab, activeFilter, dateFilter, searchName]);
+  }, [activeTab, activeFilter, dateRangeMode, dateFilter, debouncedSearch, scheduleScope]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -1001,78 +767,94 @@ function JadwalContent() {
     return () => window.removeEventListener("click", handleOutsideClick);
   }, []);
 
-  // Filter data
-  const filtered = useMemo(() => {
-    return jadwalData.filter((row) => {
-      if (row.tipeTerapi !== activeTab) return false;
+  // Fetch pending count untuk banner
+  const fetchPendingCount = useCallback(async () => {
+    if (!isMySpecialtyTab || scheduleScope !== "mine") {
+      setPendingSessionsCount(0);
+      return;
+    }
+    const count = await getPendingSessionsCount(mapTabToTherapyType(activeTab));
+    setPendingSessionsCount(count);
+  }, [activeTab, scheduleScope, isMySpecialtyTab]);
 
-      if (searchName.trim()) {
-        const lower = searchName.toLowerCase();
-        if (
-          !row.namaPasien.toLowerCase().includes(lower) &&
-          !row.namaOrangTua.toLowerCase().includes(lower)
-        ) {
-          return false;
-        }
+  useEffect(() => {
+    fetchPendingCount();
+  }, [fetchPendingCount]);
+
+  // Fetch jadwal terapi dari API backend
+  const fetchJadwalData = useCallback(async () => {
+    const requestId = ++activeRequestIdRef.current;
+    setIsLoading(true);
+
+    try {
+      const therapyType = mapTabToTherapyType(activeTab);
+      const statusParam = mapFilterToVirtualStatus(activeFilter);
+
+      let dateRangeParam: "today" | "tomorrow" | "this_week" | "this_month" | undefined = undefined;
+      let dateParam: string | undefined = undefined;
+
+      if (dateRangeMode === "custom" && dateFilter) {
+        dateParam = dateFilter;
+      } else if (activeFilter === "Terjadwal") {
+        if (dateRangeMode === "hari-ini") dateRangeParam = "today";
+        else if (dateRangeMode === "besok") dateRangeParam = "tomorrow";
+        else if (dateRangeMode === "minggu-ini") dateRangeParam = "this_week";
+        else if (dateRangeMode === "bulan-ini") dateRangeParam = "this_month";
       }
 
-      if (activeFilter === "Tertunda") {
-        return row.status === "Terjadwal" && row.tanggal < getTodayDateStr();
+      const res = await getTherapySessions({
+        therapy_type: therapyType,
+        status: statusParam,
+        date_range: dateRangeParam,
+        date: dateParam,
+        my_sessions: isMySpecialtyTab ? scheduleScope === "mine" : false,
+        search: debouncedSearch.trim() || undefined,
+        page,
+        per_page: pageSize,
+      });
+
+      if (requestId !== activeRequestIdRef.current) {
+        return;
       }
 
-      const checkDateInRange = (dateStr: string | null | undefined) => {
-        if (!dateStr) return false;
-        if (dateRangeMode === "custom") return dateStr === dateFilter;
-        if (dateRangeMode === "hari-ini") return dateStr === getTodayDateStr();
-        if (dateRangeMode === "besok") return dateStr === getTomorrowDateStr();
-        if (dateRangeMode === "minggu-ini") {
-          const { start, end } = getWeekRangeStr();
-          return dateStr >= start && dateStr <= end;
+      const cleanItems = res.items.filter((item) => {
+        if (activeFilter === "Terjadwal") {
+          return item.status !== "cancelled" && !item.reschedule_info;
         }
-        if (dateRangeMode === "bulan-ini") {
-          const { start, end } = getMonthRangeStr();
-          return dateStr >= start && dateStr <= end;
-        }
-        return false;
-      };
+        return true;
+      });
 
-      if (activeFilter === "Terjadwal") {
-        return row.status === "Terjadwal" && checkDateInRange(row.tanggal);
-      } else if (activeFilter === "Selesai") {
-        if (dateRangeMode === "custom" && dateFilter) {
-          return row.status === "Selesai" && row.tanggal === dateFilter;
-        }
-        return row.status === "Selesai";
-      } else if (activeFilter === "Reschedule") {
-        if (dateRangeMode === "custom" && dateFilter) {
-          return checkDateInRange(row.tanggal_lama) && row.tanggal !== row.tanggal_lama;
-        }
-        return row.tanggal !== row.tanggal_lama; // tampil semua yang pernah di-reschedule
+      const mapped = cleanItems.map((item) =>
+        transformSessionItemToRow(item, activeFilter)
+      );
+
+      setItems(mapped);
+      setTotalItems(res.meta.total);
+    } catch (err) {
+      if (requestId !== activeRequestIdRef.current) return;
+      console.error("Gagal memuat jadwal terapi:", err);
+      setItems([]);
+      setTotalItems(0);
+    } finally {
+      if (requestId === activeRequestIdRef.current) {
+        setIsLoading(false);
       }
+    }
+  }, [
+    activeTab,
+    activeFilter,
+    dateRangeMode,
+    dateFilter,
+    scheduleScope,
+    isMySpecialtyTab,
+    debouncedSearch,
+    page,
+    pageSize,
+  ]);
 
-      return false;
-    }).sort((a, b) => {
-      if (activeFilter === "Selesai") {
-        if (a.tanggal !== b.tanggal) return a.tanggal > b.tanggal ? -1 : 1;
-        return a.waktu > b.waktu ? -1 : 1;
-      } else if (activeFilter === "Tertunda") {
-        if (a.tanggal !== b.tanggal) return a.tanggal < b.tanggal ? -1 : 1; // terlama di atas
-        return a.waktu < b.waktu ? -1 : 1;
-      }
-      return a.waktu > b.waktu ? 1 : -1;
-    });
-  }, [jadwalData, activeTab, activeFilter, dateFilter, dateRangeMode, searchName]);
-
-  const pendingSessions = useMemo(() => {
-    return jadwalData.filter(
-      (row) => row.tipeTerapi === activeTab && row.status === "Terjadwal" && row.tanggal < getTodayDateStr()
-    );
-  }, [jadwalData, activeTab]);
-
-  const paginated = useMemo(
-    () => filtered.slice((page - 1) * pageSize, page * pageSize),
-    [filtered, page, pageSize]
-  );
+  useEffect(() => {
+    fetchJadwalData();
+  }, [fetchJadwalData]);
 
   const handleIsiSoap = (item: JadwalRow) => {
     if (typeof window !== "undefined") {
@@ -1119,6 +901,7 @@ function JadwalContent() {
     else if (dateRangeMode === "minggu-ini") dateText = "minggu ini.";
     else if (dateRangeMode === "bulan-ini") dateText = "bulan ini.";
     else dateText = `pada tanggal ${formatTanggal(dateFilter)}.`;
+
     if (activeFilter === "Reschedule") {
       if (dateRangeMode === "custom" && dateFilter) {
         return `Tidak ada riwayat reschedule pada tanggal ${formatTanggal(dateFilter)}.`;
@@ -1184,8 +967,19 @@ function JadwalContent() {
                       <button
                         key={tab}
                         onClick={() => {
+                          if (activeTab === tab) {
+                            setOpenDropdownId(null);
+                            return;
+                          }
+                          const isSpecialty = checkIsMySpecialty(tab, profile?.therapist_section);
+                          setItems([]);
+                          setIsLoading(true);
                           setActiveTab(tab);
+                          setScheduleScope(isSpecialty ? "mine" : "all");
                           setActiveFilter("Terjadwal");
+                          setDateRangeMode("hari-ini");
+                          setDateFilter("");
+                          setPage(1);
                           setSearchName("");
                           setOpenDropdownId(null);
                         }}
@@ -1204,7 +998,6 @@ function JadwalContent() {
         </div>
 
         {/* Filter Tanggal Cepat & Custom */}
-        {/* Filter Tanggal Cepat & Custom */}
         <div className="flex flex-col sm:flex-row sm:items-center w-full lg:w-auto bg-white border border-teal-100 rounded-xl shadow-[0_2px_8px_rgba(30,92,88,0.02)] p-1 shrink-0 gap-1 sm:gap-0">
           <AnimatePresence>
             {activeFilter === "Terjadwal" && (
@@ -1218,25 +1011,25 @@ function JadwalContent() {
                     width: 0,
                     transition: {
                       duration: 0.3,
-                      ease: "easeInOut"
-                    }
+                      ease: "easeInOut",
+                    },
                   },
                   visible: {
                     opacity: 1,
                     width: "auto",
                     transition: {
                       duration: 0.3,
-                      ease: "easeInOut"
-                    }
+                      ease: "easeInOut",
+                    },
                   },
                   exit: {
                     opacity: 0,
                     width: 0,
                     transition: {
                       duration: 0.4,
-                      ease: "easeInOut"
-                    }
-                  }
+                      ease: "easeInOut",
+                    },
+                  },
                 }}
                 className="flex overflow-hidden shrink-0"
               >
@@ -1290,7 +1083,10 @@ function JadwalContent() {
           </AnimatePresence>
 
           <div className="relative w-full sm:w-auto shrink-0">
-            <Calendar className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none z-10 ${dateRangeMode === "custom" ? "text-white" : "text-[#81B7A9]"}`} />
+            <Calendar
+              className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none z-10 ${dateRangeMode === "custom" ? "text-white" : "text-[#81B7A9]"
+                }`}
+            />
             <input
               type="date"
               value={dateFilter}
@@ -1316,13 +1112,23 @@ function JadwalContent() {
       <div className="flex flex-col items-start justify-between gap-4 p-2 bg-white border border-gray-100 shadow-sm xl:flex-row xl:items-center rounded-2xl">
         {/* Pill tabs */}
         <div className="relative grid w-full grid-cols-2 gap-1 p-1 md:flex md:flex-wrap xl:w-auto bg-gray-50/50 rounded-xl">
-          {(isMySpecialtyTab ? STATUS_TABS : STATUS_TABS.filter(t => t.label !== "Tertunda")).map(({ label, icon: Icon }) => {
+          {(isMySpecialtyTab
+            ? STATUS_TABS.filter((t) => t.label !== "Tertunda" || pendingSessionsCount > 0)
+            : STATUS_TABS.filter((t) => t.label !== "Tertunda")
+          ).map(({ label, icon: Icon }) => {
             const isActive = activeFilter === label;
             return (
               <button
                 key={label}
                 onClick={() => {
+                  if (activeFilter === label) return;
+                  setItems([]);
+                  setIsLoading(true);
                   setActiveFilter(label);
+                  setDateRangeMode("hari-ini");
+                  setDateFilter("");
+                  if (label === "Tertunda" && isMySpecialtyTab) setScheduleScope("mine");
+                  setPage(1);
                   setSearchName("");
                 }}
                 className={`cursor-pointer relative flex-1 md:min-w-[120px] py-2.5 text-xs sm:text-sm font-bold capitalize transition-all z-10 ${isActive ? "text-[#1E5C58]" : "text-gray-400 hover:text-gray-600"
@@ -1346,7 +1152,6 @@ function JadwalContent() {
               </button>
             );
           })}
-
         </div>
 
         {/* Search & Unduh */}
@@ -1370,7 +1175,7 @@ function JadwalContent() {
                 className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-teal-50 hover:bg-teal-50/50 text-[#1E5C58] rounded-lg text-sm font-bold transition-all shadow-sm"
               >
                 <Download size={16} />
-                <span className="hidden sm:inline">Hasil SOAP</span>
+                <span className="hidden sm:inline">Export SOAP</span>
               </button>
             </div>
           )}
@@ -1381,7 +1186,7 @@ function JadwalContent() {
       <div className="flex flex-col gap-3 -mt-2">
         {/* ── Banner Tertunda ── */}
         <AnimatePresence>
-          {isMySpecialtyTab && pendingSessions.length > 0 && activeFilter !== "Tertunda" && (
+          {isMySpecialtyTab && pendingSessionsCount > 0 && activeFilter !== "Tertunda" && (
             <motion.div
               initial={{ opacity: 0, y: -10, height: 0 }}
               animate={{ opacity: 1, y: 0, height: "auto" }}
@@ -1394,16 +1199,17 @@ function JadwalContent() {
                   <div>
                     <h3 className="text-sm font-bold text-amber-900">Ada Jadwal Tertunda</h3>
                     <p className="text-xs font-medium text-amber-700 mt-0.5">
-                      Anda memiliki {pendingSessions.length} jadwal dari hari sebelumnya yang belum diselesaikan.
+                      Anda memiliki {pendingSessionsCount} jadwal dari hari sebelumnya yang belum diselesaikan.
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => {
                     setActiveFilter("Tertunda");
+                    setDateRangeMode("hari-ini");
                     setDateFilter("");
                   }}
-                  className="px-4 py-2 text-xs font-bold text-white transition-colors shadow-sm shrink-0 bg-amber-600 hover:bg-amber-700 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-white transition-colors shadow-sm cursor-pointer shrink-0 bg-amber-600 hover:bg-amber-700 rounded-xl"
                 >
                   Lihat Jadwal
                 </button>
@@ -1414,213 +1220,261 @@ function JadwalContent() {
 
         {/* ── Area Header & Tabel ── */}
         <div className="flex flex-col gap-3">
-          {/* ── Header Tabel + Unduh Hasil ── */}
+          {/* Header Tabel */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-h-[44px]">
             <h2 className="text-sm md:text-base font-extrabold text-[#1E5C58] flex items-center gap-2.5">
               Daftar Terapi {activeFilter}
               <span className="bg-teal-50/80 text-teal-700 text-[11px] px-2.5 py-0.5 rounded-md border border-teal-100 font-bold">
-                {filtered.length} Sesi
+                {totalItems} Sesi
               </span>
             </h2>
+            {isMySpecialtyTab && activeFilter !== "Tertunda" && (
+              <div className="inline-flex items-center self-start gap-1 p-1 bg-white border border-teal-100 shadow-sm rounded-xl sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (scheduleScope === "mine") return;
+                    setItems([]);
+                    setIsLoading(true);
+                    setScheduleScope("mine");
+                    setPage(1);
+                  }}
+                  className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${scheduleScope === "mine"
+                    ? "bg-[#1E5C58] text-white shadow-sm"
+                    : "text-gray-500 hover:bg-teal-50/50 hover:text-[#1E5C58]"
+                    }`}
+                >
+                  Jadwalku
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (scheduleScope === "all") return;
+                    setItems([]);
+                    setIsLoading(true);
+                    setScheduleScope("all");
+                    setPage(1);
+                  }}
+                  className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${scheduleScope === "all"
+                    ? "bg-[#1E5C58] text-white shadow-sm"
+                    : "text-gray-500 hover:bg-teal-50/50 hover:text-[#1E5C58]"
+                    }`}
+                >
+                  Semua Jadwal
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* ── Table / Card Area ── */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`table-${activeTab}-${activeFilter}-${dateFilter}-${searchName}-${page}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="bg-white rounded-2xl border border-teal-50/60 shadow-[0_4px_24px_rgba(30,92,88,0.03)] hover:shadow-[0_8px_32px_rgba(30,92,88,0.06)] transition-shadow duration-300 overflow-hidden"
-            >
-              {/* Desktop Table */}
-              <div className="hidden lg:block">
-                <table className="w-full text-sm table-fixed">
-                  <thead>
-                    {activeFilter === "Reschedule" ? (
-                      <tr className="bg-[#F4F9F8] border-b border-teal-100">
-                        <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">PASIEN</th>
-                        <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">TELEPON</th>
-                        <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">TIPE TERAPI</th>
-                        <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">TERAPIS</th>
-                        <th className="w-[16%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">JADWAL SEMULA</th>
-                        <th className="w-[16%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">JADWAL BARU</th>
-                        <th className="w-[18%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">ALASAN</th>
-                      </tr>
-                    ) : (
-                      <tr className="bg-[#F4F9F8] border-b border-teal-100">
-                        <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Nama Pasien</th>
-                        <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Nama Orang Tua</th>
-                        <th className="w-[11%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Telepon</th>
-                        <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Tipe Terapi</th>
-                        <th className="w-[13%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Terapis</th>
-                        <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Tanggal Terapi</th>
-                        <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Waktu</th>
-                        <th className="w-[10%] px-4 py-4 text-xs font-bold tracking-wider text-center text-[#1E5C58] uppercase">Aksi</th>
-                      </tr>
-                    )}
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {paginated.length === 0 ? (
-                      <tr>
-                        <td colSpan={activeFilter === "Reschedule" ? 7 : 8} className="px-4 py-8 font-medium text-center text-gray-500">
-                          {emptyStateText}
-                        </td>
-                      </tr>
-                    ) : (
-                      paginated.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-[#EAF4F2]/20 transition-colors"
-                        >
-                          {activeFilter === "Reschedule" ? (
-                            <>
-                              <td className="px-4 py-4">
-                                <div className="font-extrabold text-gray-800 text-[13px]">{item.namaPasien}</div>
-                                <div className="inline-block bg-[#FDF1E6] text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1">
-                                  Wali: {item.namaOrangTua}
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 font-semibold text-gray-500">
-                                {item.telepon}
-                              </td>
-                              <td className="px-4 py-4 font-bold text-gray-600">
-                                {item.tipeTerapi}
-                              </td>
-                              <td className="px-4 py-4 font-bold text-gray-600">
-                                {item.terapis}
-                              </td>
-                              <td className="px-4 py-4">
-                                <div className="flex items-center gap-1.5 font-bold text-gray-800 text-[13px]">
-                                  <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                                  {item.tanggal_lama ? formatTanggal(item.tanggal_lama) : "—"}
-                                </div>
-                                <div className="flex items-center gap-1.5 font-semibold text-gray-500 text-[11px] mt-1">
-                                  <Clock className="w-3.5 h-3.5 text-gray-400" />
-                                  Pukul {item.waktu_lama ?? "—"}
-                                </div>
-                              </td>
-                              <td className="px-4 py-4">
-                                <div className="flex items-center gap-1.5 font-bold text-[#1E5C58] text-[13px]">
-                                  <Calendar className="w-3.5 h-3.5 text-[#1E5C58]" />
-                                  {formatTanggal(item.tanggal)}
-                                </div>
-                                <div className="flex items-center gap-1.5 font-semibold text-gray-500 text-[11px] mt-1">
-                                  <Clock className="w-3.5 h-3.5 text-[#1E5C58]" />
-                                  Pukul {item.waktu}
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 align-top">
-                                {item.kategori_alasan && (
-                                  <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold border ${getBadgeStyles(item.kategori_alasan)}`}>
-                                    {item.kategori_alasan}
+          {/* Table / Card Area */}
+          <div className="bg-white rounded-2xl border border-teal-50/60 shadow-[0_4px_24px_rgba(30,92,88,0.03)] hover:shadow-[0_8px_32px_rgba(30,92,88,0.06)] transition-shadow duration-300 overflow-hidden">
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full text-sm table-fixed">
+                <thead>
+                  {activeFilter === "Reschedule" ? (
+                    <tr className="bg-[#F4F9F8] border-b border-teal-100">
+                      <th className="w-[16%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">PASIEN</th>
+                      <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">TELEPON</th>
+                      <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">TIPE TERAPI</th>
+                      <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">TERAPIS</th>
+                      <th className="w-[18%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">JADWAL SEMULA</th>
+                      <th className="w-[18%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">JADWAL BARU</th>
+                      <th className="w-[20%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">ALASAN</th>
+                    </tr>
+                  ) : (
+                    <tr className="bg-[#F4F9F8] border-b border-teal-100">
+                      <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Nama Pasien</th>
+                      <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Nama Orang Tua</th>
+                      <th className="w-[11%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Telepon</th>
+                      <th className="w-[14%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Tipe Terapi</th>
+                      <th className="w-[13%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Terapis</th>
+                      <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Tanggal Terapi</th>
+                      <th className="w-[12%] px-4 py-4 text-xs font-bold tracking-wider text-left text-[#1E5C58] uppercase">Waktu</th>
+                      <th className="w-[10%] px-4 py-4 text-xs font-bold tracking-wider text-center text-[#1E5C58] uppercase">Aksi</th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={activeFilter === "Reschedule" ? 7 : 8} className="px-4 py-16 text-center">
+                        <div className="flex flex-col items-center justify-center gap-3 text-[#1E5C58]">
+                          <div className="h-7 w-7 animate-spin rounded-full border-3 border-[#81B7A9] border-t-transparent" />
+                          <p className="text-xs font-semibold text-gray-500">Memuat data terapi...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : items.length === 0 ? (
+                    <tr>
+                      <td colSpan={activeFilter === "Reschedule" ? 7 : 8} className="px-4 py-12 font-medium text-center text-gray-500">
+                        {emptyStateText}
+                      </td>
+                    </tr>
+                  ) : (
+                    items.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="hover:bg-[#EAF4F2]/20 transition-colors"
+                      >
+                        {activeFilter === "Reschedule" ? (
+                          <>
+                            <td className="px-4 py-4">
+                              <div className="font-extrabold text-gray-800 text-[13px]">{item.namaPasien}</div>
+                              <div className="inline-block bg-[#FDF1E6] text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1">
+                                Wali: {item.namaOrangTua}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 font-semibold text-gray-500">
+                              {item.telepon}
+                            </td>
+                            <td className="px-4 py-4 font-bold text-gray-600">
+                              {item.tipeTerapi}
+                            </td>
+                            <td className="px-4 py-4 font-bold text-gray-600">
+                              {item.terapis}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-1.5 font-bold text-gray-800 text-[13px]">
+                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                {item.tanggal_lama ? formatTanggal(item.tanggal_lama) : "—"}
+                              </div>
+                              <div className="flex items-center gap-1.5 font-semibold text-gray-500 text-[11px] mt-1">
+                                <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                Pukul {item.waktu_lama ?? "—"}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-1.5 font-bold text-[#1E5C58] text-[13px]">
+                                <Calendar className="w-3.5 h-3.5 text-[#1E5C58]" />
+                                {formatTanggal(item.tanggal)}
+                              </div>
+                              <div className="flex items-center gap-1.5 font-semibold text-gray-500 text-[11px] mt-1">
+                                <Clock className="w-3.5 h-3.5 text-[#1E5C58]" />
+                                Pukul {item.waktu}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              {item.alasan ? (
+                                <p className="text-xs text-gray-600 font-medium leading-relaxed max-w-[220px]">
+                                  {item.alasan}
+                                </p>
+                              ) : (
+                                <span className="text-xs text-gray-400">—</span>
+                              )}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-4 font-extrabold text-gray-800">
+                              {item.namaPasien}
+                            </td>
+                            <td className="px-4 py-4 font-semibold text-gray-600">
+                              {item.namaOrangTua}
+                            </td>
+                            <td className="px-4 py-4 font-semibold text-gray-500">
+                              {item.telepon}
+                            </td>
+                            <td className="px-4 py-4 font-bold text-gray-600">
+                              {item.tipeTerapi}
+                            </td>
+                            <td className="px-4 py-4 font-bold text-gray-600">
+                              {item.terapis}
+                            </td>
+                            <td className="px-4 py-4 font-semibold text-gray-500">
+                              <div>{formatTanggal(item.tanggal)}</div>
+                              {item.tanggal_lama && (
+                                <div className="flex flex-col items-start gap-1 mt-1">
+                                  <span className="inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
+                                    Reschedule
                                   </span>
-                                )}
-                                {item.alasan && (
-                                  <p className="mt-2 text-xs text-gray-500 font-medium leading-relaxed max-w-[180px]">
-                                    {item.alasan}
-                                  </p>
-                                )}
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="px-4 py-4 font-extrabold text-gray-800">
-                                {item.namaPasien}
-                              </td>
-                              <td className="px-4 py-4 font-semibold text-gray-600">
-                                {item.namaOrangTua}
-                              </td>
-                              <td className="px-4 py-4 font-semibold text-gray-500">
-                                {item.telepon}
-                              </td>
-                              <td className="px-4 py-4 font-bold text-gray-600">
-                                {item.tipeTerapi}
-                              </td>
-                              <td className="px-4 py-4 font-bold text-gray-600">
-                                {item.terapis}
-                              </td>
-                              <td className="px-4 py-4 font-semibold text-gray-500">
-                                <div>{formatTanggal(item.tanggal)}</div>
-                                {activeFilter === "Terjadwal" && item.tanggal_lama && item.tanggal_lama !== item.tanggal && (
-                                  <div className="flex flex-col items-start gap-1 mt-1">
-                                    <span className="inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
-                                      Reschedule
-                                    </span>
-                                    <span className="text-[10px] text-gray-400">
-                                      dari {formatTanggal(item.tanggal_lama)}
-                                    </span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-4 py-4 font-semibold text-gray-500">
-                                <div>{item.waktu}</div>
-                                {activeFilter === "Terjadwal" && item.waktu_lama && item.waktu_lama !== item.waktu && (
-                                  <div className="flex flex-col items-start gap-1 mt-1">
-                                    <span className="inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
-                                      Reschedule
-                                    </span>
-                                    <span className="text-[10px] text-gray-400">
-                                      dari {item.waktu_lama}
-                                    </span>
-                                  </div>
-                                )}
-                              </td>
-                              <ActionDropdown
-                                item={item}
-                                openDropdownId={openDropdownId}
-                                setOpenDropdownId={setOpenDropdownId}
-                                statusFilter={activeFilter}
-                                mySection={profile?.therapist_section ?? ""}
-                                currentTab={activeTab}
-                                onIsiSoap={handleIsiSoap}
-                                onDetail={handleDetail}
-                                onLihatHasil={handleLihatHasil}
-                              />
-                            </>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                                  <span className="text-[10px] text-gray-400">
+                                    dari {formatTanggal(item.tanggal_lama)}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 font-semibold text-gray-500">
+                              <div>{item.waktu}</div>
+                              {item.waktu_lama && item.waktu_lama !== item.waktu && (
+                                <div className="flex flex-col items-start gap-1 mt-1">
+                                  <span className="inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
+                                    Reschedule
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">
+                                    dari {item.waktu_lama}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <ActionDropdown
+                              item={item}
+                              openDropdownId={openDropdownId}
+                              setOpenDropdownId={setOpenDropdownId}
+                              statusFilter={activeFilter}
+                              mySection={profile?.therapist_section ?? ""}
+                              currentTab={activeTab}
+                              canEdit={
+                                isMySpecialtyTab &&
+                                !!profile?.therapist_name &&
+                                item.terapis.toLowerCase() === profile.therapist_name.toLowerCase()
+                              }
+                              onIsiSoap={handleIsiSoap}
+                              onDetail={handleDetail}
+                              onLihatHasil={handleLihatHasil}
+                            />
+                          </>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-              {/* Mobile Card View */}
-              <div className="block p-4 space-y-3 lg:hidden">
-                {paginated.length === 0 ? (
-                  <div className="px-4 py-8 font-medium text-center text-gray-500 bg-white border border-teal-100 border-dashed rounded-xl">
-                    {emptyStateText}
-                  </div>
-                ) : (
-                  paginated.map((item) => (
-                    <MobileJadwalCard
-                      key={item.id}
-                      item={item}
-                      statusFilter={activeFilter}
-                      mySection={profile?.therapist_section ?? ""}
-                      currentTab={activeTab}
-                      onIsiSoap={handleIsiSoap}
-                      onDetail={handleDetail}
-                      onLihatHasil={handleLihatHasil}
-                    />
-                  ))
-                )}
-              </div>
+            {/* Mobile Card View */}
+            <div className="block p-4 space-y-3 lg:hidden">
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-12">
+                  <div className="h-7 w-7 animate-spin rounded-full border-3 border-[#81B7A9] border-t-transparent" />
+                  <p className="text-xs font-semibold text-gray-500">Memuat data terapi...</p>
+                </div>
+              ) : items.length === 0 ? (
+                <div className="px-4 py-8 font-medium text-center text-gray-500 bg-white border border-teal-100 border-dashed rounded-xl">
+                  {emptyStateText}
+                </div>
+              ) : (
+                items.map((item) => (
+                  <MobileJadwalCard
+                    key={item.id}
+                    item={item}
+                    statusFilter={activeFilter}
+                    mySection={profile?.therapist_section ?? ""}
+                    currentTab={activeTab}
+                    canEdit={
+                      isMySpecialtyTab &&
+                      !!profile?.therapist_name &&
+                      item.terapis.toLowerCase() === profile.therapist_name.toLowerCase()
+                    }
+                    onIsiSoap={handleIsiSoap}
+                    onDetail={handleDetail}
+                    onLihatHasil={handleLihatHasil}
+                  />
+                ))
+              )}
+            </div>
 
-              <PaginationFooter
-                totalItems={filtered.length}
-                currentPage={page}
-                pageSize={pageSize}
-                onPageChange={setPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size);
-                  setPage(1);
-                }}
-              />
-            </motion.div>
-          </AnimatePresence>
+            <PaginationFooter
+              totalItems={totalItems}
+              currentPage={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

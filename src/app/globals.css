@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@400;600;800&display=swap');
+@import "tailwindcss";
 
 :root {
   --foreground-rgb: 0, 0, 0;

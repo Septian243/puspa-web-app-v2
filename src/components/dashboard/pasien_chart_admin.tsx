@@ -229,14 +229,14 @@ export default function PasienChartAdmin({ data, loading }: PasienChartProps) {
                       setActiveIndex(activeIndex === index ? null : index)
                     }
                     className={`flex items-center gap-2 group cursor-pointer p-2 rounded-lg transition-all duration-150 ${activeIndex === index
-                        ? "bg-teal-50 shadow-sm translate-x-1"
-                        : "hover:bg-teal-50/50"
+                      ? "bg-teal-50 shadow-sm translate-x-1"
+                      : "hover:bg-teal-50/50"
                       }`}
                   >
                     <div
                       className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-sm transition-all duration-150 ${activeIndex === index
-                          ? "scale-150"
-                          : "group-hover:scale-125"
+                        ? "scale-150"
+                        : "group-hover:scale-125"
                         }`}
                       style={{ backgroundColor: COLORS[index % COLORS.length] }}
                     />
