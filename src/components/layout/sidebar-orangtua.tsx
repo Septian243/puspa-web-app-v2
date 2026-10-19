@@ -14,38 +14,91 @@ import {
   User,
   Lock,
   LogOut,
+  Settings,
   AlertTriangle,
   CalendarCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSidebar } from "@/context/SidebarContext";
-import { useProfile } from "@/context/ProfileContext";
 
-export const menuOrangtua = [
+interface MenuItem {
+  name: string;
+  path?: string;
+  icon: React.ElementType;
+  dropdown?: MenuItem[];
+}
+
+interface MenuGroup {
+  section: string | null;
+  items: MenuItem[];
+}
+
+export const menuOrangtua: MenuGroup[] = [
   {
-    name: "Dashboard",
-    icon: LayoutGrid,
-    path: "/orangtua/dashboard",
+    section: null,
+    items: [
+      {
+        name: "Dashboard",
+        icon: LayoutGrid,
+        path: "/orangtua/dashboard",
+      },
+    ],
   },
   {
-    name: "Anak",
-    icon: Baby,
-    path: "/orangtua/anak",
+    section: "Manajemen Data",
+    items: [
+      {
+        name: "Anak",
+        icon: Baby,
+        path: "/orangtua/anak",
+      },
+      {
+        name: "Assessment",
+        icon: UserSquare2,
+        path: "/orangtua/assessment",
+      },
+      {
+        name: "Terapi",
+        icon: CalendarCheck,
+        path: "/orangtua/terapi",
+      },
+    ],
   },
   {
-    name: "Assessment",
-    icon: UserSquare2,
-    path: "/orangtua/assessment",
+    section: "Bantuan",
+    items: [
+      {
+        name: "Help",
+        icon: HelpCircle,
+        path: "/orangtua/help",
+      },
+    ],
   },
   {
-    name: "Terapi",
-    icon: CalendarCheck,
-    path: "/orangtua/terapi",
-  },
-  {
-    name: "Help",
-    icon: HelpCircle,
-    path: "/orangtua/help",
+    section: "Kelola Akun",
+    items: [
+      {
+        name: "Pengaturan",
+        icon: Settings,
+        dropdown: [
+          {
+            name: "Ubah Profil",
+            icon: User,
+            path: "/orangtua/profil",
+          },
+          {
+            name: "Ubah Password",
+            icon: Lock,
+            path: "/orangtua/ubahPassword",
+          },
+        ],
+      },
+      {
+        name: "Logout",
+        icon: LogOut,
+        path: "/auth/login",
+      },
+    ],
   },
 ];
 
@@ -57,16 +110,11 @@ interface SidebarOrangtuaProps {
 export default function SidebarOrangtua({ isOpen = false, onClose = () => {} }: SidebarOrangtuaProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [openProfileMenu, setOpenProfileMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const { profile } = useProfile();
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [windowWidth, setWindowWidth] = useState(1024);
   const { isCollapsed, toggleSidebar } = useSidebar();
-
-  const guardianName = profile?.guardian_name || "User";
-  const email = profile?.email || "-";
-  const avatar = profile?.profile_picture;
 
   const handleLogout = () => {
     localStorage.clear();
@@ -164,172 +212,143 @@ export default function SidebarOrangtua({ isOpen = false, onClose = () => {} }: 
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex-1 space-y-2 sidebar-scroll overflow-y-auto px-4 py-8">
-          {menuOrangtua.map((item, i) => {
-            const active = pathname === item.path || pathname.startsWith(item.path + "/");
-            const Icon = item.icon;
-            return (
-              <Link
-                key={i}
-                href={item.path}
-                className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group
-                ${
-                  active
-                    ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                    : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
-                }`}
-              >
-                <div
-                  className={`p-1.5 rounded-lg transition-colors duration-300 
-                  ${
-                    active
-                      ? (isCollapsed ? "text-white bg-transparent" : "bg-white/20 text-white")
-                      : `text-gray-400 ${isCollapsed ? "group-hover:text-[#2B7A75]" : "group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]"}`
-                  }`}
-                >
-                  <Icon size={18} strokeWidth={2.5} />
-                </div>
-                <span className="sidebar-text text-sm font-semibold">
-                  {item.name}
-                </span>
-              </Link>
-            );
-          })}
+        <nav className="flex-1 space-y-7 sidebar-scroll overflow-y-auto px-4 py-8">
+          {menuOrangtua.map((group, groupIndex) => (
+            <div key={groupIndex} className="flex flex-col gap-1.5">
+              {group.section && (
+                <p className="sidebar-section-title text-[11px] font-bold tracking-wider uppercase mb-1 px-3 text-[#2B7A75]/60">
+                  {group.section}
+                </p>
+              )}
 
-          {/* Mobile Only Account Section */}
-          <div className="md:hidden pt-4 mt-4 border-t border-gray-100 space-y-1">
-            <p className="text-[10px] font-bold tracking-wider uppercase mb-2 px-3 text-[#2B7A75]/60">
-              Kelola Akun
-            </p>
-            <Link
-              href="/orangtua/profil"
-              className={`flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group
-              ${
-                pathname === "/orangtua/profil"
-                  ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                  : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
-              }`}
-            >
-              <div
-                className={`p-1.5 rounded-lg transition-colors duration-300 
-                ${
-                  pathname === "/orangtua/profil"
-                    ? "bg-white/20 text-white"
-                    : "text-gray-400 group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]"
-                }`}
-              >
-                <User size={18} strokeWidth={2.5} />
-              </div>
-              <span className="sidebar-text text-sm font-semibold">Profil</span>
-            </Link>
+              {group.items.map((item, itemIndex) => {
+                const active = item.path
+                  ? pathname === item.path || pathname.startsWith(item.path + "/")
+                  : false;
+                const Icon = item.icon;
+                const isLogout = item.name === "Logout";
+                const isChildActive = item.dropdown?.some(
+                  (sub) => sub.path && (pathname === sub.path || pathname.startsWith(sub.path + "/")),
+                ) ?? false;
 
-            <Link
-              href="/orangtua/ubahPassword"
-              className={`flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group
-              ${
-                pathname === "/orangtua/ubahPassword"
-                  ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                  : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
-              }`}
-            >
-              <div
-                className={`p-1.5 rounded-lg transition-colors duration-300 
-                ${
-                  pathname === "/orangtua/ubahPassword"
-                    ? "bg-white/20 text-white"
-                    : "text-gray-400 group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]"
-                }`}
-              >
-                <Lock size={18} strokeWidth={2.5} />
-              </div>
-              <span className="sidebar-text text-sm font-semibold">Ubah Password</span>
-            </Link>
+                if (item.dropdown) {
+                  const isOpen = openDropdown === item.name || isChildActive;
 
-            <button
-              onClick={() => setShowLogoutModal(true)}
-              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group text-red-500 hover:bg-red-50 hover:text-red-600 cursor-pointer"
-            >
-              <div className="p-1.5 rounded-lg text-gray-400 group-hover:bg-red-100/50 group-hover:text-red-500 transition-colors duration-300">
-                <LogOut size={18} strokeWidth={2.5} />
-              </div>
-              <span className="sidebar-text text-sm font-semibold">Logout</span>
-            </button>
-          </div>
+                  return (
+                    <div key={itemIndex} className="relative flex flex-col group/menu">
+                      <button
+                        onClick={() => {
+                          if (!isCollapsed) {
+                            setOpenDropdown(isOpen && openDropdown === item.name ? null : item.name);
+                          }
+                        }}
+                        className={`w-full flex justify-between items-center px-3.5 py-3 rounded-xl transition-all duration-300 group
+                        ${isCollapsed
+                            ? (isChildActive
+                              ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
+                              : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]")
+                            : ((isOpen || isChildActive)
+                              ? "bg-[#F4F9F8] text-[#1E5C58]"
+                              : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]")
+                          }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-1.5 rounded-lg transition-colors duration-300 ${
+                            isCollapsed
+                              ? (isChildActive ? "text-white bg-transparent" : "text-gray-400 group-hover:text-[#2B7A75]")
+                              : ((isOpen || isChildActive) ? "bg-[#2B7A75]/10 text-[#2B7A75]" : "text-gray-400 group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]")
+                          }`}>
+                            <Icon size={18} strokeWidth={2.5} />
+                          </div>
+                          <span className="sidebar-text text-sm font-semibold">{item.name}</span>
+                        </div>
+                        <ChevronDown
+                          size={16}
+                          strokeWidth={3}
+                          className={`sidebar-chevron transition-transform duration-300 text-gray-400 group-hover:text-[#2B7A75] ${isOpen ? "rotate-180 text-[#2B7A75]" : ""}`}
+                        />
+                      </button>
+
+                      <AnimatePresence>
+                        {isOpen && !isCollapsed && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                            className="overflow-hidden sidebar-text"
+                          >
+                            <div className="ml-10 mt-1 space-y-1 relative before:absolute before:inset-y-0 before:left-[-14px] before:w-px before:bg-gray-200">
+                              {item.dropdown.map((sub, subIndex) => {
+                                const SubIcon = sub.icon;
+                                const subActive = sub.path === pathname || (sub.path ? pathname.startsWith(sub.path + "/") : false);
+                                return (
+                                  <Link
+                                    key={subIndex}
+                                    href={sub.path || "#"}
+                                    className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13.5px] transition-all duration-300 ${
+                                      subActive
+                                        ? "text-[#1E5C58] bg-[#F4F9F8] font-bold before:absolute before:left-[-15px] before:w-[3px] before:h-5 before:bg-[#2B7A75] before:rounded-r-full"
+                                        : "text-gray-500 hover:text-[#2B7A75] hover:bg-gray-50 font-medium"
+                                    }`}
+                                  >
+                                    <SubIcon size={15} strokeWidth={2.5} className={subActive ? "text-[#2B7A75]" : "opacity-60"} />
+                                    <span>{sub.name}</span>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                }
+
+                if (isLogout) {
+                  return (
+                    <button
+                      key={itemIndex}
+                      onClick={() => setShowLogoutModal(true)}
+                      className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group text-red-500 hover:bg-red-50 hover:text-red-600 mt-2 cursor-pointer"
+                    >
+                      <div className="p-1.5 rounded-lg text-gray-400 group-hover:bg-red-100/50 group-hover:text-red-500 transition-colors duration-300">
+                        <Icon size={18} strokeWidth={2.5} />
+                      </div>
+                      <span className="sidebar-text text-sm font-semibold">{item.name}</span>
+                    </button>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={itemIndex}
+                    href={item.path || "#"}
+                    className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-300 group
+                    ${
+                      active
+                        ? "bg-[#2B7A75] text-white shadow-md shadow-teal-500/20"
+                        : "text-gray-600 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
+                    }`}
+                  >
+                    <div
+                      className={`p-1.5 rounded-lg transition-colors duration-300
+                      ${
+                        active
+                          ? (isCollapsed ? "text-white bg-transparent" : "bg-white/20 text-white")
+                          : `text-gray-400 ${isCollapsed ? "group-hover:text-[#2B7A75]" : "group-hover:bg-[#2B7A75]/10 group-hover:text-[#2B7A75]"}`
+                      }`}
+                    >
+                      <Icon size={18} strokeWidth={2.5} />
+                    </div>
+                    <span className="sidebar-text text-sm font-semibold">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        {/* Profile Dropdown Section at bottom */}
-        <div className="hidden md:block p-4 border-t border-gray-150 mt-auto bg-white/50 backdrop-blur-md relative">
-          <div
-            className="flex items-center justify-between cursor-pointer p-2 rounded-2xl hover:bg-gray-50 transition-colors"
-            onClick={() => setOpenProfileMenu(!openProfileMenu)}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#A2E4D3] shadow-sm flex items-center justify-center bg-[#F4F9F8] shrink-0">
-                {avatar ? (
-                  <Image
-                    src={avatar}
-                    alt="Avatar"
-                    width={36}
-                    height={36}
-                    className="object-cover w-full h-full"
-                  />
-                ) : (
-                  <User className="w-5 h-5 text-[#2B7A75]" />
-                )}
-              </div>
-
-              <div className="sidebar-text flex flex-col min-w-0">
-                <span className="text-xs font-bold text-[#1E5C58] truncate">
-                  {guardianName}
-                </span>
-                <br />
-                <span className="text-[10px] font-semibold text-gray-400 truncate">
-                  {email}
-                </span>
-              </div>
-            </div>
-
-            <div className="sidebar-chevron">
-              {openProfileMenu ? (
-                <ChevronDown size={16} className="text-gray-400 shrink-0" />
-              ) : (
-                <ChevronRight size={16} className="text-gray-400 shrink-0" />
-              )}
-            </div>
-          </div>
-
-          <AnimatePresence>
-            {openProfileMenu && (
-              <motion.div
-                initial={isCollapsed ? { opacity: 0, scale: 0.95, x: -10 } : { opacity: 0, y: 10 }}
-                animate={isCollapsed ? { opacity: 1, scale: 1, x: 0 } : { opacity: 1, y: 0 }}
-                exit={isCollapsed ? { opacity: 0, scale: 0.95, x: -10 } : { opacity: 0, y: 10 }}
-                className={`space-y-1 p-2 rounded-2xl border border-teal-50 bg-white shadow-xl ${
-                  isCollapsed
-                    ? "absolute left-full bottom-4 ml-3 min-w-[180px] z-50 shadow-teal-900/5"
-                    : "mt-3 bg-gray-50/50"
-                }`}
-              >
-                <Link href="/orangtua/profil">
-                  <div className={`flex items-center gap-2.5 text-xs font-bold px-3 py-2.5 rounded-xl transition cursor-pointer ${pathname === "/orangtua/profil" ? "text-white bg-[#2B7A75]" : "text-gray-650 hover:bg-gray-100"}`}>
-                    <User size={15} /> Profil
-                  </div>
-                </Link>
-                <Link href="/orangtua/ubahPassword">
-                  <div className={`flex items-center gap-2.5 text-xs font-bold px-3 py-2.5 rounded-xl transition cursor-pointer ${pathname === "/orangtua/ubahPassword" ? "text-white bg-[#2B7A75]" : "text-gray-655 hover:bg-gray-100"}`}>
-                    <Lock size={15} /> Ubah Password
-                  </div>
-                </Link>
-                <button
-                  onClick={() => setShowLogoutModal(true)}
-                  className="w-full flex items-center gap-2.5 text-xs font-bold px-3 py-2.5 rounded-xl cursor-pointer text-red-655 hover:bg-red-50 hover:text-red-700 transition-colors duration-300"
-                >
-                  <LogOut size={15} /> Logout
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </motion.aside>
 
       {/* Logout Confirmation Modal */}
