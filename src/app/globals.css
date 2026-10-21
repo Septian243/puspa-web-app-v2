@@ -124,9 +124,9 @@ input[type="month"]:valid::-webkit-datetime-edit-year-field {
 
 /* Set default dimensions in expanded state to allow smooth collapse transition */
 aside {
-  width: 220px;
-  min-width: 220px;
-  max-width: 220px;
+  width: 256px;
+  min-width: 256px;
+  max-width: 256px;
   transition:
     width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
