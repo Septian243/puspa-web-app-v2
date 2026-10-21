@@ -51,6 +51,8 @@ export interface RescheduleItem {
     id: string;
     session_number: number;
     session_date: string;
+    start_time?: string;
+    end_time?: string;
     therapist_name: string;
     status: string;
   } | null;
@@ -58,6 +60,8 @@ export interface RescheduleItem {
     id: string;
     session_number: number;
     session_date: string;
+    start_time?: string;
+    end_time?: string;
     therapist_name: string;
     status: string;
   } | null;
@@ -208,6 +212,8 @@ export async function createReschedule(
   sessionId: string,
   data: {
     new_date: string;
+    start_time?: string;
+    end_time?: string;
     new_therapist_id?: string;
     reason: string;
     requested_by: "children" | "therapist" | "guardian";

@@ -1450,6 +1450,8 @@ export default function PresensiPage() {
       if (payload.reschedule && payload.tanggalBaru) {
         await createReschedule(payload.id, {
           new_date: payload.tanggalBaru,
+          start_time: payload.jamMulaiBaru || undefined,
+          end_time: payload.jamSelesaiBaru || undefined,
           new_therapist_id: payload.terapisBaruId || undefined,
           reason: payload.keterangan || "Di-reschedule saat presensi",
           requested_by: "guardian",
