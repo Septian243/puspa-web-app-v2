@@ -77,7 +77,12 @@ export default function AdminDashboard() {
       setTodaySchedule(scheduleData);
       if (statsData) {
         setStats(statsData);
-        setPatientCategories(statsData.patient_categories || []);
+        const filteredCategories = (statsData.patient_categories || []).filter(
+          (c) =>
+            !c.type_key?.toLowerCase().includes("umum") &&
+            !c.type?.toLowerCase().includes("umum")
+        );
+        setPatientCategories(filteredCategories);
       } else {
         setStats(null);
       }

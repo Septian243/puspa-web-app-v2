@@ -194,7 +194,7 @@ function SoapGrid({ soap }: { soap: SoapNote }) {
           <p className="text-[9px] font-extrabold text-[#2B7A75] uppercase tracking-widest mb-1">
             {key}
           </p>
-          <p className="text-sm text-gray-700 leading-relaxed">{val}</p>
+          <p className="text-xs text-gray-700 leading-relaxed">{val}</p>
         </div>
       ))}
     </div>
@@ -246,21 +246,21 @@ function SesiCard({ sesi, defaultOpen = false }: { sesi: RiwayatSesi; defaultOpe
             </div>
 
             {/* Title */}
-            <h3 className="text-base font-bold text-gray-800 leading-tight">
+            <h3 className="text-sm font-bold text-gray-800 leading-tight">
               {sesi.judulSesi}
             </h3>
-            <p className="text-xs text-gray-400 font-medium mt-0.5">{sesi.deskripsiSingkat}</p>
+            <p className="text-[11px] text-gray-400 font-medium mt-0.5">{sesi.deskripsiSingkat}</p>
           </div>
 
           {/* Toggle icon */}
           <div
-            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-all ${
+            className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-full border transition-all ${
               open
                 ? "border-[#2B7A75] bg-[#2B7A75] text-white"
                 : "border-gray-200 bg-gray-50 text-gray-400 hover:border-teal-300"
             }`}
           >
-            {open ? <ChevronUp size={16} strokeWidth={2.5} /> : <ChevronDown size={16} strokeWidth={2.5} />}
+            {open ? <ChevronUp size={14} strokeWidth={2.5} /> : <ChevronDown size={14} strokeWidth={2.5} />}
           </div>
         </div>
       </button>
@@ -277,32 +277,32 @@ function SesiCard({ sesi, defaultOpen = false }: { sesi: RiwayatSesi; defaultOpe
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 border-t border-gray-100">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-4 mt-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-3.5 mt-4">
                 {/* Left column: basic info */}
-                <div className="sm:col-span-1 space-y-4">
+                <div className="sm:col-span-1 space-y-3">
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Nama Anak</p>
-                    <p className="text-sm font-bold text-gray-800">{sesi.namaAnak}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Nama Anak</p>
+                    <p className="text-xs font-bold text-gray-800">{sesi.namaAnak}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Jenis Terapi</p>
-                    <p className="text-sm font-bold text-gray-800">{sesi.jenisTerapi}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Jenis Terapi</p>
+                    <p className="text-xs font-bold text-gray-800">{sesi.jenisTerapi}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Terapis</p>
-                    <p className="text-sm font-bold text-gray-800">{sesi.terapis}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Terapis</p>
+                    <p className="text-xs font-bold text-gray-800">{sesi.terapis}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Tanggal & Jam</p>
-                    <p className="text-sm font-bold text-gray-800">{sesi.tanggal} pukul {sesi.jamMulai}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Tanggal & Jam</p>
+                    <p className="text-xs font-bold text-gray-800">{sesi.tanggal} pukul {sesi.jamMulai}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Durasi Sesi</p>
-                    <p className="text-sm font-bold text-gray-800">{sesi.durasi}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Durasi Sesi</p>
+                    <p className="text-xs font-bold text-gray-800">{sesi.durasi}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Diagnosis Terapi</p>
-                    <p className="text-sm font-bold text-gray-800">{sesi.diagnosisTerapi}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Diagnosis Terapi</p>
+                    <p className="text-xs font-bold text-gray-800">{sesi.diagnosisTerapi}</p>
                   </div>
                 </div>
 
@@ -340,45 +340,45 @@ export default function RiwayatTerapiPage() {
   return (
     <ResponsiveOrangtuaLayout maxWidth="max-w-full">
       {/* Page Header */}
-      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+      <div className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight flex items-center gap-2">
-            <History className="w-7 h-7 text-[#2B7A75]" />
+          <h1 className="text-xl font-extrabold text-[#1E5C58] tracking-tight flex items-center gap-2">
+            <History className="w-6 h-6 text-[#2B7A75]" />
             Riwayat Terapi Anak
           </h1>
-          <p className="text-sm text-[#2B7A75]/70 mt-1 font-medium">
+          <p className="text-xs text-[#2B7A75]/70 mt-0.5 font-medium">
             Lihat riwayat seluruh sesi terapi atau pilih sebagian saja
           </p>
         </div>
         <button
           onClick={() => router.back()}
-          className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 bg-[#1E5C58] hover:bg-[#163F3C] text-white text-sm font-bold rounded-xl shadow-md shadow-teal-900/20 transition-all active:scale-95 shrink-0"
+          className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 shrink-0"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={14} />
           Kembali ke Daftar
         </button>
       </div>
 
       {/* Filter Card */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-5 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
-        <div className="mb-4">
-          <span className="inline-block px-3 py-1 bg-gray-100 text-gray-500 text-[10px] font-extrabold uppercase tracking-widest rounded-full">
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 mb-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
+        <div className="mb-3">
+          <span className="inline-block px-2.5 py-0.5 bg-gray-100 text-gray-500 text-[9.5px] font-extrabold uppercase tracking-widest rounded-full">
             Filter Riwayat
           </span>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-5 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-wrap">
           {/* Anak selector */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Anak</p>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {ANAK_LIST.map((a) => (
                 <button
                   key={a}
                   onClick={() => setSelectedAnak(a)}
-                  className={`cursor-pointer px-4 py-1.5 rounded-full text-sm font-bold transition-all border ${
+                  className={`cursor-pointer px-3 py-1 rounded-full text-xs font-bold transition-all border ${
                     selectedAnak === a
-                      ? "bg-[#1E5C58] text-white border-[#1E5C58] shadow-sm"
+                      ? "bg-[#1E5C58] text-white border-[#1E5C58] shadow-xs"
                       : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-[#2B7A75]"
                   }`}
                 >
@@ -389,23 +389,23 @@ export default function RiwayatTerapiPage() {
           </div>
 
           {/* Date range */}
-          <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex flex-col gap-1.5">
+          <div className="flex items-end gap-2.5 flex-wrap">
+            <div className="flex flex-col gap-1">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dari Tanggal</p>
               <input
                 type="date"
                 value={dariTanggal}
                 onChange={(e) => setDariTanggal(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] transition-colors hover:border-teal-200 cursor-pointer"
+                className="px-2.5 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] transition-colors hover:border-teal-200 cursor-pointer"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sampai Tanggal</p>
               <input
                 type="date"
                 value={sampaiTanggal}
                 onChange={(e) => setSampaiTanggal(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] transition-colors hover:border-teal-200 cursor-pointer"
+                className="px-2.5 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] transition-colors hover:border-teal-200 cursor-pointer"
               />
             </div>
           </div>
@@ -413,7 +413,7 @@ export default function RiwayatTerapiPage() {
       </div>
 
       {/* Count info */}
-      <p className="text-sm text-gray-500 font-medium mb-4">
+      <p className="text-xs text-gray-500 font-medium mb-3">
         <span className="font-bold text-[#1E5C58]">{filtered.length} sesi</span>{" "}
         ditampilkan, urut dari yang terbaru
       </p>
@@ -421,9 +421,9 @@ export default function RiwayatTerapiPage() {
       {/* Session list */}
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl gap-3">
-            <History className="w-10 h-10 text-gray-200" />
-            <p className="text-sm font-medium">Tidak ada riwayat yang cocok dengan filter</p>
+          <div className="flex flex-col items-center justify-center py-14 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl gap-2.5">
+            <History className="w-8 h-8 text-gray-200" />
+            <p className="text-xs font-medium">Tidak ada riwayat yang cocok dengan filter</p>
           </div>
         ) : (
           filtered.map((sesi, idx) => (

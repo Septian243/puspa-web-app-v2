@@ -273,7 +273,7 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
 
   const c = config[status];
   return (
-    <span className={`inline-flex items-center text-xs ${c.className}`}>
+    <span className={`inline-flex items-center text-[11px] ${c.className}`}>
       <span style={{ whiteSpace: "pre-line" }}>{c.label}</span>
     </span>
   );
@@ -1432,15 +1432,15 @@ function ActionDropdown({
     "cursor-pointer flex items-center w-full px-4 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors";
 
   return (
-    <td className="px-6 py-4 text-right">
+    <td className="px-4 py-3 text-right">
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-teal-100 rounded-xl text-[#1E5C58] hover:bg-teal-50/40 text-xs font-semibold transition-colors"
+        className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 border border-teal-100 rounded-lg text-[#1E5C58] hover:bg-teal-50/40 text-[11px] font-semibold transition-colors"
       >
         <span>Aksi</span>
         <ChevronDown
-          size={12}
+          size={11}
           className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
@@ -2512,16 +2512,15 @@ export default function KeuanganPage() {
     currentPage * ITEMS_PER_PAGE
   );
 
-  // Summary stats — jumlah tagihan dari filtered, belum dibayar & potongan global
+  // Summary stats — jumlah tagihan, belum dibayar, lunas, dan total keseluruhan
   const jumlahTagihan = filtered.length;
   const totalBelumDibayar = invoices
     .filter((i) => i.status === "BELUM DIBAYAR")
     .reduce((sum, i) => sum + i.total, 0);
-  const periodeBerikutnya = invoices.filter(
-    (i) => Boolean(i.periodeBerikutnya)
-  ).length;
-  // Potongan berikutnya: nilai tetap Rp 300.000 (sesuai gambar referensi — potongan sisa sesi)
-  const potonganBerikutnya = 300000;
+  const totalLunas = invoices
+    .filter((i) => i.status === "LUNAS")
+    .reduce((sum, i) => sum + i.total, 0);
+  const grandTotal = totalBelumDibayar + totalLunas;
 
   const handleExport = () => {
     const headers = [
@@ -2712,13 +2711,13 @@ export default function KeuanganPage() {
               className="bg-white rounded-3xl border border-teal-50 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.08)] overflow-hidden"
             >
               {/* Status Tabs */}
-              <div className="flex items-center gap-1 px-4 pt-4 overflow-x-auto border-b border-gray-100">
+              <div className="flex items-center gap-1 px-4 pt-3.5 overflow-x-auto no-scrollbar border-b border-gray-100">
                 {TABS.map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     id={`status-tab-${tab.toLowerCase().replace(/ /g, "-")}`}
-                    className={`cursor-pointer whitespace-nowrap px-4 py-3 text-sm font-semibold transition-all border-b-2 ${activeTab === tab
+                    className={`cursor-pointer whitespace-nowrap px-3 py-2 text-xs font-semibold transition-all border-b-2 ${activeTab === tab
                       ? "border-[#2B7A75] text-[#1E5C58] font-bold"
                       : "border-transparent text-gray-400 hover:text-[#2B7A75]"
                       }`}
@@ -2729,20 +2728,20 @@ export default function KeuanganPage() {
               </div>
 
               {/* Filters Bar */}
-              <div className="flex items-center gap-2.5 px-4 py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 overflow-x-auto no-scrollbar">
                 {/* Semua tipe */}
                 <div className="relative shrink-0">
                   <select
                     id="filter-tipe"
                     value={tipe}
                     onChange={(e) => setTipe(e.target.value)}
-                    className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
+                    className="appearance-none pl-3 pr-7 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
                   >
                     <option>Tipe</option>
                     <option>Bulanan</option>
                     <option>Paket Durasi</option>
                   </select>
-                  <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <ChevronDown size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
                 {/* Semua tahun */}
@@ -2751,13 +2750,13 @@ export default function KeuanganPage() {
                     id="filter-tahun"
                     value={tahun}
                     onChange={(e) => setTahun(e.target.value)}
-                    className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
+                    className="appearance-none pl-3 pr-7 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
                   >
                     <option>Tahun</option>
                     <option>2025</option>
                     <option>2026</option>
                   </select>
-                  <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <ChevronDown size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
                 {/* Semua bulan */}
@@ -2766,7 +2765,7 @@ export default function KeuanganPage() {
                     id="filter-bulan"
                     value={bulan}
                     onChange={(e) => setBulan(e.target.value)}
-                    className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
+                    className="appearance-none pl-3 pr-7 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-600 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] cursor-pointer transition-all"
                   >
                     <option>Bulan</option>
                     {[
@@ -2776,33 +2775,33 @@ export default function KeuanganPage() {
                       <option key={b}>{b}</option>
                     ))}
                   </select>
-                  <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <ChevronDown size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
 
                 {/* Group Search Box, Export & Buat tagihan on the right */}
-                <div className="flex items-center gap-2.5 ml-auto shrink-0 whitespace-nowrap">
-                  {/* Search box — fixed width */}
-                  <div className="relative w-[240px]">
+                <div className="flex items-center gap-2 ml-auto shrink-0 whitespace-nowrap">
+                  {/* Search box — compact width */}
+                  <div className="relative w-[210px]">
                     <Search
-                      size={15}
-                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
+                      size={14}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
                     />
                     <input
                       id="search-invoice"
                       type="text"
-                      placeholder="Cari anak, orang tua, invoice"
+                      placeholder="Cari anak, wali, invoice"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all"
                     />
                   </div>
 
                   <button
                     id="btn-export"
                     onClick={handleExport}
-                    className="cursor-pointer flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                    className="cursor-pointer flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
                   >
-                    <Download size={15} />
+                    <Download size={14} />
                     Export
                   </button>
                   <button
@@ -2816,9 +2815,9 @@ export default function KeuanganPage() {
                         window.history.pushState({ view: "buat-tagihan", fromTab: "Tagihan" }, "");
                       }
                     }}
-                    className="cursor-pointer flex items-center gap-2 px-4 py-2.5 bg-[#1E5C58] text-white rounded-xl text-sm font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors"
+                    className="cursor-pointer flex items-center gap-1.5 px-3.5 py-2 bg-[#1E5C58] text-white rounded-xl text-xs font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors"
                   >
-                    <Plus size={15} />
+                    <Plus size={14} />
                     Buat tagihan
                   </button>
                 </div>
@@ -2834,29 +2833,29 @@ export default function KeuanganPage() {
                   transition={{ duration: 0.2 }}
                 >
                   {/* Table */}
-                  <div className="overflow-x-auto min-h-[300px]">
-                    <table className="w-full text-sm table-fixed">
+                  <div className="overflow-x-auto no-scrollbar min-h-[300px]">
+                    <table className="w-full text-xs table-fixed">
                       <thead>
                         <tr className="border-gray-100 border-y bg-gray-50/60">
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-wider text-gray-400 w-[15%]">
                             No. Invoice
                           </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[18%]">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-wider text-gray-400 w-[18%]">
                             Anak
                           </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-wider text-gray-400 w-[17%]">
                             Periode
                           </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[14%]">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-wider text-gray-400 w-[14%]">
                             Total
                           </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[16%]">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-wider text-gray-400 w-[15%]">
                             Tanggal Terbit
                           </th>
-                          <th className="px-6 py-3 text-left text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[12%]">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-wider text-gray-400 w-[9%]">
                             Status
                           </th>
-                          <th className="px-6 py-3 text-right text-[11px] font-extrabold uppercase tracking-wider text-gray-400 w-[8%]">
+                          <th className="px-4 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-wider text-gray-400 w-[9%]">
                             Aksi
                           </th>
                         </tr>
@@ -2864,10 +2863,10 @@ export default function KeuanganPage() {
                       <tbody>
                         {paginatedData.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="px-6 py-20 text-center">
-                              <div className="flex flex-col items-center gap-3">
-                                <Filter size={36} className="text-gray-300" strokeWidth={1.5} />
-                                <p className="text-sm font-semibold text-gray-400">
+                            <td colSpan={7} className="px-4 py-16 text-center">
+                              <div className="flex flex-col items-center gap-2.5">
+                                <Filter size={32} className="text-gray-300" strokeWidth={1.5} />
+                                <p className="text-xs font-semibold text-gray-400">
                                   Tidak Ada Data Yang Ditemukan
                                 </p>
                               </div>
@@ -2879,44 +2878,44 @@ export default function KeuanganPage() {
                               key={inv.id}
                               className="transition-colors border-b border-gray-100 hover:bg-teal-50/20 group"
                             >
-                              <td className="px-6 py-4">
+                              <td className="px-4 py-3">
                                 <div>
-                                  <p className="font-bold text-[#1E5C58] text-xs">
+                                  <p className="font-bold text-[#1E5C58] text-[11px] truncate">
                                     {inv.no_invoice}
                                   </p>
-                                  <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">
                                     {inv.tipe}
                                   </p>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-4 py-3">
                                 <div>
-                                  <p className="text-sm font-bold text-gray-800">
+                                  <p className="text-xs font-bold text-gray-800 truncate">
                                     {inv.anak}
                                   </p>
-                                  <span className="mt-1 inline-flex max-w-[160px] truncate rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                                  <span className="mt-0.5 inline-flex max-w-[140px] truncate rounded-md border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[9px] font-bold text-orange-700">
                                     Wali: {inv.wali}
                                   </span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-1.5 text-gray-600 text-sm font-medium">
-                                  <Calendar size={14} className="text-[#2B7A75] shrink-0" />
-                                  <span>{inv.periode}</span>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1.5 text-gray-600 text-xs font-medium">
+                                  <Calendar size={13} className="text-[#2B7A75] shrink-0" />
+                                  <span className="truncate">{inv.periode}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
-                                <p className="text-sm font-extrabold text-gray-800">
+                              <td className="px-4 py-3">
+                                <p className="text-xs font-extrabold text-gray-800">
                                   {formatRupiah(inv.total)}
                                 </p>
                               </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-1.5 text-gray-500 text-sm font-medium">
-                                  <Clock size={14} className="text-gray-300 shrink-0" />
-                                  <span>{inv.tanggal_terbit}</span>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1.5 text-gray-500 text-xs font-medium">
+                                  <Clock size={13} className="text-gray-300 shrink-0" />
+                                  <span className="truncate">{inv.tanggal_terbit}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-4 py-3">
                                 <StatusBadge status={inv.status} />
                               </td>
                               <ActionDropdown
@@ -2956,57 +2955,57 @@ export default function KeuanganPage() {
                   {filtered.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
                       {/* Jumlah Tagihan */}
-                      <div className="px-6 py-5 border-r border-gray-100">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Jumlah Tagihan</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">{jumlahTagihan}</p>
+                      <div className="px-5 py-3.5 border-r border-gray-100">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-0.5">Jumlah Tagihan</p>
+                        <p className="text-base font-extrabold text-[#1E5C58]">{jumlahTagihan}</p>
                       </div>
                       {/* Belum Dibayar */}
-                      <div className="px-6 py-5 border-r border-gray-100">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Belum Dibayar</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">
+                      <div className="px-5 py-3.5 border-r border-gray-100">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-0.5">Belum Dibayar</p>
+                        <p className="text-base font-extrabold text-red-500">
                           {formatRupiah(totalBelumDibayar)}
                         </p>
                       </div>
-                      {/* Periode Berakhir */}
-                      <div className="px-6 py-5 border-r border-gray-100">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Periode Berakhir</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">{periodeBerikutnya} tagihan</p>
+                      {/* Lunas */}
+                      <div className="px-5 py-3.5 border-r border-gray-100">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-0.5">Lunas</p>
+                        <p className="text-base font-extrabold text-emerald-600">{formatRupiah(totalLunas)}</p>
                       </div>
-                      {/* Potongan Berikutnya */}
-                      <div className="px-6 py-5">
-                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">Potongan Berikutnya</p>
-                        <p className="text-lg font-extrabold text-[#1E5C58]">{formatRupiah(potonganBerikutnya)}</p>
+                      {/* Total */}
+                      <div className="px-5 py-3.5">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-0.5">Total</p>
+                        <p className="text-base font-extrabold text-[#1E5C58]">{formatRupiah(grandTotal)}</p>
                       </div>
                     </div>
                   )}
 
                   {/* Pagination */}
                   {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-100">
-                      <p className="text-sm text-gray-500">
+                    <div className="flex items-center justify-between px-5 py-3 bg-white border-t border-gray-100">
+                      <p className="text-xs text-gray-500">
                         Menampilkan <span className="font-semibold text-gray-800">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> hingga{" "}
                         <span className="font-semibold text-gray-800">
                           {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
                         </span>{" "}
                         dari <span className="font-semibold text-gray-800">{filtered.length}</span> data
                       </p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                           disabled={currentPage === 1}
-                          className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="p-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                          <ChevronLeft size={16} />
+                          <ChevronLeft size={14} />
                         </button>
-                        <span className="px-2 text-sm font-medium text-gray-700">
+                        <span className="px-1.5 text-xs font-medium text-gray-700">
                           Halaman {currentPage} dari {totalPages}
                         </span>
                         <button
                           onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                           disabled={currentPage === totalPages}
-                          className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="p-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                          <ChevronRight size={16} />
+                          <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
