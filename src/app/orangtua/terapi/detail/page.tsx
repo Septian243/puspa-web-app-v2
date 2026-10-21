@@ -27,7 +27,7 @@ function InfoField({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-      <p className="text-sm font-bold text-gray-800">{value}</p>
+      <p className="text-xs font-bold text-gray-800">{value}</p>
     </div>
   );
 }
@@ -35,12 +35,12 @@ function InfoField({ label, value }: { label: string; value: string }) {
 function SectionCard({ tag, children }: { tag: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="px-6 py-3 border-b border-gray-100">
-        <span className="inline-block px-3 py-1 bg-[#EAF4F2] text-[#1E5C58] text-[10px] font-extrabold uppercase tracking-widest rounded-full">
+      <div className="px-5 py-2.5 border-b border-gray-100">
+        <span className="inline-block px-2.5 py-0.5 bg-[#EAF4F2] text-[#1E5C58] text-[9.5px] font-extrabold uppercase tracking-widest rounded-full">
           {tag}
         </span>
       </div>
-      <div className="px-6 py-5">
+      <div className="px-5 py-4">
         {children}
       </div>
     </div>
@@ -50,16 +50,27 @@ function SectionCard({ tag, children }: { tag: string; children: React.ReactNode
 function SoapCard({ tag, content }: { tag: string; content: string }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-50">
-        <span className="inline-block px-3 py-1 bg-[#EAF4F2] text-[#1E5C58] text-[10px] font-extrabold uppercase tracking-widest rounded-full">
+      <div className="px-4 py-2 border-b border-gray-50">
+        <span className="inline-block px-2.5 py-0.5 bg-[#EAF4F2] text-[#1E5C58] text-[9.5px] font-extrabold uppercase tracking-widest rounded-full">
           {tag}
         </span>
       </div>
-      <div className="px-5 py-4">
-        <p className="text-sm font-semibold text-gray-700">{content}</p>
+      <div className="px-4 py-3">
+        <p className="text-xs font-semibold text-gray-700">{content}</p>
       </div>
     </div>
   );
+}
+
+function formatNoRekam(raw: string | number | undefined | null): string {
+  if (!raw || raw === "-") return "-";
+  const str = String(raw).trim();
+  const digits = str.replace(/\D/g, "");
+  if (digits) {
+    const num = digits.length > 6 ? digits.slice(-6) : digits.padStart(6, "0");
+    return `RM-${num}`;
+  }
+  return str.startsWith("RM-") ? str : `RM-${str}`;
 }
 
 function DetailContent() {
@@ -67,7 +78,8 @@ function DetailContent() {
   const params = useSearchParams();
 
   const namaAnak = params.get("namaAnak") ?? "-";
-  const noRekam = params.get("noRekam") ?? "-";
+  const rawNoRekam = params.get("noRekam") ?? "-";
+  const noRekam = formatNoRekam(rawNoRekam);
   const jenisTerapi = params.get("jenisTerapi") ?? "-";
   const terapis = params.get("terapis") ?? "-";
   const tanggal = params.get("tanggal") ?? "-";
@@ -91,22 +103,22 @@ function DetailContent() {
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="mb-6 flex items-start justify-between gap-4 flex-wrap"
+        className="mb-5 flex items-start justify-between gap-4 flex-wrap"
       >
         <div>
-          <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
+          <h1 className="text-xl font-extrabold text-[#1E5C58] tracking-tight">
             Detail Jadwal Terapi
           </h1>
-          <p className="text-sm text-gray-400 font-medium mt-0.5">
+          <p className="text-xs text-gray-400 font-medium mt-0.5">
             {namaAnak} &bull; {noRekam} &bull; {tanggal} &bull; {jamMulai} – {jamSelesai}
           </p>
         </div>
 
         <button
           onClick={() => router.back()}
-          className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 bg-[#1E5C58] hover:bg-[#163F3C] text-white text-sm font-bold rounded-xl shadow-md shadow-teal-900/20 transition-all active:scale-95 shrink-0"
+          className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 shrink-0"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={14} />
           Kembali ke Daftar
         </button>
       </motion.div>

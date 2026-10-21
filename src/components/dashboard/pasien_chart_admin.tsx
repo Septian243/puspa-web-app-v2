@@ -28,12 +28,12 @@ type PieLabelProps = {
 export default function PasienChartAdmin({ data, loading }: PasienChartProps) {
   // A sophisticated, calming palette for the health/therapy theme
   const COLORS = [
-    "#1E5C58", // Umum
     "#38A3A5", // Terapi Wicara
     "#4ADE80", // Terapi Okupasi (Warna Terang - Hijau Cerah)
     "#FFB703", // Fisioterapi
     "#F472B6", // Paedagog (Warna Terang - Merah Muda Cerah)
     "#F4A261", // Cadangan
+    "#2A9D8F", // Tambahan
   ];
 
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -49,13 +49,40 @@ export default function PasienChartAdmin({ data, loading }: PasienChartProps) {
   const chartData: ChartItem[] = useMemo(() => {
     if (!data || data.length === 0) return [];
 
-    return data.map((item: any) => {
+    // Filter out "Umum" category
+    const filtered = data.filter((item: any) => {
+      const key = String(item.type_key ?? "").toLowerCase().trim();
+      const type = String(item.type ?? "").toLowerCase().trim();
+      const name = String(item.name ?? "").toLowerCase().trim();
+      return (
+        key !== "umum" &&
+        !key.includes("umum") &&
+        type !== "umum" &&
+        !type.includes("umum") &&
+        name !== "umum" &&
+        !name.includes("umum")
+      );
+    });
+
+    const totalCount = filtered.reduce(
+      (sum: number, item: any) => sum + (Number(item.count) || 0),
+      0
+    );
+
+    return filtered.map((item: any) => {
       const key = item.type_key?.toLowerCase();
+      const count = Number(item.count) || 0;
+      const percentage =
+        totalCount > 0
+          ? Math.round((count / totalCount) * 1000) / 10
+          : Number(item.percentage) || 0;
 
       return {
-        name: CATEGORY_LABEL_MAP[key] || item.type || "Unknown",
-        value: Number(item.count) || 0,
-        percentage: Number(item.percentage) || 0,
+        ...item,
+        name: CATEGORY_LABEL_MAP[key] || item.type || item.name || "Unknown",
+        value: count,
+        count: count,
+        percentage: percentage,
       };
     });
   }, [data]);
@@ -245,7 +272,7 @@ export default function PasienChartAdmin({ data, loading }: PasienChartProps) {
                         {item.name}
                       </span>
                       <span className="text-[10px] text-gray-400 font-semibold uppercase">
-                        {item.value}% ({item.count || 0} Anak)
+                        {item.percentage}% ({item.count || 0} Anak)
                       </span>
                     </div>
                   </div>
