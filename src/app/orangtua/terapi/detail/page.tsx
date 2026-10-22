@@ -115,7 +115,7 @@ function DetailContent() {
         </div>
 
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push("/orangtua/terapi")}
           className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 shrink-0"
         >
           <ArrowLeft size={14} />

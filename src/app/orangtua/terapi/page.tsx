@@ -20,7 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
 import { useProfile } from "@/context/ProfileContext";
 import { getChildren } from "@/lib/api/childrenAsesment";
-import { getSchedules } from "@/lib/api/jadwal_terapi";
+import { getSchedules, getScheduleDetail } from "@/lib/api/jadwal_terapi";
 
 // =====================
 // Types
@@ -181,6 +181,7 @@ export default function TerapiOrangtuaPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [childrenData, setChildrenData] = useState<any[]>([]);
   const [apiSchedules, setApiSchedules] = useState<JadwalTetapItem[] | null>(null);
+  const [apiSessions, setApiSessions] = useState<JadwalTerapi[] | null>(null);
   const [selectedJadwalTetap, setSelectedJadwalTetap] = useState<JadwalTetapItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [tetapPage, setTetapPage] = useState(1);
@@ -217,7 +218,8 @@ export default function TerapiOrangtuaPage() {
           }
           if (schedRes.status === "fulfilled" && schedRes.value?.items?.length > 0) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const mapped: JadwalTetapItem[] = schedRes.value.items.map((item: any) => {
+            const rawItems = schedRes.value.items;
+            const mapped: JadwalTetapItem[] = rawItems.map((item: any) => {
               const rawType = String(item.therapy_type || "").toUpperCase();
               let jenis = "PLB (PAEDAGOG)";
               if (rawType.includes("OKUPASI")) jenis = "TERAPI OKUPASI";
@@ -231,7 +233,7 @@ export default function TerapiOrangtuaPage() {
 
               return {
                 id: item.id,
-                namaAnak: item.child_name || "Rayhan",
+                namaAnak: item.child_name || "Arjuna Pratama",
                 noRekam: formatNoRekam(item.medical_record_number || item.child_id || "124"),
                 hari: item.day_name || "Senin",
                 jamMulai: item.start_time?.slice(0, 5) || "11:00",
@@ -245,6 +247,77 @@ export default function TerapiOrangtuaPage() {
               };
             });
             setApiSchedules(mapped);
+
+            // Fetch detail sesi dari seluruh schedules untuk mengisi tabel bawah (Daftar Sesi)
+            try {
+              const detailPromises = rawItems.map((item: any) => getScheduleDetail(item.id));
+              const details = await Promise.all(detailPromises);
+              const sessionsList: JadwalTerapi[] = [];
+              let sessionIdx = 1;
+
+              details.forEach((schedDetail) => {
+                if (!schedDetail || !schedDetail.sessions) return;
+                const rawType = String(schedDetail.therapy_type || "").toUpperCase();
+                let jenis = "PLB (Paedagog)";
+                if (rawType.includes("OKUPASI")) jenis = "Terapi Okupasi";
+                else if (rawType.includes("WICARA")) jenis = "Wicara";
+                else if (rawType.includes("FISIO")) jenis = "Fisioterapi";
+
+                schedDetail.sessions.forEach((s) => {
+                  let statusSesi: StatusTerapi = "Terjadwal";
+                  if (s.status === "present") statusSesi = "Selesai";
+                  else if (s.status === "cancelled" || s.status === "absent" || s.status === "excused" || s.status === "sick") statusSesi = "Reschedule";
+                  else if (s.status === "pending") statusSesi = "Terjadwal";
+
+                  // Format tanggal DD/MM/YYYY
+                  let formattedDate = s.session_date;
+                  if (s.session_date && s.session_date.includes("-")) {
+                    const [y, m, d] = s.session_date.split("-");
+                    formattedDate = `${d}/${m}/${y}`;
+                  }
+
+                    // Informasi detail anak dari API
+                    const ttl = [schedDetail.child_birth_place, schedDetail.child_birth_date_formatted].filter(Boolean).filter((v) => v !== "-").join(", ") || "-";
+                    const jenisKelaminLabel = schedDetail.child_gender
+                      ? schedDetail.child_gender.toLowerCase().includes("laki")
+                        ? "Laki-laki"
+                        : "Perempuan"
+                      : "Laki-laki";
+
+                    sessionsList.push({
+                      id: sessionIdx++,
+                      namaAnak: schedDetail.child_name || "Anak",
+                      avatarEmoji: "👶",
+                      noRekam: formatNoRekam(schedDetail.medical_record_number || schedDetail.child_id || "124"),
+                      jenisTerapi: jenis,
+                      terapis: s.therapist_name || schedDetail.therapist_name || "-",
+                      tanggal: formattedDate || "",
+                      jamMulai: schedDetail.start_time?.replace(":", ".")?.slice(0, 5) || "09.00",
+                      jamSelesai: schedDetail.end_time?.replace(":", ".")?.slice(0, 5) || "10.00",
+                      status: statusSesi,
+                      namaOrangtua: schedDetail.guardian_name || guardianName,
+                      nomorTelepon: schedDetail.guardian_phone || "-",
+                      jenisKelamin: jenisKelaminLabel,
+                      usia: schedDetail.child_age || "-",
+                      tempatTanggalLahir: ttl,
+                      asalSekolah: schedDetail.child_school || "-",
+                      alamat: schedDetail.child_address || "-",
+                    });
+                  });
+                });
+
+              if (sessionsList.length > 0) {
+                setApiSessions(sessionsList);
+              } else {
+                setApiSessions([]);
+              }
+            } catch (errDetail) {
+              console.warn("Could not fetch schedule details:", errDetail);
+              setApiSessions([]);
+            }
+          } else if (schedRes.status === "fulfilled") {
+            setApiSchedules([]);
+            setApiSessions([]);
           }
         }
       } catch (e) {
@@ -259,7 +332,7 @@ export default function TerapiOrangtuaPage() {
     return () => {
       isMounted = false;
     };
-  }, [guardianName]);
+  }, []);
 
   const defaultFixedSchedules: JadwalTetapItem[] = useMemo(() => {
     const child1Name = childrenData[0]?.child_name || "Rayhan";
@@ -357,8 +430,8 @@ export default function TerapiOrangtuaPage() {
   }, [childrenData, guardianName]);
 
   const finalJadwalTetapList = useMemo(() => {
-    return apiSchedules && apiSchedules.length > 0 ? apiSchedules : defaultFixedSchedules;
-  }, [apiSchedules, defaultFixedSchedules]);
+    return apiSchedules !== null ? apiSchedules : [];
+  }, [apiSchedules]);
 
   const totalTetap = finalJadwalTetapList.length;
   const totalTetapPages = Math.ceil(totalTetap / TETAP_PER_PAGE) || 1;
@@ -382,7 +455,9 @@ export default function TerapiOrangtuaPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    return DUMMY_JADWAL.filter((item) => {
+    // Jika apiSessions sudah ada, gunakan apiSessions. Jika tidak ada sesi sama sekali, gunakan array kosong agar tidak membocorkan data dummy Rayhan.
+    const dataSource = apiSessions !== null ? apiSessions : [];
+    return dataSource.filter((item) => {
       const matchTab = activeTab === "Semua" ? true : item.status === activeTab;
       const matchSearch = item.namaAnak.toLowerCase().includes(search.toLowerCase());
 
@@ -411,7 +486,7 @@ export default function TerapiOrangtuaPage() {
 
       return matchTab && matchSearch && matchDate;
     });
-  }, [activeTab, search, filterDate, quickFilter, quickDates]);
+  }, [apiSessions, activeTab, search, filterDate, quickFilter, quickDates]);
 
   useEffect(() => {
     setSesiPage(1);
