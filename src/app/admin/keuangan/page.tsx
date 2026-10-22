@@ -40,6 +40,8 @@ import {
   payInvoice,
   refundInvoice,
   getAttendanceForRefund,
+  getCredits,
+  getTransactions,
 } from "@/lib/api/keuangan";
 import { showSuccessToast, showErrorToast, handleApiError } from "@/lib/toast";
 
@@ -2295,7 +2297,7 @@ function BuatTagihanForm({
 export default function KeuanganPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [riwayatList, setRiwayatList] = useState<RiwayatPembayaran[] | undefined>(undefined);
-  const [potonganList, setPotonganList] = useState<PotonganData[]>(DUMMY_POTONGAN);
+  const [potonganList, setPotonganList] = useState<PotonganData[]>([]);
   const [summary, setSummary] = useState({
     jumlah_tagihan: 0,
     total_belum_dibayar: 0,
@@ -2413,6 +2415,26 @@ export default function KeuanganPage() {
   useEffect(() => {
     fetchInvoicesData();
   }, [activeTab, search, tipe, tahun, bulan, currentPage]);
+
+  useEffect(() => {
+    async function loadSessionCredits() {
+      try {
+        const creditData = await getCredits();
+        if (creditData && creditData.items) {
+          const mappedCredits: PotonganData[] = creditData.items.map((c: any) => ({
+            id: c.id,
+            anak: c.anak,
+            wali: c.wali,
+            jumlah: c.jumlah,
+          }));
+          setPotonganList(mappedCredits);
+        }
+      } catch (err) {
+        console.warn("Gagal memuat session credits:", err);
+      }
+    }
+    loadSessionCredits();
+  }, []);
 
   const lunasInvoices = invoices.filter((i) => i.status === "LUNAS");
 

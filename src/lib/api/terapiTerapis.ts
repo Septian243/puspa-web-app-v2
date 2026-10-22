@@ -338,3 +338,19 @@ export async function getPendingSessionsCount(
   }
 }
 
+/**
+ * Helper untuk mengambil riwayat sesi terapi & SOAP untuk portal orang tua
+ */
+export async function getParentTherapyHistory(params: { child_id?: string; start_date?: string; end_date?: string } = {}) {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await axiosInstance.get("/my/dashboard/therapy-history", {
+      params,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data?.data || [];
+  } catch (error) {
+    console.error("Gagal mengambil riwayat terapi orang tua:", error);
+    return [];
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   History,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
+import { getParentTherapyHistory } from "@/lib/api/terapiTerapis";
 
 // ======================
 // Types
@@ -29,10 +30,10 @@ interface SoapNote {
 }
 
 interface RiwayatSesi {
-  id: number;
+  id: number | string;
   namaAnak: string;
   jenisTerapi: string;
-  jenisTerapiBadgeColor: string;
+  jenisTerapiBadgeColor?: string;
   tanggal: string;        // display format: "18/09/2026"
   tanggalRaw: string;     // for sorting: "2026-09-18"
   jamMulai: string;
@@ -44,133 +45,13 @@ interface RiwayatSesi {
   soap: SoapNote;
 }
 
-// ======================
-// Dummy Data
-// ======================
-const ANAK_LIST = ["Semua", "Rayhan", "Putra Pratama"];
-
-const DUMMY_RIWAYAT: RiwayatSesi[] = [
-  {
-    id: 1,
-    namaAnak: "Rayhan",
-    jenisTerapi: "PLB (Paedagog)",
-    jenisTerapiBadgeColor: "bg-[#EAF4F2] text-[#1E5C58]",
-    tanggal: "18/09/2026",
-    tanggalRaw: "2026-09-18",
-    jamMulai: "08.55",
-    durasi: "60 menit",
-    terapis: "Alief Arifun",
-    diagnosisTerapi: "Keterlambatan bicara dan fokus",
-    judulSesi: "Keterlambatan bicara dan fokus",
-    deskripsiSingkat: "Rayhan • Terapi bermain terstruktur dan latihan atensi",
-    soap: {
-      subjektif:
-        "Ibu menyampaikan anak sulit mengikuti instruksi dua langkah.",
-      objektif:
-        "Mengikuti instruksi satu langkah dengan pengingat.",
-      assessment:
-        "Atensi masih pendek, sekitar 5 menit.",
-      plan:
-        "Latihan atensi bertahap dengan permainan puzzle.",
-      implementasi:
-        "Puzzle 4 keping dan permainan menyusun balok.",
-      assessmentLanjutan:
-        "Anak antusias dengan permainan visual.",
-      planLanjutan:
-        "Naikkan tingkat kesulitan puzzle.",
-    },
-  },
-  {
-    id: 2,
-    namaAnak: "Rayhan",
-    jenisTerapi: "PLB (Paedagog)",
-    jenisTerapiBadgeColor: "bg-[#EAF4F2] text-[#1E5C58]",
-    tanggal: "11/09/2026",
-    tanggalRaw: "2026-09-11",
-    jamMulai: "08.55",
-    durasi: "60 menit",
-    terapis: "Alief Arifun",
-    diagnosisTerapi: "Keterlambatan bicara dan fokus",
-    judulSesi: "Keterlambatan bicara dan fokus",
-    deskripsiSingkat: "Rayhan • Latihan atensi dan instruksi satu langkah",
-    soap: {
-      subjektif:
-        "Orang tua melaporkan anak sudah mulai mau mendengarkan lebih lama.",
-      objektif:
-        "Mampu mengikuti instruksi satu langkah tanpa pengingat 3x dari 5x percobaan.",
-      assessment:
-        "Ada peningkatan kecil pada atensi dibanding sesi sebelumnya.",
-      plan:
-        "Mulai latihan instruksi dua langkah sederhana.",
-      implementasi:
-        "Permainan sortir warna dan menyusun urutan.",
-      assessmentLanjutan:
-        "Anak sudah bisa duduk tenang ±8 menit.",
-      planLanjutan:
-        "Tambahkan variasi permainan dengan instruksi dua langkah.",
-    },
-  },
-  {
-    id: 3,
-    namaAnak: "Rayhan",
-    jenisTerapi: "Okupasi Terapi",
-    jenisTerapiBadgeColor: "bg-amber-50 text-amber-700",
-    tanggal: "04/09/2026",
-    tanggalRaw: "2026-09-04",
-    jamMulai: "08.50",
-    durasi: "45 menit",
-    terapis: "Nindya Zahri",
-    diagnosisTerapi: "Keterlambatan motorik halus",
-    judulSesi: "Keterlambatan bicara dan fokus",
-    deskripsiSingkat: "Rayhan • Asesmen dan permainan terstruktur",
-    soap: {
-      subjektif:
-        "Ibu menyampaikan anak kesulitan memegang pensil.",
-      objektif:
-        "Genggaman tripod belum terbentuk, masih menggunakan genggaman silinder.",
-      assessment:
-        "Tonus otot tangan perlu distimulasi lebih lanjut.",
-      plan:
-        "Latihan playdoh dan aktivitas finger painting.",
-      implementasi:
-        "Sesi 30 menit playdoh dan 15 menit mewarnai.",
-      assessmentLanjutan:
-        "Anak menikmati aktivitas playdoh dengan antusias.",
-      planLanjutan:
-        "Tingkatkan resistansi playdoh secara bertahap.",
-    },
-  },
-  {
-    id: 4,
-    namaAnak: "Putra Pratama",
-    jenisTerapi: "Terapi Wicara",
-    jenisTerapiBadgeColor: "bg-blue-50 text-blue-700",
-    tanggal: "10/09/2026",
-    tanggalRaw: "2026-09-10",
-    jamMulai: "10.00",
-    durasi: "45 menit",
-    terapis: "Rina Wulandari",
-    diagnosisTerapi: "Keterlambatan bicara",
-    judulSesi: "Latihan produksi konsonan",
-    deskripsiSingkat: "Putra Pratama • Latihan pengucapan konsonan B dan P",
-    soap: {
-      subjektif:
-        "Orang tua melaporkan anak jarang mau berbicara di rumah.",
-      objektif:
-        "Mampu mengucapkan 'ba' dan 'pa' dengan stimulasi visual cermin.",
-      assessment:
-        "Kemampuan imitasi oromotor mulai muncul.",
-      plan:
-        "Latihan babbling dengan variasi vokal a, i, u.",
-      implementasi:
-        "Permainan tiup busa dan latihan cermin 20 menit.",
-      assessmentLanjutan:
-        "Kontak mata mulai konsisten selama sesi.",
-      planLanjutan:
-        "Gabungkan latihan wicara dengan aktivitas bermain favorit.",
-    },
-  },
-];
+function getBadgeColor(jenis: string): string {
+  const j = (jenis || "").toLowerCase();
+  if (j.includes("wicara")) return "bg-blue-50 text-blue-700";
+  if (j.includes("okupasi")) return "bg-amber-50 text-amber-700";
+  if (j.includes("fisio")) return "bg-purple-50 text-purple-700";
+  return "bg-[#EAF4F2] text-[#1E5C58]";
+}
 
 // ======================
 // Soap Grid Component
@@ -324,18 +205,50 @@ function SesiCard({ sesi, defaultOpen = false }: { sesi: RiwayatSesi; defaultOpe
 // ======================
 export default function RiwayatTerapiPage() {
   const router = useRouter();
+  const [apiRiwayat, setApiRiwayat] = useState<RiwayatSesi[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedAnak, setSelectedAnak] = useState("Semua");
   const [dariTanggal, setDariTanggal] = useState("");
   const [sampaiTanggal, setSampaiTanggal] = useState("");
 
-  const filtered = DUMMY_RIWAYAT.filter((r) => {
-    const matchAnak = selectedAnak === "Semua" || r.namaAnak === selectedAnak;
-    let matchDari = true;
-    let matchSampai = true;
-    if (dariTanggal) matchDari = r.tanggalRaw >= dariTanggal;
-    if (sampaiTanggal) matchSampai = r.tanggalRaw <= sampaiTanggal;
-    return matchAnak && matchDari && matchSampai;
-  }).sort((a, b) => b.tanggalRaw.localeCompare(a.tanggalRaw));
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const res = await getParentTherapyHistory();
+        if (Array.isArray(res) && res.length > 0) {
+          const mapped: RiwayatSesi[] = res.map((item: any) => ({
+            ...item,
+            jenisTerapiBadgeColor: getBadgeColor(item.jenisTerapi),
+          }));
+          setApiRiwayat(mapped);
+        } else {
+          setApiRiwayat([]);
+        }
+      } catch (err) {
+        console.warn("Gagal memuat riwayat terapi:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const anakList = useMemo(() => {
+    const names = Array.from(new Set(apiRiwayat.map((r) => r.namaAnak).filter(Boolean)));
+    return ["Semua", ...names];
+  }, [apiRiwayat]);
+
+  const filtered = useMemo(() => {
+    return apiRiwayat.filter((r) => {
+      const matchAnak = selectedAnak === "Semua" || r.namaAnak === selectedAnak;
+      let matchDari = true;
+      let matchSampai = true;
+      if (dariTanggal) matchDari = r.tanggalRaw >= dariTanggal;
+      if (sampaiTanggal) matchSampai = r.tanggalRaw <= sampaiTanggal;
+      return matchAnak && matchDari && matchSampai;
+    }).sort((a, b) => b.tanggalRaw.localeCompare(a.tanggalRaw));
+  }, [apiRiwayat, selectedAnak, dariTanggal, sampaiTanggal]);
 
   return (
     <ResponsiveOrangtuaLayout maxWidth="max-w-full">
@@ -372,7 +285,7 @@ export default function RiwayatTerapiPage() {
           <div className="flex flex-col gap-1">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Anak</p>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {ANAK_LIST.map((a) => (
+              {anakList.map((a) => (
                 <button
                   key={a}
                   onClick={() => setSelectedAnak(a)}
