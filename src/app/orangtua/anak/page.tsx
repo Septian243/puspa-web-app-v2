@@ -22,9 +22,12 @@ import FormHapusAnak from "@/components/form/FormHapusAnak";
 
 import { FaEye, FaPen, FaTrash } from "react-icons/fa";
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import toast from "react-hot-toast";
+
 export default function ChildList() {
-  const [children, setChildren] = useState<ChildItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [openDetail, setOpenDetail] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
@@ -32,6 +35,66 @@ export default function ChildList() {
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedChild, setSelectedChild] = useState<ChildDetail | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // TanStack Query untuk get list anak
+  const { data: children = [], isLoading: loading } = useQuery<ChildItem[]>({
+    queryKey: queryKeys.children.byParent,
+    queryFn: async () => {
+      const res = await getChildren();
+      return res.data || [];
+    },
+  });
+
+  // TanStack Mutations
+  const createMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      return await createChild(payload);
+    },
+    onSuccess: () => {
+      toast.success("Data anak berhasil ditambahkan!");
+      queryClient.invalidateQueries({ queryKey: queryKeys.children.byParent });
+      setOpenAdd(false);
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 422) {
+        const errors = err.response?.data?.errors as Record<string, string[]> | undefined;
+        const firstError = errors ? Object.values(errors)[0]?.[0] : null;
+        toast.error(firstError || "Validasi gagal");
+        return;
+      }
+      toast.error("Terjadi kesalahan server saat menambah anak");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+      return await updateChild(id, payload);
+    },
+    onSuccess: async (_, variables) => {
+      toast.success("Data anak berhasil diperbarui!");
+      const updatedDetail = await getChildDetail(variables.id);
+      setSelectedChild(updatedDetail);
+      queryClient.invalidateQueries({ queryKey: queryKeys.children.byParent });
+      setOpenEdit(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || "Gagal memperbarui data anak");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await deleteChild(id);
+    },
+    onSuccess: () => {
+      toast.success("Data anak berhasil dihapus");
+      queryClient.invalidateQueries({ queryKey: queryKeys.children.byParent });
+      setOpenDelete(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || "Gagal menghapus anak");
+    },
+  });
 
   // Initial State Lengkap sesuai ChildDetail
   const [formAdd, setFormAdd] = useState({
@@ -96,19 +159,6 @@ export default function ChildList() {
     }
   };
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        const res = await getChildren();
-        setChildren(res.data || []);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
   async function handleOpenDetail(id: string) {
     const data = await getChildDetail(id);
     setSelectedChild(data);
@@ -126,11 +176,8 @@ export default function ChildList() {
     setOpenDelete(true);
   };
 
-  const handleHapus = async (id: string) => {
-    await deleteChild(id);
-    const refreshed = await getChildren();
-    setChildren(refreshed.data || []);
-    setOpenDelete(false);
+  const handleHapus = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
   const handleUbah = async (payload: Partial<ChildDetail>) => {
@@ -151,26 +198,16 @@ export default function ChildList() {
       const newValue = cleanPayload[field as keyof ChildDetail];
       const oldValue = selectedChild[field as keyof ChildDetail];
 
-      // kalau kosong -> null
       if (newValue === "") {
         cleanPayload[field] = null;
       }
 
-      // kalau tidak berubah -> hapus dari payload
       if (newValue === oldValue) {
         delete cleanPayload[field];
       }
     });
 
-    await updateChild(selectedChild.child_id, cleanPayload);
-
-    const updatedDetail = await getChildDetail(selectedChild.child_id);
-    setSelectedChild(updatedDetail);
-
-    const refreshed = await getChildren();
-    setChildren(refreshed.data || []);
-
-    setOpenEdit(false);
+    updateMutation.mutate({ id: selectedChild.child_id, payload: cleanPayload });
   };
 
   async function handleTambah() {
@@ -194,23 +231,7 @@ export default function ChildList() {
       }
     });
 
-    try {
-      await createChild(payload);
-
-      const refreshed = await getChildren();
-      setChildren(refreshed.data || []);
-      setOpenAdd(false);
-    } catch (err: any) {
-      if (err.response?.status === 422) {
-        const errors = err.response?.data?.errors as
-          | Record<string, string[]>
-          | undefined;
-        const firstError = errors ? Object.values(errors)[0]?.[0] : null;
-        alert(firstError || "Validasi gagal");
-        return;
-      }
-      alert("Terjadi kesalahan server");
-    }
+    createMutation.mutate(payload);
   }
 
   const filtered = children.filter((c) =>

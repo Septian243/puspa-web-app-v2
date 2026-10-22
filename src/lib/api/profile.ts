@@ -19,6 +19,7 @@ export interface ParentProfile {
   guardian_name: string;
   guardian_type: string;
   relationship_with_child: string;
+  relationship_with_child_detail?: string;
   guardian_birth_date: string;
   guardian_phone: string;
   email: string;

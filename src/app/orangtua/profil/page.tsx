@@ -1,17 +1,20 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
 import { getParentProfile, updateParentProfile } from "@/lib/api/profile";
+import { queryKeys } from "@/lib/queryKeys";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProfile } from "@/context/ProfileContext";
 import { User, Edit3, Camera, Heart, Calendar, Phone, Mail, Briefcase, Shield } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function ProfileOrangtuaPage() {
   const [isEditing, setIsEditing] = useState(false);
-  const [guardianId, setGuardianId] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const { refreshProfile } = useProfile();
+  const queryClient = useQueryClient();
 
   interface FormData {
     guardian_name: string;
@@ -38,40 +41,70 @@ export default function ProfileOrangtuaPage() {
     profile_picture: null,
   });
 
-  useEffect(() => {
-    async function loadProfile() {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
+  // TanStack Query untuk fetch profil
+  const { data: profileData, isLoading } = useQuery({
+    queryKey: queryKeys.profile.ortu,
+    queryFn: async () => {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) return null;
       const res = await getParentProfile(token);
       if (res?.success && res.data) {
         const d = res.data;
-        setGuardianId(d.guardian_id);
-
         setFormData({
           guardian_name: d.guardian_name || "",
           guardian_type: d.guardian_type || "",
           relationship_with_child: d.relationship_with_child || "",
+          relationship_with_child_detail: d.relationship_with_child_detail || "",
           guardian_birth_date: d.guardian_birth_date
             ? d.guardian_birth_date.split("-").reverse().join("-")
             : "",
-
           guardian_phone: d.guardian_phone || "",
           email: d.email || "",
           guardian_occupation: d.guardian_occupation || "",
           role: d.role || "",
           profile_picture: d.profile_picture || null,
         });
+        return d;
       }
-    }
-    loadProfile();
-  }, []);
+      return null;
+    },
+  });
+
+  const guardianId = profileData?.guardian_id || "";
+
+  // TanStack Mutation untuk update profil
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { id: string; formData: globalThis.FormData }) => {
+      return await updateParentProfile(payload.id, payload.formData);
+    },
+    onSuccess: (res) => {
+      if (res?.success) {
+        toast.success("Profil berhasil diperbarui!");
+        setIsEditing(false);
+        if (res.data?.profile_picture) {
+          setFormData((prev) => ({
+            ...prev,
+            profile_picture: res.data.profile_picture,
+          }));
+        }
+        queryClient.invalidateQueries({ queryKey: queryKeys.profile.ortu });
+        refreshProfile();
+      } else {
+        toast.error("Gagal memperbarui profil.");
+      }
+    },
+    onError: () => {
+      toast.error("Terjadi kesalahan saat menyimpan profil.");
+    },
+  });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleUpdate = async () => {
+  const handleUpdate = () => {
+    if (!guardianId) return;
+
     const formatDateToBE = (date: string) => {
       if (!date) return "";
       const [y, m, d] = date.split("-");
@@ -97,21 +130,7 @@ export default function ProfileOrangtuaPage() {
     fd.append("email", formData.email);
     fd.append("guardian_occupation", formData.guardian_occupation);
 
-    const res = await updateParentProfile(guardianId, fd);
-
-    if (res?.success) {
-      alert("Profil berhasil diperbarui!");
-      setIsEditing(false);
-
-      if (res.data?.profile_picture) {
-        setFormData((prev) => ({
-          ...prev,
-          profile_picture: res.data.profile_picture,
-        }));
-      }
-
-      refreshProfile();
-    }
+    updateMutation.mutate({ id: guardianId, formData: fd });
   };
 
   return (

@@ -49,6 +49,8 @@ import {
 import { getTherapists, getChildren } from "@/lib/api/jadwal_terapi";
 import { showSuccessToast, showErrorToast, handleApiError } from "@/lib/toast";
 import { Html5Qrcode } from "html5-qrcode";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PresensiData {
@@ -1200,24 +1202,8 @@ export default function PresensiPage() {
     localStorage.setItem("puspa_presensi_tab", tab);
   };
 
+  const queryClient = useQueryClient();
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Today Presensi Data
-  const [presensiItems, setPresensiItems] = useState<PresensiData[]>([]);
-  const [presensiMeta, setPresensiMeta] = useState({
-    current_page: 1,
-    last_page: 1,
-    total: 0,
-  });
-
-  // Reschedule Data
-  const [rescheduleItems, setRescheduleItems] = useState<RescheduleItem[]>([]);
-  const [rescheduleMeta, setRescheduleMeta] = useState({
-    current_page: 1,
-    last_page: 1,
-    total: 0,
-  });
 
   // Filters & State
   const [presensiSearch, setPresensiSearch] = useState("");
@@ -1227,35 +1213,107 @@ export default function PresensiPage() {
   const [pageSize, setPageSize] = useState(10);
   const [presensiPage, setPresensiPage] = useState(1);
   const [reschedulePage, setReschedulePage] = useState(1);
-  const [therapistsList, setTherapistsList] = useState<{ id: string; name: string }[]>([]);
 
-  useEffect(() => {
-    async function loadTherapists() {
+  // TanStack Query: Therapists List
+  const { data: therapistsList = [] } = useQuery({
+    queryKey: queryKeys.therapists.all,
+    queryFn: async () => {
       const res = await getTherapists();
       if (Array.isArray(res)) {
-        setTherapistsList(
-          res.map((t: any) => ({
-            id: t.therapist_id ?? t.id,
-            name: t.therapist_name,
-          }))
-        );
+        return res.map((t: any) => ({
+          id: t.therapist_id ?? t.id,
+          name: t.therapist_name,
+        }));
       }
-    }
-    loadTherapists();
-  }, []);
+      return [];
+    },
+  });
 
-  // Modals Target
-  const [detailTarget, setDetailTarget] = useState<PresensiDetailData | null>(
-    null
-  );
-  const [presensiTarget, setPresensiTarget] =
-    useState<PresensiManualTarget | null>(null);
-  const [presensiInitialValues, setPresensiInitialValues] = useState<
-    PresensiManualInitialValues | undefined
-  >(undefined);
+  // TanStack Query: Today Sessions
+  const activePresensiDate = presensiDate || (isClient ? new Date().toISOString().slice(0, 10) : "");
+  const {
+    data: presensiDataRes,
+    isLoading: isPresensiLoading,
+    refetch: refetchTodaySessions,
+  } = useQuery({
+    queryKey: queryKeys.presensi.today({
+      date: activePresensiDate,
+      search: presensiSearch || undefined,
+      page: presensiPage,
+      per_page: pageSize,
+    }),
+    queryFn: async () => {
+      const res = await getTodaySessions({
+        date: activePresensiDate,
+        search: presensiSearch || undefined,
+        page: presensiPage,
+        per_page: pageSize,
+      });
+
+      let mapped = (res.items || []).map(mapSessionToPresensiData);
+      mapped.sort((a, b) => {
+        const aBelum = a.status === "Belum Presensi";
+        const bBelum = b.status === "Belum Presensi";
+        if (aBelum && !bBelum) return -1;
+        if (!aBelum && bBelum) return 1;
+
+        const timeA = a.rawSession?.start_time || "";
+        const timeB = b.rawSession?.start_time || "";
+        return timeA.localeCompare(timeB);
+      });
+
+      return {
+        items: mapped,
+        meta: res.meta,
+      };
+    },
+    enabled: isClient && activeTab === "Presensi",
+  });
+
+  const presensiItems = presensiDataRes?.items || [];
+  const presensiMeta = presensiDataRes?.meta || { current_page: 1, last_page: 1, total: 0 };
+
+  // TanStack Query: Rescheduled Sessions
+  const {
+    data: rescheduleDataRes,
+    isLoading: isRescheduleLoading,
+    refetch: refetchReschedules,
+  } = useQuery({
+    queryKey: queryKeys.presensi.rescheduled({
+      date: rescheduleDate || undefined,
+      search: rescheduleSearch || undefined,
+      page: reschedulePage,
+      per_page: pageSize,
+    }),
+    queryFn: async () => {
+      const res = await getRescheduledSessions({
+        date: rescheduleDate || undefined,
+        search: rescheduleSearch || undefined,
+        page: reschedulePage,
+        per_page: pageSize,
+      });
+      return {
+        items: res.items || [],
+        meta: res.meta,
+      };
+    },
+    enabled: isClient && activeTab === "Reschedule",
+  });
+
+  const rescheduleItems = rescheduleDataRes?.items || [];
+  const rescheduleMeta = rescheduleDataRes?.meta || { current_page: 1, last_page: 1, total: 0 };
+
+  const loading = (activeTab === "Presensi" && isPresensiLoading) || (activeTab === "Reschedule" && isRescheduleLoading);
+
+  const fetchTodaySessions = () => refetchTodaySessions();
+  const fetchReschedules = () => refetchReschedules();
+
+  // Modals Target State
+  const [detailTarget, setDetailTarget] = useState<PresensiDetailData | null>(null);
+  const [presensiTarget, setPresensiTarget] = useState<PresensiManualTarget | null>(null);
+  const [presensiInitialValues, setPresensiInitialValues] = useState<PresensiManualInitialValues | undefined>(undefined);
   const [presensiMode, setPresensiMode] = useState<"create" | "edit">("create");
-  const [activeSession, setActiveSession] =
-    useState<SessionAttendanceItem | null>(null);
+  const [activeSession, setActiveSession] = useState<SessionAttendanceItem | null>(null);
   const [qrModalData, setQrModalData] = useState<{
     sessionId: string;
     childName: string;
@@ -1276,61 +1334,6 @@ export default function PresensiPage() {
   >([]);
   const [isProcessingScan, setIsProcessingScan] = useState(false);
 
-  // Fetch Today Sessions from API
-  const fetchTodaySessions = async () => {
-    setLoading(true);
-    try {
-      const res = await getTodaySessions({
-        date: presensiDate || new Date().toISOString().slice(0, 10),
-        search: presensiSearch || undefined,
-        page: presensiPage,
-        per_page: pageSize,
-      });
-
-      let mapped = (res.items || []).map(mapSessionToPresensiData);
-
-      mapped.sort((a, b) => {
-        const aBelum = a.status === "Belum Presensi";
-        const bBelum = b.status === "Belum Presensi";
-
-        if (aBelum && !bBelum) return -1;
-        if (!aBelum && bBelum) return 1;
-
-        const timeA = a.rawSession?.start_time || "";
-        const timeB = b.rawSession?.start_time || "";
-
-        return timeA.localeCompare(timeB);
-      });
-
-      setPresensiItems(mapped);
-      setPresensiMeta(res.meta);
-    } catch (err: any) {
-      handleApiError(err, "Gagal mengambil data presensi hari ini");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch Rescheduled Sessions from API
-  const fetchReschedules = async () => {
-    setLoading(true);
-    try {
-      const res = await getRescheduledSessions({
-        date: rescheduleDate || undefined,
-        search: rescheduleSearch || undefined,
-        page: reschedulePage,
-        per_page: pageSize,
-      });
-
-      setRescheduleItems(res.items || []);
-      setRescheduleMeta(res.meta);
-    } catch (err: any) {
-      handleApiError(err, "Gagal mengambil data reschedule");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Reset page to 1 when filter date or search changes
   useEffect(() => {
     setPresensiPage(1);
@@ -1339,15 +1342,6 @@ export default function PresensiPage() {
   useEffect(() => {
     setReschedulePage(1);
   }, [rescheduleDate, rescheduleSearch]);
-
-  useEffect(() => {
-    if (!isClient) return;
-    if (activeTab === "Presensi") {
-      fetchTodaySessions();
-    } else if (activeTab === "Reschedule") {
-      fetchReschedules();
-    }
-  }, [activeTab, presensiDate, presensiSearch, presensiPage, rescheduleDate, rescheduleSearch, reschedulePage, pageSize, isClient]);
 
   const tabs = [
     { id: "Presensi", label: "Presensi", icon: CheckCircle2 },
@@ -1431,8 +1425,9 @@ export default function PresensiPage() {
     }
   };
 
-  const handleSavePresensi = async (payload: PresensiManualPayload) => {
-    try {
+  // TanStack Mutation: Save Attendance & Reschedule
+  const attendanceMutation = useMutation({
+    mutationFn: async (payload: PresensiManualPayload) => {
       const backendStatus = mapUiStatusToBackend(payload.status);
 
       if (presensiMode === "edit") {
@@ -1456,19 +1451,26 @@ export default function PresensiPage() {
           reason: payload.keterangan || "Di-reschedule saat presensi",
           requested_by: "guardian",
         });
-        showSuccessToast(
-          "Presensi dan Reschedule berhasil disimpan!",
-          "Berhasil"
-        );
+      }
+
+      return payload;
+    },
+    onSuccess: (payload) => {
+      if (payload.reschedule && payload.tanggalBaru) {
+        showSuccessToast("Presensi dan Reschedule berhasil disimpan!", "Berhasil");
       } else {
         showSuccessToast("Presensi berhasil disimpan!", "Berhasil");
       }
-
       setPresensiTarget(null);
-      fetchTodaySessions();
-    } catch (err: any) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.presensi.all });
+    },
+    onError: (err: any) => {
       handleApiError(err, "Gagal menyimpan presensi");
-    }
+    },
+  });
+
+  const handleSavePresensi = (payload: PresensiManualPayload) => {
+    attendanceMutation.mutate(payload);
   };
 
   // Camera / QR Code Scan Handler
@@ -1537,7 +1539,7 @@ export default function PresensiPage() {
         },
         ...history,
       ]);
-      await fetchTodaySessions();
+      queryClient.invalidateQueries({ queryKey: queryKeys.presensi.all });
     } catch (err: any) {
       handleApiError(err, "Gagal memproses QR Code presensi");
     } finally {
