@@ -15,9 +15,11 @@ import {
   UserRound,
   Eye,
   X,
+  QrCode,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
+import QrCodeViewerModal from "@/components/modal/QrCodeViewerModal";
 import { useProfile } from "@/context/ProfileContext";
 import { getChildren } from "@/lib/api/childrenAsesment";
 import { getSchedules, getScheduleDetail } from "@/lib/api/jadwal_terapi";
@@ -63,6 +65,8 @@ interface JadwalTerapi {
   tempatTanggalLahir: string;
   asalSekolah: string;
   alamat: string;
+  sessionId?: string;
+  attendanceToken?: string;
 }
 
 // =====================
@@ -193,6 +197,18 @@ export default function TerapiOrangtuaPage() {
   const [sesiPage, setSesiPage] = useState(1);
   const SESI_PER_PAGE = 10;
 
+  // State Modal QR Code Presensi Pasien
+  const [qrModalData, setQrModalData] = useState<{
+    sessionId: string;
+    childName: string;
+    medicalRecordNumber: string;
+    therapyType: string;
+    therapistName: string;
+    sessionDate: string;
+    sessionTime: string;
+    attendanceToken: string;
+  } | null>(null);
+
   const guardianName = useMemo(() => {
     if (profile?.guardian_name) {
       const rel = profile.relationship_with_child ? ` (${profile.relationship_with_child})` : "";
@@ -263,7 +279,7 @@ export default function TerapiOrangtuaPage() {
                 else if (rawType.includes("WICARA")) jenis = "Wicara";
                 else if (rawType.includes("FISIO")) jenis = "Fisioterapi";
 
-                schedDetail.sessions.forEach((s) => {
+                schedDetail.sessions.forEach((s: any) => {
                   let statusSesi: StatusTerapi = "Terjadwal";
                   if (s.status === "present") statusSesi = "Selesai";
                   else if (s.status === "cancelled" || s.status === "absent" || s.status === "excused" || s.status === "sick") statusSesi = "Reschedule";
@@ -302,6 +318,8 @@ export default function TerapiOrangtuaPage() {
                       tempatTanggalLahir: ttl,
                       asalSekolah: schedDetail.child_school || "-",
                       alamat: schedDetail.child_address || "-",
+                      sessionId: String(s.session_id || s.id || ""),
+                      attendanceToken: s.attendance_token || String(s.session_id || s.id || ""),
                     });
                   });
                 });
@@ -951,13 +969,35 @@ export default function TerapiOrangtuaPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center whitespace-nowrap">
-                          <button
-                            onClick={() => handleLihatDetail(item)}
-                            className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 bg-[#1E5C58] hover:bg-[#163F3C] text-white text-[11px] font-bold rounded-lg shadow-xs transition-all active:scale-95 whitespace-nowrap shrink-0"
-                          >
-                            <ChevronRight size={12} strokeWidth={2.5} className="shrink-0" />
-                            Lihat Detail
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrModalData({
+                                  sessionId: item.sessionId || String(item.id),
+                                  childName: item.namaAnak,
+                                  medicalRecordNumber: item.noRekam,
+                                  therapyType: item.jenisTerapi,
+                                  therapistName: item.terapis,
+                                  sessionDate: item.tanggal,
+                                  sessionTime: `${item.jamMulai} - ${item.jamSelesai}`,
+                                  attendanceToken: item.attendanceToken || String(item.id),
+                                });
+                              }}
+                              title="Tampilkan QR Barcode Presensi Kartu Pasien"
+                              className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-[#1E5C58] text-[11px] font-bold rounded-lg border border-teal-200 shadow-2xs transition-all active:scale-95 whitespace-nowrap shrink-0"
+                            >
+                              <QrCode size={13} className="text-[#2B7A75]" />
+                              QR Presensi
+                            </button>
+                            <button
+                              onClick={() => handleLihatDetail(item)}
+                              className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 bg-[#1E5C58] hover:bg-[#163F3C] text-white text-[11px] font-bold rounded-lg shadow-xs transition-all active:scale-95 whitespace-nowrap shrink-0"
+                            >
+                              <ChevronRight size={12} strokeWidth={2.5} className="shrink-0" />
+                              Lihat Detail
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1154,10 +1194,16 @@ export default function TerapiOrangtuaPage() {
             </div>
           )
         }
-      </AnimatePresence >
+      </AnimatePresence>
+
+      <QrCodeViewerModal
+        open={!!qrModalData}
+        onClose={() => setQrModalData(null)}
+        sessionData={qrModalData}
+      />
 
         </div>
       )}
-    </ResponsiveOrangtuaLayout >
+    </ResponsiveOrangtuaLayout>
   );
 }

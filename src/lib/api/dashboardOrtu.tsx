@@ -67,3 +67,17 @@ export async function getOrtuUpcomingSchedules(type: string = "all") {
     throw new Error(error.response?.data?.message || "Gagal memuat jadwal mendatang");
   }
 }
+
+// -----------------------------------------------------
+// GET TODAY THERAPY SESSIONS (With QR Code attendance token)
+// -----------------------------------------------------
+export async function getOrtuTodayTherapySessions() {
+  try {
+    const res = await axiosInstance.get("/my/dashboard/today-therapy-sessions");
+    return res.data?.data || [];
+  } catch (error: any) {
+    console.error("❌ Error getOrtuTodayTherapySessions:", error.response?.data || error);
+    return [];
+  }
+}
+

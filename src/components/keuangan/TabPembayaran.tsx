@@ -294,7 +294,7 @@ export default function TabPembayaran({
             </motion.div>
           ))}
         </AnimatePresence>
-        {filtered.length === 0 && (
+        {filteredCredits.length === 0 && (
           <div className="py-6 text-xs font-semibold text-center text-gray-400">
             Tidak ada data potongan ditemukan.
           </div>
@@ -302,14 +302,14 @@ export default function TabPembayaran({
       </div>
 
       {/* Lihat Semua Button (Bottom) */}
-      {filtered.length > 3 && (
+      {filteredCredits.length > 3 && (
         <div className="pt-2.5 mt-2 text-center border-t border-gray-100/80 -mb-1">
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-extrabold text-[#1E5C58] bg-teal-50 hover:bg-teal-100/80 rounded-xl transition-colors cursor-pointer"
           >
-            {isExpanded ? "Tutup sebagian" : `Lihat semua (${filtered.length})`}
+            {isExpanded ? "Tutup sebagian" : `Lihat semua (${filteredCredits.length})`}
           </button>
         </div>
       )}
@@ -442,7 +442,7 @@ export default function TabPembayaran({
                         <button className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-md text-[11px] font-bold hover:bg-blue-100 transition-colors">
                           <FileText size={12} />
                           Lihat Bukti
-                        </a>
+                        </button>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}

@@ -2338,7 +2338,7 @@ export default function KeuanganPage() {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [backendTotalPages, setBackendTotalPages] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const ITEMS_PER_PAGE = 10;
 
@@ -2349,6 +2349,21 @@ export default function KeuanganPage() {
     setPrefillData(null);
     if (typeof window !== "undefined" && window.history.state?.view) {
       window.history.back();
+    }
+  };
+
+  const handleSaveInvoice = (invData: any) => {
+    fetchInvoicesData();
+    handleBack();
+  };
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    try {
+      await deleteInvoice(invoiceId);
+      showSuccessToast("Invoice berhasil dihapus", "Berhasil");
+      fetchInvoicesData();
+    } catch (e: any) {
+      showErrorToast(e.message || "Gagal menghapus invoice", "Error");
     }
   };
 
@@ -2406,7 +2421,7 @@ export default function KeuanganPage() {
           } : undefined,
         }));
         setInvoices(mapped);
-        setTotalPages(res.invoices.last_page || 1);
+        setBackendTotalPages(res.invoices.last_page || 1);
         setTotalData(res.invoices.total || 0);
       }
     }
