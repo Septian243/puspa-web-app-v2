@@ -134,16 +134,33 @@ export interface ExportChildOption {
   medical_record_number: string;
 }
 
-export interface ExportFilterOptions {
-  therapist_id: string;
+export interface ExportTherapistOption {
+  id: string;
   therapist_name: string;
   therapy_type: string;
   therapy_type_label: string;
+}
+
+export interface ExportTherapyTypeOption {
+  value: string;
+  label: string;
+}
+
+export interface ExportFilterOptions {
+  scope?: "all" | "therapist";
+  therapist_id?: string;
+  therapist_name?: string;
+  therapy_type?: string;
+  therapy_type_label?: string;
+  therapy_types?: ExportTherapyTypeOption[];
+  therapists?: ExportTherapistOption[];
   children: ExportChildOption[];
 }
 
 export interface ExportTherapySoapFilters {
   child_id?: string | string[];
+  therapist_id?: string;
+  therapy_type?: string;
   period_type?: "daily" | "weekly" | "monthly" | "custom";
   date?: string;
   week?: number;
@@ -290,9 +307,14 @@ export async function createTherapySoap(
 /**
  * Mengambil opsi filter untuk halaman unduh catatan SOAP (GET /therapy_soaps/export/filter-options)
  */
-export async function getExportFilterOptions(): Promise<ExportFilterOptions | null> {
+export async function getExportFilterOptions(params?: {
+  therapy_type?: string;
+  therapist_id?: string;
+}): Promise<ExportFilterOptions | null> {
   try {
-    const res = await axiosInstance.get("/therapy_soaps/export/filter-options");
+    const res = await axiosInstance.get("/therapy_soaps/export/filter-options", {
+      params,
+    });
     return res.data?.data || null;
   } catch (error) {
     console.error("Gagal mengambil filter options export SOAP:", error);
@@ -301,19 +323,77 @@ export async function getExportFilterOptions(): Promise<ExportFilterOptions | nu
 }
 
 /**
- * Mengambil data mentah catatan SOAP untuk diekspor ke Excel/PDF (GET /therapy_soaps/export)
+ * Mengunduh berkas PDF catatan SOAP (GET /therapy_soaps/export)
  */
-export async function getExportTherapySoaps(
+export async function downloadExportTherapySoapPdf(
   filters: ExportTherapySoapFilters = {}
-): Promise<Record<string, unknown>[]> {
+): Promise<{ success: boolean; error?: string; fileName?: string }> {
   try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await axiosInstance.get("/therapy_soaps/export", {
       params: filters,
+      responseType: "blob",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/pdf",
+      },
     });
-    return res.data?.data || [];
-  } catch (error) {
-    console.error("Gagal mengambil data export SOAP:", error);
-    return [];
+
+    if (res.data.type === "application/json") {
+      const text = await res.data.text();
+      const parsed = JSON.parse(text);
+      return {
+        success: false,
+        error: parsed.message || "Data catatan SOAP tidak ditemukan.",
+      };
+    }
+
+    let fileName = `laporan_soap_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const disposition = res.headers["content-disposition"] || res.headers["Content-Disposition"];
+    if (disposition && disposition.includes("filename=")) {
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (match && match[1]) {
+        fileName = match[1].replace(/['"]/g, "").trim();
+      }
+    }
+
+    const blob = new Blob([res.data], { type: "application/pdf" });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+
+    return { success: true, fileName };
+  } catch (error: any) {
+    console.error("Gagal mendownload PDF export SOAP:", error);
+
+    if (error.response?.data instanceof Blob) {
+      try {
+        const errorText = await error.response.data.text();
+        const json = JSON.parse(errorText);
+        return {
+          success: false,
+          error: json.message || "Data catatan SOAP tidak ditemukan untuk filter ini.",
+        };
+      } catch {
+        // Fallback jika gagal parse json
+      }
+    }
+
+    const message =
+      error.response?.data?.message ||
+      (error.response?.status === 404
+        ? "Data catatan SOAP tidak ditemukan untuk filter yang dipilih."
+        : "Gagal mengunduh laporan PDF.");
+
+    return {
+      success: false,
+      error: message,
+    };
   }
 }
 
