@@ -6,10 +6,13 @@ import { X, Download, ChevronDown, Check, Loader2, ArrowLeft } from "lucide-reac
 import { useTherapistProfile } from "@/context/ProfileTerapisContext";
 import {
   getExportFilterOptions,
-  getExportTherapySoaps,
+  downloadExportTherapySoapPdf,
+  getTherapySessions,
+  getTherapySoapBySession,
   ExportFilterOptions,
   ExportTherapySoapFilters,
 } from "@/lib/api/terapiTerapis";
+import { showSuccessToast, showErrorToast } from "@/lib/toast";
 
 export interface ExportSoapRecord {
   id: string;
@@ -210,8 +213,8 @@ function FilterMultiSelect({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onChange([])}
               className={`text-xs font-bold transition-colors cursor-pointer ${selectedValues.length === 0
-                  ? "text-[#1E5C58]"
-                  : "text-gray-500 hover:text-[#1E5C58]"
+                ? "text-[#1E5C58]"
+                : "text-gray-500 hover:text-[#1E5C58]"
                 }`}
             >
               {allLabel}
@@ -238,15 +241,15 @@ function FilterMultiSelect({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => toggleOption(option)}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors flex items-center justify-between cursor-pointer ${isSelected
-                      ? "bg-teal-50/70 font-bold text-[#1E5C58]"
-                      : "text-gray-700 hover:bg-gray-50 font-medium"
+                    ? "bg-teal-50/70 font-bold text-[#1E5C58]"
+                    : "text-gray-700 hover:bg-gray-50 font-medium"
                     }`}
                 >
                   <div className="flex items-center gap-2.5 truncate">
                     <div
                       className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${isSelected
-                          ? "bg-[#2B7A75] border-[#2B7A75] text-white"
-                          : "border-gray-300 bg-white"
+                        ? "bg-[#2B7A75] border-[#2B7A75] text-white"
+                        : "border-gray-300 bg-white"
                         }`}
                     >
                       {isSelected && (
@@ -295,7 +298,9 @@ export default function UnduhHasilPage() {
 
   const [filterOptions, setFilterOptions] = useState<ExportFilterOptions | null>(null);
   const [exportRecords, setExportRecords] = useState<ExportSoapRecord[]>([]);
+  const [totalFilteredCount, setTotalFilteredCount] = useState(0);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const therapistName =
     filterOptions?.therapist_name || profile?.therapist_name || "Memuat...";
@@ -350,67 +355,160 @@ export default function UnduhHasilPage() {
     return { anakOptions: options, childNameToId: mapping };
   }, [filterOptions]);
 
-  // Fetch export records when filters change
+  // Fetch completed therapy sessions with SOAP for preview table (Opsi A)
   useEffect(() => {
     let isMounted = true;
     setIsLoadingData(true);
 
-    const apiFilters: ExportTherapySoapFilters = {};
+    async function loadPreview() {
+      try {
+        const res = await getTherapySessions({
+          status: "completed",
+          my_sessions: true,
+          per_page: 50,
+        });
 
-    if (selectedAnak.length > 0) {
-      const selectedIds = selectedAnak
-        .map((name) => childNameToId[name])
-        .filter(Boolean);
-      if (selectedIds.length > 0) {
-        apiFilters.child_id = selectedIds;
+        if (!isMounted) return;
+
+        let sessions = res.items || [];
+
+        // Filter by selected children
+        if (selectedAnak.length > 0) {
+          const selectedIds = selectedAnak
+            .map((name) => childNameToId[name])
+            .filter(Boolean);
+          if (selectedIds.length > 0) {
+            sessions = sessions.filter(
+              (s) => s.child_id && selectedIds.includes(s.child_id)
+            );
+          }
+        }
+
+        // Filter by period
+        if (periode === "Harian" && hari) {
+          sessions = sessions.filter((s) => s.session_date === hari);
+        } else if (periode === "Mingguan" && minggu) {
+          const parts = minggu.split("-W");
+          if (parts.length === 2) {
+            const yr = parseInt(parts[0], 10);
+            sessions = sessions.filter((s) => {
+              if (!s.session_date) return false;
+              const d = new Date(s.session_date);
+              return d.getFullYear() === yr;
+            });
+          }
+        } else if (periode === "Bulanan" && bulan) {
+          sessions = sessions.filter(
+            (s) => s.session_date && s.session_date.startsWith(bulan)
+          );
+        } else if (periode === "Custom") {
+          if (dari) {
+            sessions = sessions.filter(
+              (s) => s.session_date && s.session_date >= dari
+            );
+          }
+          if (sampai) {
+            sessions = sessions.filter(
+              (s) => s.session_date && s.session_date <= sampai
+            );
+          }
+        }
+
+        // Fetch detail SOAP for top 10 items to display real diagnosis
+        const top10 = sessions.slice(0, 10);
+        const mappedRecords = await Promise.all(
+          top10.map(async (s) => {
+            const soap = await getTherapySoapBySession(s.id);
+            return {
+              id: s.id,
+              child_name: s.child_name,
+              therapist_name: s.therapist_name || therapistName,
+              therapy_type_label: s.therapy_type_label || therapistSection,
+              performed_date_formatted: s.session_date_formatted,
+              performed_date: s.session_date,
+              performed_time: `${s.start_time} – ${s.end_time}`,
+              therapy_diagnosis: soap?.therapy_diagnosis || s.notes || "—",
+            } as ExportSoapRecord;
+          })
+        );
+
+        if (isMounted) {
+          setTotalFilteredCount(sessions.length);
+          setExportRecords(mappedRecords);
+          setIsLoadingData(false);
+        }
+      } catch (err) {
+        console.error("Gagal memuat preview data SOAP:", err);
+        if (isMounted) {
+          setExportRecords([]);
+          setTotalFilteredCount(0);
+          setIsLoadingData(false);
+        }
       }
     }
 
-    if (periode === "Harian") {
-      apiFilters.period_type = "daily";
-      if (hari) apiFilters.date = hari;
-    } else if (periode === "Mingguan") {
-      apiFilters.period_type = "weekly";
-      if (minggu) {
-        const parts = minggu.split("-W");
-        if (parts.length === 2) {
-          apiFilters.year = parseInt(parts[0], 10);
-          apiFilters.week = parseInt(parts[1], 10);
-        }
-      }
-    } else if (periode === "Bulanan") {
-      apiFilters.period_type = "monthly";
-      if (bulan) {
-        const parts = bulan.split("-");
-        if (parts.length === 2) {
-          apiFilters.year = parseInt(parts[0], 10);
-          apiFilters.month = parseInt(parts[1], 10);
-        }
-      }
-    } else if (periode === "Custom") {
-      apiFilters.period_type = "custom";
-      if (dari) apiFilters.date_from = dari;
-      if (sampai) apiFilters.date_to = sampai;
-    }
-
-    getExportTherapySoaps(apiFilters)
-      .then((data) => {
-        if (isMounted) {
-          setExportRecords(data as unknown as ExportSoapRecord[]);
-          setIsLoadingData(false);
-        }
-      })
-      .catch((err) => {
-        console.error("Gagal mengambil data export SOAP:", err);
-        if (isMounted) {
-          setIsLoadingData(false);
-        }
-      });
+    loadPreview();
 
     return () => {
       isMounted = false;
     };
-  }, [selectedAnak, periode, hari, minggu, bulan, dari, sampai, childNameToId]);
+  }, [selectedAnak, periode, hari, minggu, bulan, dari, sampai, childNameToId, therapistName, therapistSection]);
+
+  const handleExportPdf = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+
+    try {
+      const apiFilters: ExportTherapySoapFilters = {};
+
+      if (selectedAnak.length > 0) {
+        const selectedIds = selectedAnak
+          .map((name) => childNameToId[name])
+          .filter(Boolean);
+        if (selectedIds.length > 0) {
+          apiFilters.child_id = selectedIds;
+        }
+      }
+
+      if (periode === "Harian") {
+        apiFilters.period_type = "daily";
+        if (hari) apiFilters.date = hari;
+      } else if (periode === "Mingguan") {
+        apiFilters.period_type = "weekly";
+        if (minggu) {
+          const parts = minggu.split("-W");
+          if (parts.length === 2) {
+            apiFilters.year = parseInt(parts[0], 10);
+            apiFilters.week = parseInt(parts[1], 10);
+          }
+        }
+      } else if (periode === "Bulanan") {
+        apiFilters.period_type = "monthly";
+        if (bulan) {
+          const parts = bulan.split("-");
+          if (parts.length === 2) {
+            apiFilters.year = parseInt(parts[0], 10);
+            apiFilters.month = parseInt(parts[1], 10);
+          }
+        }
+      } else if (periode === "Custom") {
+        apiFilters.period_type = "custom";
+        if (dari) apiFilters.date_from = dari;
+        if (sampai) apiFilters.date_to = sampai;
+      }
+
+      const res = await downloadExportTherapySoapPdf(apiFilters);
+      if (res.success) {
+        showSuccessToast("Laporan SOAP PDF berhasil diunduh!", "Berhasil Unduh");
+      } else {
+        showErrorToast(res.error || "Gagal mengunduh laporan PDF.");
+      }
+    } catch (err: any) {
+      showErrorToast(err?.message || "Terjadi kesalahan saat mengunduh PDF.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleReset = () => {
     setSelectedAnak([]);
@@ -510,7 +608,7 @@ export default function UnduhHasilPage() {
           <div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <FilterMultiSelect
-                label="Anak"
+                label="Anak / Pasien"
                 selectedValues={selectedAnak}
                 onChange={setSelectedAnak}
                 allLabel="Semua anak"
@@ -555,8 +653,8 @@ export default function UnduhHasilPage() {
                         type="button"
                         onClick={() => setPeriode(opt)}
                         className={`cursor-pointer flex-1 whitespace-nowrap px-4 py-2 rounded-lg text-sm transition-all ${isActive
-                            ? "bg-[#1E5C58] text-white font-bold shadow-sm"
-                            : "text-gray-400 font-semibold hover:text-[#2B7A75]"
+                          ? "bg-[#1E5C58] text-white font-bold shadow-sm"
+                          : "text-gray-400 font-semibold hover:text-[#2B7A75]"
                           }`}
                       >
                         {opt}
@@ -670,12 +768,21 @@ export default function UnduhHasilPage() {
           <div className="flex flex-wrap items-center justify-end gap-3 shrink-0">
             <button
               type="button"
-              disabled
-              title="Fitur ekspor PDF ditunda sementara menunggu endpoint pengiriman PDF dari backend"
-              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-[#1E5C58] rounded-xl shadow-sm opacity-50 cursor-not-allowed"
+              onClick={handleExportPdf}
+              disabled={isExporting}
+              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#1E5C58]/90 rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
-              <Download className="w-4 h-4" strokeWidth={2.5} />
-              <span>Export PDF (Pending)</span>
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Mengekspor PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" strokeWidth={2.5} />
+                  <span>Export PDF</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -694,7 +801,7 @@ export default function UnduhHasilPage() {
               )}
             </div>
             <span className="px-3 py-1 text-[11px] font-bold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
-              Total: {exportRecords.length} data
+              Total: {totalFilteredCount} data
             </span>
           </div>
 

@@ -14,9 +14,12 @@ import {
 } from "lucide-react";
 import {
   getTherapySessionDetail,
+  downloadExportTherapySoapPdf,
   TherapySessionDetail,
+  ExportTherapySoapFilters,
 } from "@/lib/api/terapiTerapis";
 import { useTherapistProfile } from "@/context/ProfileTerapisContext";
+import { showSuccessToast, showErrorToast } from "@/lib/toast";
 
 interface StoredJadwal {
   id: string;
@@ -101,6 +104,7 @@ function HasilTerapiContent() {
 
   const [sessionDetail, setSessionDetail] = useState<TherapySessionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Fallback cache dari sessionStorage jika ada
   const storedJadwal = useMemo<StoredJadwal | null>(() => {
@@ -250,6 +254,42 @@ function HasilTerapiContent() {
     router.push(`/terapis/terapi?type=${targetType}&status=${targetStatus}`);
   };
 
+  const handleExportSoap = async () => {
+    if (isExporting || !sessionDetail) return;
+    setIsExporting(true);
+    try {
+      const filters: ExportTherapySoapFilters = {
+        child_id: sessionDetail.child_id,
+      };
+      const exportDate = sessionDetail.soap?.performed_date || sessionDetail.session_date;
+      if (exportDate) {
+        filters.period_type = "daily";
+        filters.date = exportDate;
+      }
+
+      let res = await downloadExportTherapySoapPdf(filters);
+      // Fallback: jika daily tidak menemukan record, coba unduh berdasarkan child_id
+      if (!res.success && filters.period_type === "daily") {
+        const fallbackRes = await downloadExportTherapySoapPdf({
+          child_id: sessionDetail.child_id,
+        });
+        if (fallbackRes.success) {
+          res = fallbackRes;
+        }
+      }
+
+      if (res.success) {
+        showSuccessToast("Laporan SOAP PDF berhasil diunduh!", "Berhasil Unduh");
+      } else {
+        showErrorToast(res.error || "Gagal mengunduh catatan SOAP.");
+      }
+    } catch (err: any) {
+      showErrorToast(err?.message || "Terjadi kesalahan saat mengunduh catatan SOAP.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const isMySpecialty = useMemo(() => {
     if (!profile?.therapist_section) return false;
     const mySection = profile.therapist_section.toLowerCase();
@@ -301,12 +341,26 @@ function HasilTerapiContent() {
           {isMySpecialty && (
             <button
               type="button"
-              disabled
-              title="Fitur ekspor SOAP ditunda sementara menunggu endpoint pengiriman PDF dari backend"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border border-teal-100 text-[#1E5C58] opacity-50 cursor-not-allowed"
+              onClick={handleExportSoap}
+              disabled={isExporting || !sessionDetail?.has_soap}
+              title={
+                !sessionDetail?.has_soap
+                  ? "Catatan SOAP belum diisi untuk sesi ini"
+                  : "Unduh laporan catatan SOAP (PDF)"
+              }
+              className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border border-teal-200 text-[#1E5C58] bg-white hover:bg-teal-50 transition-all shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:scale-100"
             >
-              <Download className="w-4 h-4" />
-              <span>Export SOAP (Pending)</span>
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-[#1E5C58]" />
+                  <span>Mengekspor...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Export SOAP</span>
+                </>
+              )}
             </button>
           )}
           <button

@@ -1155,7 +1155,7 @@ function JadwalContent() {
         </div>
 
         {/* Search & Unduh */}
-        <div className="flex w-full gap-2 md:w-auto">
+        <div className="flex items-center w-full gap-2 md:w-auto">
           <div className="relative flex-1 md:w-64">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
               <Search className="w-4 h-4 text-gray-400" />
@@ -1165,7 +1165,7 @@ function JadwalContent() {
               placeholder="Cari pasien / orangtua..."
               value={searchName}
               onChange={(e) => setSearchName(e.target.value)}
-              className="w-full h-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all font-medium text-gray-700"
+              className="w-full h-11 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all font-medium text-gray-700"
             />
           </div>
           {isMySpecialtyTab && (
