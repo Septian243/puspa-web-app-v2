@@ -127,6 +127,7 @@ export default function FormAssessmentOrangtua() {
 
       await updateParentIdentity(payload);
       alert("Identitas berhasil disimpan.");
+      goNextCategory();
     } catch (err: any) {
       console.error("Gagal update identitas:", err);
       alert(err?.message || "Gagal menyimpan identitas");
