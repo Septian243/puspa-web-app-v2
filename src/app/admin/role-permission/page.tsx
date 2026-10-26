@@ -13,33 +13,182 @@ import {
   Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRoleMatrix, RbacMatrixData, RoleInfo } from "@/lib/api/rbac";
+import { getRoleMatrix, updateRolePermission, RbacMatrixData, RoleInfo } from "@/lib/api/rbac";
+
+const DEFAULT_RBAC_DATA: RbacMatrixData = {
+  roles: [
+    { key: "owner", name: "Owner / Direktur", badge: "Bisa Segalanya" },
+    { key: "asesor", name: "Asesor Klinis", badge: "Asesmen & Terapi" },
+    { key: "admin", name: "Admin Operasional", badge: "Administrasi & Jadwal" },
+    { key: "terapis", name: "Terapis", badge: "Pelaksana Terapi" },
+  ],
+  matrix: [
+    {
+      category: "Manajemen Pasien",
+      items: [
+        { key: "show_children", label: "Melihat Daftar Pasien / Anak", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "show_detail_child", label: "Melihat Detail Pasien & Profil", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "edit_child", label: "Mengubah Data Pasien", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "delete_child", label: "Menghapus Data Pasien", access: { owner: true, asesor: false, admin: true, terapis: false } },
+      ],
+    },
+    {
+      category: "Observasi & Skrining (Fase 1)",
+      items: [
+        { key: "show_observations", label: "Melihat Jadwal & Status Observasi", access: { owner: true, asesor: true, admin: true, terapis: true } },
+        { key: "show_detail_observation", label: "Melihat Detail Observasi", access: { owner: true, asesor: true, admin: true, terapis: true } },
+        { key: "edit_schedule_observation", label: "Mengatur Tanggal / Reschedule Observasi", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "submit_observation", label: "Mengisi Hasil Observasi Klinis", access: { owner: true, asesor: true, admin: true, terapis: true } },
+        { key: "show_observation_answer", label: "Melihat Jawaban Kuesioner Observasi", access: { owner: true, asesor: true, admin: true, terapis: true } },
+        { key: "show_observation_summary", label: "Melihat Ringkasan Observasi", access: { owner: true, asesor: true, admin: true, terapis: true } },
+        { key: "set_assessment", label: "Menyetujui & Melanjutkan ke Asesmen", access: { owner: true, asesor: true, admin: true, terapis: false } },
+      ],
+    },
+    {
+      category: "Asesmen Klinis (Fase 2)",
+      items: [
+        { key: "show_assessments", label: "Melihat Daftar Asesmen", access: { owner: true, asesor: true, admin: true, terapis: false } },
+        { key: "show_detail_assessment", label: "Melihat Rincian Asesmen Klinis", access: { owner: true, asesor: true, admin: true, terapis: false } },
+        { key: "edit_schedule_assessment", label: "Mengatur Jadwal Asesmen", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "submit_assessment", label: "Mengisi & Menyelesaikan Asesmen Klinis", access: { owner: true, asesor: true, admin: false, terapis: false } },
+        { key: "upload_report_assessment_file", label: "Mengunggah Berkas Hasil Asesmen", access: { owner: true, asesor: true, admin: true, terapis: false } },
+        { key: "download_child_report_assessment_file", label: "Mengunduh Laporan Hasil Asesmen", access: { owner: true, asesor: true, admin: true, terapis: false } },
+      ],
+    },
+    {
+      category: "Penjadwalan & Presensi (Fase 3 & 4)",
+      items: [
+        { key: "manage_schedules", label: "Membuat & Mengedit Master Jadwal Terapi", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "view_all_therapy_sessions", label: "Melihat Jadwal Seluruh Terapis (Lintas Terapis)", access: { owner: true, asesor: true, admin: true, terapis: false } },
+        { key: "view_own_therapy_sessions", label: "Melihat Jadwal Sesi Sendiri", access: { owner: true, asesor: true, admin: true, terapis: true } },
+        { key: "mark_attendance_qr", label: "Scan Presensi Kios / QR Code", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "edit_past_attendance", label: "Koreksi Presensi Sesi Lampau", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "reschedule_therapy_session", label: "Melakukan Reschedule Sesi Terapi", access: { owner: true, asesor: false, admin: true, terapis: false } },
+      ],
+    },
+    {
+      category: "Rekam Medis SOAP & Terapi (Fase 5)",
+      items: [
+        { key: "execute_therapy_session", label: "Menjalankan Sesi Terapi Pasien", access: { owner: true, asesor: true, admin: false, terapis: true } },
+        { key: "write_therapy_soap", label: "Menulis & Mengisi Catatan SOAP Terapi", access: { owner: true, asesor: true, admin: false, terapis: true } },
+        { key: "view_therapy_soap", label: "Melihat Catatan SOAP Pasien", access: { owner: true, asesor: true, admin: true, terapis: true } },
+        { key: "export_therapy_soap", label: "Ekspor Laporan Rekam Medis SOAP", access: { owner: true, asesor: true, admin: true, terapis: false } },
+      ],
+    },
+    {
+      category: "Keuangan & Billing (Fase 6)",
+      items: [
+        { key: "manage_invoices", label: "Membuat & Mengelola Tagihan Invoice", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "manage_session_credits", label: "Mengelola Potongan Kredit Sesi (Session Credit)", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "process_refunds", label: "Memproses Refund & Pengembalian Dana", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "view_financial_reports", label: "Melihat Laporan Transaksi & Arus Kas", access: { owner: true, asesor: false, admin: true, terapis: false } },
+      ],
+    },
+    {
+      category: "Manajemen Pengguna & Staf",
+      items: [
+        { key: "show_admins", label: "Melihat Daftar Admin", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "add_admin", label: "Menambah Akun Admin", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "edit_admin", label: "Mengubah Data Admin", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "delete_admin", label: "Menghapus Akun Admin", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "show_therapists", label: "Melihat Daftar Terapis", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "add_therapist", label: "Menambah Akun Terapis", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "edit_therapist", label: "Mengubah Data Terapis", access: { owner: true, asesor: false, admin: true, terapis: false } },
+        { key: "delete_therapist", label: "Menghapus Akun Terapis", access: { owner: true, asesor: false, admin: true, terapis: false } },
+      ],
+    },
+  ],
+};
 
 export default function RolePermissionPage() {
-  const [data, setData] = useState<RbacMatrixData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<RbacMatrixData>(DEFAULT_RBAC_DATA);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("semua");
+  const [userRole, setUserRole] = useState<string>("");
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
-      setLoading(true);
+      // Cek role user aktif dari localStorage
+      if (typeof window !== "undefined") {
+        const storedRole = localStorage.getItem("role") || localStorage.getItem("user_role") || "";
+        setUserRole(storedRole.toLowerCase());
+      }
+
       const res = await getRoleMatrix();
-      if (res) {
+      if (res && res.matrix && res.matrix.length > 0) {
         setData(res);
       }
-      setLoading(false);
     }
     loadData();
   }, []);
 
+  const isOwner = userRole === "owner";
+
+  // Toggle permission khusus untuk role owner saja
+  const handleTogglePermission = async (roleKey: string, permissionKey: string, currentAccess: boolean) => {
+    if (!isOwner) return;
+
+    // Owner tidak bisa mematikan hak akses dirinya sendiri
+    if (roleKey === "owner") return;
+
+    const newStatus = !currentAccess;
+    const updateId = `${roleKey}_${permissionKey}`;
+    setUpdatingKey(updateId);
+
+    // Optimistic UI update
+    setData((prev) => {
+      const nextMatrix = prev.matrix.map((cat) => ({
+        ...cat,
+        items: cat.items.map((item) => {
+          if (item.key === permissionKey) {
+            return {
+              ...item,
+              access: {
+                ...item.access,
+                [roleKey]: newStatus,
+              },
+            };
+          }
+          return item;
+        }),
+      }));
+      return { ...prev, matrix: nextMatrix };
+    });
+
+    const success = await updateRolePermission(roleKey, permissionKey, newStatus);
+    if (!success) {
+      // Revert if API failed
+      setData((prev) => {
+        const revertMatrix = prev.matrix.map((cat) => ({
+          ...cat,
+          items: cat.items.map((item) => {
+            if (item.key === permissionKey) {
+              return {
+                ...item,
+                access: {
+                  ...item.access,
+                  [roleKey]: currentAccess,
+                },
+              };
+            }
+            return item;
+          }),
+        }));
+        return { ...prev, matrix: revertMatrix };
+      });
+    }
+
+    setUpdatingKey(null);
+  };
+
   const roles = useMemo<RoleInfo[]>(() => {
     return data?.roles || [
-      { key: "owner", name: "Owner / Direktur", badge: "Super Admin" },
-      { key: "admin", name: "Admin Operasional", badge: "Manager" },
-      { key: "asesor", name: "Asesor Klinis", badge: "Clinical Specialist" },
-      { key: "terapis", name: "Terapis", badge: "Practitioner" },
-      { key: "user", name: "Orang Tua / Wali", badge: "Client" },
+      { key: "owner", name: "Owner / Direktur", badge: "Bisa Segalanya" },
+      { key: "asesor", name: "Asesor Klinis", badge: "Asesmen & Terapi" },
+      { key: "admin", name: "Admin Operasional", badge: "Administrasi & Jadwal" },
+      { key: "terapis", name: "Terapis", badge: "Pelaksana Terapi" },
     ];
   }, [data]);
 
@@ -89,9 +238,20 @@ export default function RolePermissionPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isOwner ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold">
+              <Sparkles size={14} className="text-amber-600" />
+              <span>Mode Edit Aktif (Owner)</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-500 rounded-xl text-xs font-medium">
+              <Lock size={13} className="text-gray-400" />
+              <span>Read-Only Mode</span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#EAF4F3] text-[#1E5C58] rounded-xl text-xs font-bold">
             <Sparkles size={14} />
-            <span>5 Role Terstandarisasi</span>
+            <span>4 Role Terstandarisasi</span>
           </div>
         </div>
       </div>
@@ -206,17 +366,53 @@ export default function RolePermissionPage() {
                           .filter((r) => selectedRole === "semua" || selectedRole === r.key)
                           .map((r) => {
                             const hasAccess = Boolean(item.access[r.key]);
+                            const isCellUpdating = updatingKey === `${r.key}_${item.key}`;
+                            const canToggle = isOwner && r.key !== "owner";
+
                             return (
                               <td key={r.key} className="px-4 py-3 text-center">
-                                {hasAccess ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    <CheckCircle2 size={13} className="text-emerald-600" />
-                                    <span>Diizinkan</span>
-                                  </span>
+                                {canToggle ? (
+                                  <button
+                                    onClick={() => handleTogglePermission(r.key, item.key, hasAccess)}
+                                    disabled={isCellUpdating}
+                                    title={`Klik untuk ${hasAccess ? "mencabut" : "memberikan"} izin`}
+                                    className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
+                                      hasAccess
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                        : "bg-gray-100 text-gray-500 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300"
+                                    } ${isCellUpdating ? "opacity-50 pointer-events-none" : ""}`}
+                                  >
+                                    {hasAccess ? (
+                                      <>
+                                        <CheckCircle2 size={13} className="text-emerald-600" />
+                                        <span>Diizinkan</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <XCircle size={13} className="text-gray-400" />
+                                        <span>Terkunci</span>
+                                      </>
+                                    )}
+                                  </button>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-400">
-                                    <XCircle size={13} className="text-gray-300" />
-                                    <span>Terkunci</span>
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] select-none ${
+                                      hasAccess
+                                        ? "font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : "font-medium bg-gray-100 text-gray-400"
+                                    }`}
+                                  >
+                                    {hasAccess ? (
+                                      <>
+                                        <CheckCircle2 size={13} className="text-emerald-600" />
+                                        <span>Diizinkan</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <XCircle size={13} className="text-gray-300" />
+                                        <span>Terkunci</span>
+                                      </>
+                                    )}
                                   </span>
                                 )}
                               </td>

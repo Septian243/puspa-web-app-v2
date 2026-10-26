@@ -36,15 +36,17 @@ export async function getRoleMatrix(): Promise<RbacMatrixData | null> {
   }
 }
 
-export async function getMyPermissions(): Promise<{ roles: string[]; permissions: string[] } | null> {
+export async function updateRolePermission(role: string, permission: string, enabled: boolean): Promise<boolean> {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const res = await api.get("/auth/me/permissions", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data?.data || null;
+    await api.put(
+      "/roles/permissions",
+      { role, permission, enabled },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    return true;
   } catch (error) {
-    console.error("ERROR getMyPermissions:", error);
-    return null;
+    console.error("ERROR updateRolePermission:", error);
+    return false;
   }
 }
