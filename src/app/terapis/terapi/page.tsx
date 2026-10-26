@@ -673,6 +673,9 @@ function JadwalContent() {
   );
   const [scheduleScope, setScheduleScope] = useState<ScheduleScope>("mine");
 
+  const userRole = typeof window !== "undefined" ? localStorage.getItem("role") : "";
+  const canViewAll = userRole === "kepala_terapis" || userRole === "asesor" || userRole === "admin" || userRole === "owner";
+
   const isMySpecialtyTab = useMemo(() => {
     return checkIsMySpecialty(activeTab, profile?.therapist_section);
   }, [profile, activeTab]);
@@ -682,15 +685,15 @@ function JadwalContent() {
   useEffect(() => {
     if (prevTabRef.current !== activeTab) {
       prevTabRef.current = activeTab;
-      if (isMySpecialtyTab) {
-        setScheduleScope("mine");
+      if (canViewAll) {
+        setScheduleScope(isMySpecialtyTab ? "mine" : "all");
       } else {
-        setScheduleScope("all");
+        setScheduleScope("mine");
       }
       setDateRangeMode("hari-ini");
       setDateFilter("");
     }
-  }, [activeTab, isMySpecialtyTab]);
+  }, [activeTab, isMySpecialtyTab, canViewAll]);
 
   const prevFilterRef = useRef(activeFilter);
 
@@ -807,7 +810,7 @@ function JadwalContent() {
         status: statusParam,
         date_range: dateRangeParam,
         date: dateParam,
-        my_sessions: isMySpecialtyTab ? scheduleScope === "mine" : false,
+        my_sessions: canViewAll ? (isMySpecialtyTab ? scheduleScope === "mine" : false) : true,
         search: debouncedSearch.trim() || undefined,
         page,
         per_page: pageSize,

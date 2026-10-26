@@ -25,7 +25,8 @@ import {
   CalendarCheck,
   ClipboardCheck,
   Wallet,
-  ArchiveRestore
+  ArchiveRestore,
+  ShieldCheck,
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
 
@@ -81,6 +82,7 @@ export const baseMenu: MenuGroup[] = [
         dropdown: [
           { name: "Ubah Profile", href: "/admin/profile_admin", icon: User },
           { name: "Ubah Password", href: "/admin/ubah_password", icon: Lock },
+          { name: "Hak Akses (RBAC)", href: "/admin/role-permission", icon: ShieldCheck },
         ],
       },
       { name: "Log Out", href: "/auth/login", icon: LogOut },

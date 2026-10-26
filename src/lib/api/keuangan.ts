@@ -162,6 +162,19 @@ export async function getCredits() {
   }
 }
 
+export async function getChildCredit(childId: string) {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await api.get(`/finance/credits/child/${childId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data?.data;
+  } catch (error) {
+    console.error("ERROR getChildCredit:", error);
+    return null;
+  }
+}
+
 export async function getTransactions(filters: { metode?: string; tahun?: string; bulan?: string; search?: string; page?: number; per_page?: number } = {}) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;

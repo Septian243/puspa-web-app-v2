@@ -113,15 +113,25 @@ const TERAPI_TAMBAHAN_OPTIONS = [
   "Fisioterapi",
 ];
 
+interface ChildOption {
+  id: string;
+  name: string;
+  rm: string;
+  parent_name: string;
+  parent_phone?: string;
+}
+
 function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: TambahJadwalModalProps) {
   const [noRekam, setNoRekam] = useState("");
   const [namaAnak, setNamaAnak] = useState("");
+  const [namaOrtu, setNamaOrtu] = useState("");
   const [periodeAwal, setPeriodeAwal] = useState("");
   const [periodeAkhir, setPeriodeAkhir] = useState("");
   const [showAnakDropdown, setShowAnakDropdown] = useState(false);
+  const [showRmDropdown, setShowRmDropdown] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [childrenList, setChildrenList] = useState<{ id: string; name: string; rm: string }[]>([]);
+  const [childrenList, setChildrenList] = useState<ChildOption[]>([]);
   const [selectedChildId, setSelectedChildId] = useState("");
   const [therapistsBySection, setTherapistsBySection] = useState<Record<string, { id: string; name: string }[]>>({});
 
@@ -129,7 +139,13 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
     if (open) {
       getChildren().then((res) => {
         if (Array.isArray(res)) {
-          setChildrenList(res.map((c: any) => ({ id: c.child_id, name: c.child_name, rm: c.child_id })));
+          setChildrenList(res.map((c: any) => ({
+            id: c.child_id || c.id || "",
+            name: c.child_name || "",
+            rm: c.medical_record_number || "",
+            parent_name: c.parent_name || "-",
+            parent_phone: c.parent_phone || "-",
+          })));
         }
       });
       getTherapists().then((res) => {
@@ -148,6 +164,37 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
       });
     }
   }, [open]);
+
+  const handleSelectChild = (child: ChildOption) => {
+    setNamaAnak(child.name);
+    setNoRekam(child.rm);
+    setNamaOrtu(child.parent_name);
+    setSelectedChildId(child.id);
+    setShowAnakDropdown(false);
+    setShowRmDropdown(false);
+  };
+
+  const handleNoRekamChange = (val: string) => {
+    setNoRekam(val);
+    setShowRmDropdown(true);
+    const match = childrenList.find((c) => c.rm && c.rm.toLowerCase() === val.trim().toLowerCase());
+    if (match) {
+      setNamaAnak(match.name);
+      setNamaOrtu(match.parent_name);
+      setSelectedChildId(match.id);
+    }
+  };
+
+  const handleNamaAnakChange = (val: string) => {
+    setNamaAnak(val);
+    setShowAnakDropdown(true);
+    const match = childrenList.find((c) => c.name && c.name.toLowerCase() === val.trim().toLowerCase());
+    if (match) {
+      setNoRekam(match.rm);
+      setNamaOrtu(match.parent_name);
+      setSelectedChildId(match.id);
+    }
+  };
 
   // Checklist: set of selected therapy names
   const [selectedTerapi, setSelectedTerapi] = useState<string[]>([]);
@@ -277,10 +324,10 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
         }
       }
 
-      setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
+      setNoRekam(""); setNamaAnak(""); setNamaOrtu(""); setPeriodeAwal(""); setPeriodeAkhir("");
       setSelectedTerapi([]); setScheduleMap({}); setSelectedChildId("");
       showSuccessToast("Jadwal terapi berhasil ditambahkan!");
-      onSubmit({ namaAnak, namaWali: "", hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir, totalMeetings: 4 });
+      onSubmit({ namaAnak, namaWali: namaOrtu, hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir, totalMeetings: 4 });
       onClose();
     } catch (err: any) {
       console.error("CREATE SCHEDULE ERROR:", err);
@@ -289,8 +336,9 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
   };
 
   const handleClose = () => {
-    setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
+    setNoRekam(""); setNamaAnak(""); setNamaOrtu(""); setPeriodeAwal(""); setPeriodeAkhir("");
     setSelectedTerapi([]); setScheduleMap({}); setHasSubmitted(false); setWarningMessage("");
+    setShowAnakDropdown(false); setShowRmDropdown(false);
     onClose();
   };
 
@@ -329,45 +377,90 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
               <div className="overflow-y-auto flex-1 p-5">
                 <div className="flex flex-col gap-4">
 
-                {/* Row 1: No Rekam Medis + Nama Anak */}
+                {/* Row 1: No Rekam Medis + Nama Anak (Two-Way Sync dari master data anak) */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>No. Rekam Medis</label>
-                    <input type="text" value={noRekam}
-                      onChange={(e) => setNoRekam(e.target.value)}
-                      placeholder="RM-000123" className={getInputCls(hasSubmitted && !noRekam)} />
-                  </div>
                   <div className="relative">
-                    <label className={labelCls}>Nama Anak</label>
-                    <input type="text" required value={namaAnak}
-                      onChange={(e) => {
-                        setNamaAnak(e.target.value);
-                        setShowAnakDropdown(true);
-                      }}
-                      onFocus={() => setShowAnakDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowAnakDropdown(false), 200)}
-                      placeholder="Nama lengkap anak" className={getInputCls(hasSubmitted && !namaAnak)} />
-                    
-                    {showAnakDropdown && (
-                      <ul className="absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
-                        {Array.from(new Set(allData.map(d => d.namaAnak)))
-                          .filter(name => name.toLowerCase().includes(namaAnak.toLowerCase()))
-                          .map(name => (
-                          <li
-                            key={name}
-                            onMouseDown={(e) => {
-                              e.preventDefault(); // Mencegah onBlur terpicu sebelum diklik
-                              setNamaAnak(name);
-                              setShowAnakDropdown(false);
-                            }}
-                            className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
-                          >
-                            {name}
-                          </li>
-                        ))}
+                    <label className={labelCls}>No. Rekam Medis</label>
+                    <input
+                      type="text"
+                      value={noRekam}
+                      onChange={(e) => handleNoRekamChange(e.target.value)}
+                      onFocus={() => setShowRmDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowRmDropdown(false), 200)}
+                      placeholder="RM-2026-0001"
+                      className={getInputCls(hasSubmitted && !noRekam)}
+                    />
+                    {showRmDropdown && (
+                      <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
+                        {childrenList
+                          .filter((c) => c.rm && c.rm.toLowerCase().includes(noRekam.toLowerCase()))
+                          .map((child) => (
+                            <li
+                              key={child.id}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectChild(child);
+                              }}
+                              className="px-3 py-2 cursor-pointer hover:bg-[#1E5C58] hover:text-white text-sm text-gray-700 transition-colors flex justify-between items-center"
+                            >
+                              <span className="font-semibold">{child.rm}</span>
+                              <span className="text-xs opacity-75">{child.name}</span>
+                            </li>
+                          ))}
+                        {childrenList.filter((c) => c.rm && c.rm.toLowerCase().includes(noRekam.toLowerCase())).length === 0 && (
+                          <li className="px-3 py-2 text-xs text-gray-400 italic">No. RM tidak ditemukan</li>
+                        )}
                       </ul>
                     )}
                   </div>
+                  <div className="relative">
+                    <label className={labelCls}>Nama Anak</label>
+                    <input
+                      type="text"
+                      required
+                      value={namaAnak}
+                      onChange={(e) => handleNamaAnakChange(e.target.value)}
+                      onFocus={() => setShowAnakDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowAnakDropdown(false), 200)}
+                      placeholder="Nama lengkap anak"
+                      className={getInputCls(hasSubmitted && !namaAnak)}
+                    />
+                    
+                    {showAnakDropdown && (
+                      <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
+                        {childrenList
+                          .filter((c) => c.name.toLowerCase().includes(namaAnak.toLowerCase()))
+                          .map((child) => (
+                          <li
+                            key={child.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectChild(child);
+                            }}
+                            className="px-3 py-2 cursor-pointer hover:bg-[#1E5C58] hover:text-white text-sm text-gray-700 transition-colors flex justify-between items-center"
+                          >
+                            <span className="font-semibold">{child.name}</span>
+                            <span className="text-xs opacity-75">{child.rm || "Tanpa RM"}</span>
+                          </li>
+                        ))}
+                        {childrenList.filter((c) => c.name.toLowerCase().includes(namaAnak.toLowerCase())).length === 0 && (
+                          <li className="px-3 py-2 text-xs text-gray-400 italic">Anak tidak ditemukan</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                {/* Field Orang Tua / Wali (Readonly Auto-filled) */}
+                <div>
+                  <label className={labelCls}>Nama Orang Tua / Wali (Otomatis)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={namaOrtu}
+                    placeholder="Terisi otomatis saat memilih No. RM atau Nama Anak"
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
+                  />
                 </div>
 
                 {/* Row 2: Checklist Terapi + Periode */}

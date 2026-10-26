@@ -41,6 +41,7 @@ import {
   refundInvoice,
   getAttendanceForRefund,
   getCredits,
+  getChildCredit,
   getTransactions,
 } from "@/lib/api/keuangan";
 import { showSuccessToast, showErrorToast, handleApiError } from "@/lib/toast";
@@ -1748,6 +1749,7 @@ function BuatTagihanForm({
   const [selectedGuardianId, setSelectedGuardianId] = useState(initialData?.guardian_id ?? "");
   const [selectedWaliName, setSelectedWaliName] = useState(initialData?.wali ?? prefillData?.wali ?? "");
   const [selectedAnakName, setSelectedAnakName] = useState(initialData?.anak ?? prefillData?.anak ?? "");
+  const [availableCredit, setAvailableCredit] = useState<number>(0);
 
   // Load children list from Backend API
   useEffect(() => {
@@ -1755,6 +1757,7 @@ function BuatTagihanForm({
       const data = await getChildrenWithGuardians();
       setChildrenList(data);
 
+      let targetChildId = initialData?.child_id;
       if (initialData?.child_id) {
         const found = data.find((c) => c.child_id === initialData.child_id);
         if (found) {
@@ -1766,18 +1769,30 @@ function BuatTagihanForm({
       } else if (prefillData?.anak) {
         const found = data.find((c) => c.child_name.toLowerCase() === prefillData.anak.toLowerCase());
         if (found) {
+          targetChildId = found.child_id;
           setSelectedChildId(found.child_id);
           setSelectedGuardianId(found.guardian_id);
           setSelectedWaliName(found.guardian_name);
           setSelectedAnakName(found.child_name);
         }
       }
+
+      if (targetChildId) {
+        try {
+          const creditRes = await getChildCredit(targetChildId);
+          if (creditRes && creditRes.total_credit > 0) {
+            setAvailableCredit(creditRes.total_credit);
+          }
+        } catch (e) {
+          console.error("Gagal mengambil kredit anak:", e);
+        }
+      }
     };
     fetchList();
   }, [initialData, prefillData]);
 
-  // Child selection handler: auto-populates Guardian
-  const handleChildChange = (childId: string) => {
+  // Child selection handler: auto-populates Guardian & auto-detects session credits
+  const handleChildChange = async (childId: string) => {
     setSelectedChildId(childId);
     const item = childrenList.find((c) => c.child_id === childId);
     if (item) {
@@ -1785,6 +1800,20 @@ function BuatTagihanForm({
       setSelectedGuardianId(item.guardian_id);
       setSelectedWaliName(item.guardian_name);
       setErrors((prev) => ({ ...prev, anak: false, wali: false }));
+
+      // Auto-check session credits for this child
+      try {
+        const creditRes = await getChildCredit(childId);
+        if (creditRes && creditRes.total_credit > 0) {
+          setAvailableCredit(creditRes.total_credit);
+          setPotongan(creditRes.total_credit);
+        } else {
+          setAvailableCredit(0);
+          if (!initialData) setPotongan("");
+        }
+      } catch (e) {
+        console.error("Gagal mengambil kredit anak:", e);
+      }
     }
   };
 
@@ -2195,9 +2224,15 @@ function BuatTagihanForm({
                 type="number"
                 min={0}
                 value={potongan}
-                onChange={(e) => setPotongan(Number(e.target.value))}
+                placeholder="0"
+                onChange={(e) => setPotongan(e.target.value === "" ? "" : Number(e.target.value))}
                 className={`${inputClass} max-w-xs`}
               />
+              {availableCredit > 0 && (
+                <p className="mt-1.5 text-xs text-[#2B7A75] font-semibold flex items-center gap-1">
+                  <span>💡 Tersedia potongan saldo sesi sebelumnya: {formatRupiah(availableCredit)}</span>
+                </p>
+              )}
             </div>
 
             <div>
