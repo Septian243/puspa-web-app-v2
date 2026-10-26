@@ -354,8 +354,8 @@ function ConfirmDialogModal({
               onClick={onConfirm}
               id="btn-confirm-action"
               className={`cursor-pointer flex-1 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-colors ${confirmVariant === "danger"
-                  ? "bg-red-600 hover:bg-red-700 shadow-red-700/20"
-                  : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"
+                ? "bg-red-600 hover:bg-red-700 shadow-red-700/20"
+                : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"
                 }`}
             >
               {confirmText}
@@ -732,7 +732,6 @@ function PengembalianDanaModal({
                   transition={{ duration: 0.18 }}
                   className="text-xs font-medium text-gray-400"
                 >
-                  Nilainya otomatis jadi potongan di tagihan periode berikutnya.
                 </motion.p>
               )}
             </AnimatePresence>
@@ -843,7 +842,6 @@ function CatatBayarModal({
               <div className="flex items-center justify-between w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 font-medium">
 
                 <span className="truncate">{invoice.no_invoice} – {invoice.anak} ({formatRupiah(invoice.total)})</span>
-                <ChevronDown size={15} className="ml-2 text-gray-400 shrink-0" />
 
               </div>
             </div>
@@ -1959,11 +1957,11 @@ function BuatTagihanForm({
                     id="select-anak"
                     value={selectedChildId}
                     onChange={(e) => handleChildChange(e.target.value)}
-                    className={`${selectClass} ${errors.anak ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
+                    className={`${selectClass} ${errors.anak ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""} ${!selectedChildId ? "text-gray-400" : "text-gray-700"}`}
                   >
-                    <option value="" disabled>Pilih Anak</option>
+                    <option value="" disabled className="text-gray-400">Pilih Nama Anak</option>
                     {childrenList.map((c) => (
-                      <option key={c.child_id} value={c.child_id}>
+                      <option key={c.child_id} value={c.child_id} className="text-gray-700">
                         {c.child_name}
                       </option>
                     ))}
@@ -1974,13 +1972,14 @@ function BuatTagihanForm({
 
               <div>
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                  Orang tua / wali (Otomatis)
+                  Orang tua / wali
                 </label>
                 <input
                   type="text"
-                  readOnly
-                  value={selectedWaliName || "Pilih anak terlebih dahulu"}
-                  className={`${inputClass} bg-gray-50 text-gray-700 cursor-default font-semibold`}
+                  value={selectedWaliName}
+                  onChange={(e) => setSelectedWaliName(e.target.value)}
+                  placeholder="Nama Orangtua/Wali"
+                  className={`${inputClass} bg-gray-50 placeholder:text-gray-400`}
                 />
               </div>
             </div>
@@ -1991,22 +1990,44 @@ function BuatTagihanForm({
                   Periode (bulan)
                 </label>
                 <div className="relative max-w-xs">
+                  {/* Text display — hanya menampilkan mm/yyyy */}
                   <input
-                    id="input-periode-bulan"
-                    type="month"
-                    value={periode}
-                    onChange={(e) => { setPeriode(e.target.value); setErrors(prev => ({ ...prev, periode: false })); }}
-                    className={`${inputClass} cursor-pointer pr-10 ${!periode ? "text-transparent" : ""} ${errors.periode ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
+                    type="text"
+                    readOnly
+                    value={
+                      periode
+                        ? (() => {
+                          const [y, m] = periode.split("-");
+                          return `${m}/${y}`;
+                        })()
+                        : ""
+                    }
+                    placeholder="mm/yyyy"
+                    onClick={() => {
+                      const el = document.getElementById("input-periode-bulan") as HTMLInputElement | null;
+                      if (el) {
+                        if (typeof el.showPicker === "function") {
+                          try { el.showPicker(); } catch { el.focus(); }
+                        } else {
+                          el.focus();
+                        }
+                      }
+                    }}
+                    className={`${inputClass} cursor-pointer pr-10 placeholder:text-gray-400 ${errors.periode ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                   />
                   <Calendar
                     size={16}
                     className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
                   />
-                  {!periode && (
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
-                      mm/yyyy
-                    </span>
-                  )}
+                  {/* Input month tersembunyi — mengelola value & membuka picker */}
+                  <input
+                    id="input-periode-bulan"
+                    type="month"
+                    value={periode}
+                    onChange={(e) => { setPeriode(e.target.value); setErrors(prev => ({ ...prev, periode: false })); }}
+                    className="absolute inset-0 opacity-0 pointer-events-none w-0 h-0"
+                    tabIndex={-1}
+                  />
                 </div>
               </div>
             ) : (
@@ -2059,11 +2080,11 @@ function BuatTagihanForm({
           </div>
 
           <div className="p-5 space-y-3">
-            <div className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 items-center">
+            <div className="hidden sm:grid grid-cols-[1.2fr_90px_1fr_1.1fr_auto] gap-3 items-center">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
                 Jenis terapi
               </span>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 text-center">
                 Jumlah sesi
               </span>
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
@@ -2072,7 +2093,7 @@ function BuatTagihanForm({
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
                 Subtotal
               </span>
-              <span className="w-6" />
+              <span className="w-7" />
             </div>
 
             <AnimatePresence>
@@ -2083,18 +2104,18 @@ function BuatTagihanForm({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.18 }}
-                  className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 items-center"
+                  className="grid grid-cols-1 sm:grid-cols-[1.2fr_90px_1fr_1.1fr_auto] gap-3 items-center"
                 >
                   <div className="relative">
                     <select
                       id={`jenis-terapi-${idx}`}
                       value={row.jenis}
                       onChange={(e) => updateTerapiRow(row.id, "jenis", e.target.value)}
-                      className={selectClass}
+                      className={`${selectClass} pr-8 ${!row.jenis ? "text-gray-400" : "text-gray-700"}`}
                     >
-                      <option value="" disabled>Pilih Jenis Terapi</option>
+                      <option value="" disabled className="text-gray-400">Pilih Jenis Terapi</option>
                       {JENIS_TERAPI_OPTIONS.map((j) => (
-                        <option key={j} value={j}>{j}</option>
+                        <option key={j} value={j} className="text-gray-700">{j}</option>
                       ))}
                     </select>
                     <ChevronDown size={14} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
@@ -2105,9 +2126,9 @@ function BuatTagihanForm({
                     type="number"
                     min={1}
                     value={row.jumlah_sesi}
-                    placeholder="Jumlah sesi"
+                    placeholder="Sesi"
                     onChange={(e) => updateTerapiRow(row.id, "jumlah_sesi", e.target.value === "" ? "" : Number(e.target.value))}
-                    className={inputClass}
+                    className={`${inputClass} text-center`}
                   />
 
                   <input
@@ -2123,19 +2144,19 @@ function BuatTagihanForm({
                     className={`${inputClass} ${errors.terapi?.some(t => t.id === row.id && t.field === "harga_sesi") ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                   />
 
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-extrabold text-gray-800 whitespace-nowrap">
-                      {formatRupiah(rowSubtotal(row))}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => removeTerapiRow(row.id)}
-                      disabled={terapiRows.length === 1}
-                      className="text-red-400 transition-colors cursor-pointer hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                    >
-                      <X size={16} strokeWidth={2.5} />
-                    </button>
-                  </div>
+                  <p className="text-sm font-extrabold text-gray-800 whitespace-nowrap">
+                    {formatRupiah(rowSubtotal(row))}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => removeTerapiRow(row.id)}
+                    disabled={terapiRows.length === 1}
+                    className="flex items-center justify-center w-7 h-7 text-red-400 transition-colors cursor-pointer hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
+                    title="Hapus baris"
+                  >
+
+                  </button>
                 </motion.div>
               ))}
             </AnimatePresence>

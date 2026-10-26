@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   CalendarCheck,
   Search as SearchIcon,
@@ -31,6 +31,7 @@ interface JadwalTerapi {
   id: number;
   namaAnak: string;
   namaWali: string;
+  noRekam?: string;
   hari: string;
   jamMulai: string;
   jamSelesai: string;
@@ -113,15 +114,82 @@ const TERAPI_TAMBAHAN_OPTIONS = [
   "Fisioterapi",
 ];
 
+function PeriodeDateField({
+  value,
+  onChange,
+  isError,
+  placeholder = "dd/mm/yyyy",
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  isError?: boolean;
+  placeholder?: string;
+}) {
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  const formatDisplay = (val: string) => {
+    if (!val) return "";
+    const parts = val.split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return val;
+  };
+
+  const handleOpenPicker = () => {
+    if (dateInputRef.current) {
+      if (typeof dateInputRef.current.showPicker === "function") {
+        try {
+          dateInputRef.current.showPicker();
+        } catch {
+          dateInputRef.current.focus();
+        }
+      } else {
+        dateInputRef.current.focus();
+      }
+    }
+  };
+
+  return (
+    <div className="relative flex-1 flex items-center">
+      <input
+        type="text"
+        readOnly
+        value={formatDisplay(value)}
+        onClick={handleOpenPicker}
+        placeholder={placeholder}
+        className={`w-full px-2 py-2.5 pr-7 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 bg-white cursor-pointer transition-colors ${
+          isError ? "border-red-500 bg-red-50" : "border-gray-200"
+        }`}
+      />
+      <CalendarDays
+        onClick={handleOpenPicker}
+        className="w-3.5 h-3.5 text-gray-400 absolute right-2 pointer-events-none"
+      />
+      <input
+        ref={dateInputRef}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 opacity-0 pointer-events-none w-0 h-0"
+        tabIndex={-1}
+      />
+    </div>
+  );
+}
+
 function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: TambahJadwalModalProps) {
   const [noRekam, setNoRekam] = useState("");
   const [namaAnak, setNamaAnak] = useState("");
+  const [namaOrangtua, setNamaOrangtua] = useState("");
   const [periodeAwal, setPeriodeAwal] = useState("");
   const [periodeAkhir, setPeriodeAkhir] = useState("");
   const [showAnakDropdown, setShowAnakDropdown] = useState(false);
+  const [showNoRekamDropdown, setShowNoRekamDropdown] = useState(false);
+  const [showOrangtuaDropdown, setShowOrangtuaDropdown] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [childrenList, setChildrenList] = useState<{ id: string; name: string; rm: string }[]>([]);
+  const [childrenList, setChildrenList] = useState<{ id: string; name: string; rm: string; guardian?: string }[]>([]);
   const [selectedChildId, setSelectedChildId] = useState("");
   const [therapistsBySection, setTherapistsBySection] = useState<Record<string, { id: string; name: string }[]>>({});
 
@@ -129,7 +197,14 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
     if (open) {
       getChildren().then((res) => {
         if (Array.isArray(res)) {
-          setChildrenList(res.map((c: any) => ({ id: c.child_id, name: c.child_name, rm: c.child_id })));
+          setChildrenList(
+            res.map((c: any) => ({
+              id: c.child_id || c.id || "",
+              name: c.child_name || c.name || "",
+              rm: c.medical_record_number || c.no_rekam_medis || c.child_id || c.id || "",
+              guardian: c.guardian_name || c.parent_name || c.father_name || c.mother_name || "",
+            }))
+          );
         }
       });
       getTherapists().then((res) => {
@@ -148,6 +223,75 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
       });
     }
   }, [open]);
+
+  // Options for No Rekam Medis dropdown
+  const rmOptions = useMemo(() => {
+    const list: { rm: string; name: string; guardian: string; id: string }[] = [];
+    const seen = new Set<string>();
+
+    childrenList.forEach((c) => {
+      const rmVal = c.rm || c.id;
+      if (rmVal && !seen.has(rmVal.toLowerCase())) {
+        seen.add(rmVal.toLowerCase());
+        list.push({ rm: rmVal, name: c.name, guardian: c.guardian || "", id: c.id });
+      }
+    });
+
+    allData.forEach((d) => {
+      if (d.noRekam && d.noRekam !== "-" && !seen.has(d.noRekam.toLowerCase())) {
+        seen.add(d.noRekam.toLowerCase());
+        list.push({ rm: d.noRekam, name: d.namaAnak, guardian: d.namaWali || "", id: "" });
+      }
+    });
+
+    return list;
+  }, [childrenList, allData]);
+
+  // Options for Nama Anak dropdown
+  const anakOptions = useMemo(() => {
+    const list: { name: string; rm: string; guardian: string; id: string }[] = [];
+    const seen = new Set<string>();
+
+    childrenList.forEach((c) => {
+      if (c.name && !seen.has(c.name.toLowerCase())) {
+        seen.add(c.name.toLowerCase());
+        list.push({ name: c.name, rm: c.rm || c.id || "", guardian: c.guardian || "", id: c.id });
+      }
+    });
+
+    allData.forEach((d) => {
+      if (d.namaAnak && d.namaAnak !== "-" && !seen.has(d.namaAnak.toLowerCase())) {
+        seen.add(d.namaAnak.toLowerCase());
+        list.push({ name: d.namaAnak, rm: d.noRekam && d.noRekam !== "-" ? d.noRekam : "", guardian: d.namaWali || "", id: "" });
+      }
+    });
+
+    return list;
+  }, [childrenList, allData]);
+
+  // Options for Orang Tua dropdown
+  const orangtuaOptions = useMemo(() => {
+    const list: { guardian: string; name: string; rm: string; id: string }[] = [];
+    const seen = new Set<string>();
+
+    childrenList.forEach((c) => {
+      const guardianVal = c.guardian?.trim();
+      if (guardianVal && !seen.has(guardianVal.toLowerCase())) {
+        seen.add(guardianVal.toLowerCase());
+        list.push({ guardian: guardianVal, name: c.name, rm: c.rm || c.id || "", id: c.id });
+      }
+    });
+
+    allData.forEach((d) => {
+      const guardianVal = d.namaWali?.trim();
+      if (guardianVal && guardianVal !== "-" && !seen.has(guardianVal.toLowerCase())) {
+        seen.add(guardianVal.toLowerCase());
+        list.push({ guardian: guardianVal, name: d.namaAnak, rm: d.noRekam && d.noRekam !== "-" ? d.noRekam : "", id: "" });
+      }
+    });
+
+    return list;
+  }, [childrenList, allData]);
 
   // Checklist: set of selected therapy names
   const [selectedTerapi, setSelectedTerapi] = useState<string[]>([]);
@@ -225,7 +369,10 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
     }
 
     const matchedChild = childrenList.find(
-      (c) => c.name.toLowerCase() === namaAnak.toLowerCase() || c.id === selectedChildId
+      (c) =>
+        c.name.toLowerCase() === namaAnak.toLowerCase() ||
+        c.id === selectedChildId ||
+        (noRekam && c.rm.toLowerCase() === noRekam.toLowerCase())
     );
     const targetChildId = matchedChild?.id || selectedChildId || childrenList[0]?.id;
 
@@ -277,10 +424,10 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
         }
       }
 
-      setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
+      setNoRekam(""); setNamaAnak(""); setNamaOrangtua(""); setPeriodeAwal(""); setPeriodeAkhir("");
       setSelectedTerapi([]); setScheduleMap({}); setSelectedChildId("");
       showSuccessToast("Jadwal terapi berhasil ditambahkan!");
-      onSubmit({ namaAnak, namaWali: "", hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir, totalMeetings: 4 });
+      onSubmit({ namaAnak, namaWali: namaOrangtua, hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir, totalMeetings: 4 });
       onClose();
     } catch (err: any) {
       console.error("CREATE SCHEDULE ERROR:", err);
@@ -289,8 +436,9 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
   };
 
   const handleClose = () => {
-    setNoRekam(""); setNamaAnak(""); setPeriodeAwal(""); setPeriodeAkhir("");
+    setNoRekam(""); setNamaAnak(""); setNamaOrangtua(""); setPeriodeAwal(""); setPeriodeAkhir("");
     setSelectedTerapi([]); setScheduleMap({}); setHasSubmitted(false); setWarningMessage("");
+    setShowAnakDropdown(false); setShowNoRekamDropdown(false); setShowOrangtuaDropdown(false);
     onClose();
   };
 
@@ -328,97 +476,197 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
               <div className="overflow-y-auto flex-1 p-5">
                 <div className="flex flex-col gap-4">
+                  {/* Grid Input Utama: Kolom Kiri (RM & Terapi) | Kolom Kanan (Anak, Orang Tua, Periode) */}
+                  <div className="grid grid-cols-2 gap-3 items-start">
+                  {/* Kolom Kiri: No. Rekam Medis & Checklist Terapi */}
+                  <div className="flex flex-col gap-3">
+                    {/* No. Rekam Medis dengan Dropdown */}
+                    <div className="relative">
+                      <label className={labelCls}>No. Rekam Medis</label>
+                      <input
+                        type="text"
+                        value={noRekam}
+                        onChange={(e) => {
+                          setNoRekam(e.target.value);
+                          setShowNoRekamDropdown(true);
+                        }}
+                        onFocus={() => setShowNoRekamDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowNoRekamDropdown(false), 200)}
+                        placeholder="RM-000123"
+                        className={getInputCls(hasSubmitted && !noRekam)}
+                      />
+                      {showNoRekamDropdown && (
+                        <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
+                          {rmOptions
+                            .filter((item) => item.rm.toLowerCase().includes(noRekam.toLowerCase()))
+                            .map((item) => (
+                              <li
+                                key={item.rm}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setNoRekam(item.rm);
+                                  if (item.name) setNamaAnak(item.name);
+                                  if (item.guardian) setNamaOrangtua(item.guardian);
+                                  if (item.id) setSelectedChildId(item.id);
+                                  setShowNoRekamDropdown(false);
+                                }}
+                                className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
+                              >
+                                {item.rm}
+                              </li>
+                            ))}
+                          {rmOptions.filter((item) => item.rm.toLowerCase().includes(noRekam.toLowerCase())).length === 0 && (
+                            <li className="px-3 py-2 text-xs text-gray-400">Tidak ada nomor RM cocok</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
 
-                {/* Row 1: No Rekam Medis + Nama Anak */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>No. Rekam Medis</label>
-                    <input type="text" value={noRekam}
-                      onChange={(e) => setNoRekam(e.target.value)}
-                      placeholder="RM-000123" className={getInputCls(hasSubmitted && !noRekam)} />
-                  </div>
-                  <div className="relative">
-                    <label className={labelCls}>Nama Anak</label>
-                    <input type="text" required value={namaAnak}
-                      onChange={(e) => {
-                        setNamaAnak(e.target.value);
-                        setShowAnakDropdown(true);
-                      }}
-                      onFocus={() => setShowAnakDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowAnakDropdown(false), 200)}
-                      placeholder="Nama lengkap anak" className={getInputCls(hasSubmitted && !namaAnak)} />
-                    
-                    {showAnakDropdown && (
-                      <ul className="absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
-                        {Array.from(new Set(allData.map(d => d.namaAnak)))
-                          .filter(name => name.toLowerCase().includes(namaAnak.toLowerCase()))
-                          .map(name => (
-                          <li
-                            key={name}
-                            onMouseDown={(e) => {
-                              e.preventDefault(); // Mencegah onBlur terpicu sebelum diklik
-                              setNamaAnak(name);
-                              setShowAnakDropdown(false);
-                            }}
-                            className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
-                          >
-                            {name}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-
-                {/* Row 2: Checklist Terapi + Periode */}
-                <div className="grid grid-cols-2 gap-3 items-start">
-                  <div>
-                    <label className={labelCls}>Terapi</label>
-                    <div className={`border rounded-lg p-2.5 space-y-2 transition-colors ${hasSubmitted && selectedTerapi.length === 0 ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-gray-50/50"}`}>
-                      {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
-                        const checked = selectedTerapi.includes(name);
-                        const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
-                        return (
-                          <label key={name} className="flex items-center gap-2.5 cursor-pointer group">
-                            <div
-                              onClick={() => toggleTerapi(name)}
-                              className={`w-4.5 h-4.5 w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${
-                                checked
-                                  ? "bg-[#1E5C58] border-[#1E5C58]"
-                                  : "border-gray-300 bg-white group-hover:border-[#2B7A75]"
-                              }`}
-                            >
-                              {checked && (
-                                <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />
-                              )}
-                            </div>
-                            <span
-                              onClick={() => toggleTerapi(name)}
-                              className={`text-sm font-medium transition-colors ${
-                                checked ? "text-[#1E5C58] font-semibold" : "text-gray-600"
-                              }`}
-                            >
-                              {label}
-                            </span>
-                          </label>
-                        );
-                      })}
+                    {/* Checklist Terapi */}
+                    <div>
+                      <label className={labelCls}>Terapi</label>
+                      <div className={`border rounded-lg p-2.5 space-y-2 transition-colors ${hasSubmitted && selectedTerapi.length === 0 ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-gray-50/50"}`}>
+                        {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
+                          const checked = selectedTerapi.includes(name);
+                          const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
+                          return (
+                            <label key={name} className="flex items-center gap-2.5 cursor-pointer group">
+                              <div
+                                onClick={() => toggleTerapi(name)}
+                                className={`w-4.5 h-4.5 w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${
+                                  checked
+                                    ? "bg-[#1E5C58] border-[#1E5C58]"
+                                    : "border-gray-300 bg-white group-hover:border-[#2B7A75]"
+                                }`}
+                              >
+                                {checked && (
+                                  <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />
+                                )}
+                              </div>
+                              <span
+                                onClick={() => toggleTerapi(name)}
+                                className={`text-sm font-medium transition-colors ${
+                                  checked ? "text-[#1E5C58] font-semibold" : "text-gray-600"
+                                }`}
+                              >
+                                {label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label className={labelCls}>Periode</label>
-                    <div className="flex items-center gap-1.5">
-                      <input type="date" value={periodeAwal}
-                        onChange={(e) => setPeriodeAwal(e.target.value)}
-                        className={`flex-1 px-2 py-2.5 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors ${hasSubmitted && !periodeAwal ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
-                      <span className="text-gray-400 text-sm">–</span>
-                      <input type="date" value={periodeAkhir}
-                        onChange={(e) => setPeriodeAkhir(e.target.value)}
-                        className={`flex-1 px-2 py-2.5 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors ${hasSubmitted && !periodeAkhir ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
+
+                  {/* Kolom Kanan: Nama Anak, Orang Tua, Periode */}
+                  <div className="flex flex-col gap-3">
+                    {/* Nama Anak dengan Dropdown */}
+                    <div className="relative">
+                      <label className={labelCls}>Nama Anak</label>
+                      <input
+                        type="text"
+                        required
+                        value={namaAnak}
+                        onChange={(e) => {
+                          setNamaAnak(e.target.value);
+                          setShowAnakDropdown(true);
+                        }}
+                        onFocus={() => setShowAnakDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowAnakDropdown(false), 200)}
+                        placeholder="Nama lengkap anak"
+                        className={getInputCls(hasSubmitted && !namaAnak)}
+                      />
+                      {showAnakDropdown && (
+                        <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
+                          {anakOptions
+                            .filter((item) => item.name.toLowerCase().includes(namaAnak.toLowerCase()))
+                            .map((item) => (
+                              <li
+                                key={item.name}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setNamaAnak(item.name);
+                                  if (item.rm) setNoRekam(item.rm);
+                                  if (item.guardian) setNamaOrangtua(item.guardian);
+                                  if (item.id) setSelectedChildId(item.id);
+                                  setShowAnakDropdown(false);
+                                }}
+                                className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
+                              >
+                                {item.name}
+                              </li>
+                            ))}
+                          {anakOptions.filter((item) => item.name.toLowerCase().includes(namaAnak.toLowerCase())).length === 0 && (
+                            <li className="px-3 py-2 text-xs text-gray-400">Tidak ada nama cocok</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* Kolom Orang Tua dengan Dropdown */}
+                    <div className="relative">
+                      <label className={labelCls}>Orang Tua</label>
+                      <input
+                        type="text"
+                        value={namaOrangtua}
+                        onChange={(e) => {
+                          setNamaOrangtua(e.target.value);
+                          setShowOrangtuaDropdown(true);
+                        }}
+                        onFocus={() => setShowOrangtuaDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowOrangtuaDropdown(false), 200)}
+                        placeholder="Nama orang tua / wali"
+                        className={getInputCls(false)}
+                      />
+                      {showOrangtuaDropdown && (
+                        <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
+                          {orangtuaOptions
+                            .filter((item) => item.guardian.toLowerCase().includes(namaOrangtua.toLowerCase()))
+                            .map((item) => (
+                              <li
+                                key={item.guardian}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setNamaOrangtua(item.guardian);
+                                  if (item.name) setNamaAnak(item.name);
+                                  if (item.rm) setNoRekam(item.rm);
+                                  if (item.id) setSelectedChildId(item.id);
+                                  setShowOrangtuaDropdown(false);
+                                }}
+                                className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
+                              >
+                                {item.guardian}
+                              </li>
+                            ))}
+                          {orangtuaOptions.filter((item) => item.guardian.toLowerCase().includes(namaOrangtua.toLowerCase())).length === 0 && (
+                            <li className="px-3 py-2 text-xs text-gray-400">Tidak ada nama orang tua cocok</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* Kolom Periode */}
+                    <div>
+                      <label className={labelCls}>Periode</label>
+                      <div className="flex items-center gap-1.5">
+                        <PeriodeDateField
+                          value={periodeAwal}
+                          onChange={setPeriodeAwal}
+                          isError={hasSubmitted && !periodeAwal}
+                          placeholder="dd/mm/yyyy"
+                        />
+                        <span className="text-gray-400 text-sm">–</span>
+                        <PeriodeDateField
+                          value={periodeAkhir}
+                          onChange={setPeriodeAkhir}
+                          isError={hasSubmitted && !periodeAkhir}
+                          placeholder="dd/mm/yyyy"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
-                </div>
+              </div>
 
                 {/* Dynamic sections per selected terapi */}
                 <div className="mt-4 flex flex-col">
@@ -1013,14 +1261,22 @@ function EditModal({
                       })}
                     </div>
                   </div>
-                  <div>
-                    <label className={labelCls}>Periode</label>
-                    <div className="flex items-center gap-1.5">
-                      <input type="date" value={periodeAwal} onChange={(e) => setPeriodeAwal(e.target.value)} className="flex-1 px-2 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors" />
-                      <span className="text-gray-400 text-sm">–</span>
-                      <input type="date" value={periodeAkhir} onChange={(e) => setPeriodeAkhir(e.target.value)} className="flex-1 px-2 py-2.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 transition-colors" />
+                    <div>
+                      <label className={labelCls}>Periode</label>
+                      <div className="flex items-center gap-1.5">
+                        <PeriodeDateField
+                          value={periodeAwal}
+                          onChange={setPeriodeAwal}
+                          placeholder="dd/mm/yyyy"
+                        />
+                        <span className="text-gray-400 text-sm">–</span>
+                        <PeriodeDateField
+                          value={periodeAkhir}
+                          onChange={setPeriodeAkhir}
+                          placeholder="dd/mm/yyyy"
+                        />
+                      </div>
                     </div>
-                  </div>
                 </div>
                 </div>
 
@@ -1302,6 +1558,7 @@ export default function JadwalTerapiPage() {
           id: item.id || idx + 1,
           namaAnak: item.child_name || "-",
           namaWali: item.guardian_name || "-",
+          noRekam: item.medical_record_number || "-",
           hari: item.day_name || "Senin",
           jamMulai: item.start_time || "15.00",
           jamSelesai: item.end_time || "16.00",
