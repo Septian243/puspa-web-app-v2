@@ -52,6 +52,36 @@ export interface ExportSoapRecord {
 
 type PeriodeType = "Harian" | "Mingguan" | "Bulanan" | "Custom";
 
+function getTodayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentMonthString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getCurrentWeekString(): string {
+  const now = new Date();
+  const target = new Date(now.valueOf());
+  const dayNr = (now.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  }
+  const weekNum = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+  const year = new Date(firstThursday).getFullYear();
+  return `${year}-W${String(weekNum).padStart(2, "0")}`;
+}
+
 const rekapInputClass =
   "w-full px-4 py-2.5 bg-white border border-teal-100 rounded-xl text-sm text-gray-700 font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]";
 
@@ -85,17 +115,17 @@ function FilterChip({
   );
 }
 
-function FilterMultiSelect({
+function FilterSingleSelect({
   label,
-  selectedValues,
+  value,
   onChange,
-  allLabel,
+  placeholder = "Pilih anak...",
   options,
 }: {
   label: string;
-  selectedValues: string[];
-  onChange: (values: string[]) => void;
-  allLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
   options: string[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -119,28 +149,12 @@ function FilterMultiSelect({
     option.toLowerCase().includes(search.toLowerCase())
   );
 
-  const toggleOption = (option: string) => {
-    if (selectedValues.includes(option)) {
-      onChange(selectedValues.filter((v) => v !== option));
-    } else {
-      onChange([...selectedValues, option]);
-    }
-  };
-
-  let displayText = "";
-  if (selectedValues.length === 0) {
-    displayText = "";
-  } else if (selectedValues.length === 1) {
-    displayText = selectedValues[0];
-  } else {
-    displayText = `${selectedValues[0]} (+${selectedValues.length - 1} lainnya)`;
-  }
-
   return (
     <div ref={dropdownRef} className="relative">
       <FieldLabel>{label}</FieldLabel>
       <div
-        className={`${rekapInputClass} relative flex items-center pr-11 cursor-text`}
+        className={`${rekapInputClass} relative flex items-center pr-11 cursor-text ${!value ? "border-teal-200" : ""
+          }`}
         onClick={() => {
           if (!isOpen) {
             setIsOpen(true);
@@ -151,7 +165,7 @@ function FilterMultiSelect({
         <input
           ref={inputRef}
           type="text"
-          value={isOpen ? search : displayText}
+          value={isOpen ? search : value}
           onFocus={() => setIsOpen(true)}
           onChange={(event) => {
             setSearch(event.target.value);
@@ -163,16 +177,26 @@ function FilterMultiSelect({
               setSearch("");
             }
           }}
-          placeholder={
-            isOpen
-              ? selectedValues.length > 0
-                ? `${selectedValues.length} dipilih - cari...`
-                : `Cari ${label.toLowerCase()}...`
-              : allLabel
-          }
+          placeholder={isOpen ? "Cari nama anak / no RM..." : placeholder}
           aria-label={`Pilih ${label.toLowerCase()}`}
-          className="w-full p-0 text-sm font-medium text-gray-700 bg-transparent border-0 outline-none placeholder:text-gray-500 cursor-text"
+          className="w-full p-0 text-sm font-medium text-gray-700 bg-transparent border-0 outline-none placeholder:text-gray-400 cursor-text"
         />
+
+        {value && !isOpen && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              setSearch("");
+            }}
+            aria-label="Hapus pilihan anak"
+            className="absolute flex items-center justify-center p-1 text-gray-400 transition-colors rounded-full cursor-pointer right-8 hover:text-red-500"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+
         <button
           type="button"
           tabIndex={-1}
@@ -193,11 +217,6 @@ function FilterMultiSelect({
           }
           className="absolute right-0 flex items-center justify-center h-full pr-3 cursor-pointer"
         >
-          {selectedValues.length > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-bold text-white bg-[#2B7A75] rounded-full mr-1 shrink-0">
-              {selectedValues.length}
-            </span>
-          )}
           <ChevronDown
             className={`w-4 h-4 text-gray-700 transition-transform duration-200 ${isOpen ? "rotate-180" : ""
               }`}
@@ -207,84 +226,36 @@ function FilterMultiSelect({
 
       {isOpen && (
         <div className="absolute left-0 right-0 z-30 mt-2 flex flex-col max-h-[240px] overflow-hidden bg-white border border-gray-100 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.12)]">
-          <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-[#F4F9F8]/60">
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onChange([])}
-              className={`text-xs font-bold transition-colors cursor-pointer ${selectedValues.length === 0
-                ? "text-[#1E5C58]"
-                : "text-gray-500 hover:text-[#1E5C58]"
-                }`}
-            >
-              {allLabel}
-            </button>
-            {selectedValues.length > 0 && (
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onChange([])}
-                className="text-[11px] text-red-500 hover:text-red-700 font-bold cursor-pointer"
-              >
-                Hapus Pilihan ({selectedValues.length})
-              </button>
-            )}
-          </div>
-
           <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-0.5">
             {filteredOptions.map((option) => {
-              const isSelected = selectedValues.includes(option);
+              const isSelected = value === option;
               return (
                 <button
                   key={option}
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => toggleOption(option)}
+                  onClick={() => {
+                    onChange(option);
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors flex items-center justify-between cursor-pointer ${isSelected
-                    ? "bg-teal-50/70 font-bold text-[#1E5C58]"
-                    : "text-gray-700 hover:bg-gray-50 font-medium"
+                      ? "bg-teal-50/70 font-bold text-[#1E5C58]"
+                      : "text-gray-700 hover:bg-gray-50 font-medium"
                     }`}
                 >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <div
-                      className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${isSelected
-                        ? "bg-[#2B7A75] border-[#2B7A75] text-white"
-                        : "border-gray-300 bg-white"
-                        }`}
-                    >
-                      {isSelected && (
-                        <Check className="w-3 h-3 text-white" strokeWidth={3} />
-                      )}
-                    </div>
-                    <span className="truncate">{option}</span>
-                  </div>
+                  <span className="truncate">{option}</span>
+                  {isSelected && (
+                    <Check className="w-4 h-4 text-[#2B7A75]" strokeWidth={2.5} />
+                  )}
                 </button>
               );
             })}
             {filteredOptions.length === 0 && (
               <p className="px-3 py-4 text-xs text-center text-gray-400">
-                Data tidak ditemukan.
+                Data anak tidak ditemukan.
               </p>
             )}
-          </div>
-
-          <div className="flex items-center justify-between px-3 py-2 text-xs border-t border-gray-100 shrink-0 bg-gray-50/50">
-            <span className="text-gray-400 font-medium text-[11px]">
-              {selectedValues.length === 0
-                ? "Semua dipilih"
-                : `${selectedValues.length} dari ${options.length} dipilih`}
-            </span>
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setIsOpen(false);
-                setSearch("");
-              }}
-              className="text-[#2B7A75] hover:text-[#1E5C58] font-bold text-xs cursor-pointer"
-            >
-              Tutup
-            </button>
           </div>
         </div>
       )}
@@ -307,20 +278,28 @@ export default function UnduhHasilPage() {
   const therapistSection =
     filterOptions?.therapy_type_label || profile?.therapist_section || "Memuat...";
 
-  const currentDate = new Date();
-  const currentMonthStr = `${currentDate.getFullYear()}-${String(
-    currentDate.getMonth() + 1
-  ).padStart(2, "0")}`;
+  const currentMonthStr = getCurrentMonthString();
 
-  const [selectedAnak, setSelectedAnak] = useState<string[]>([]);
+  const [selectedAnak, setSelectedAnak] = useState<string>("");
   const [periode, setPeriode] = useState<PeriodeType>("Bulanan");
 
   // Custom period states
-  const [hari, setHari] = useState("");
-  const [minggu, setMinggu] = useState("");
+  const [hari, setHari] = useState(getTodayDateString());
+  const [minggu, setMinggu] = useState(getCurrentWeekString());
   const [bulan, setBulan] = useState(currentMonthStr);
   const [dari, setDari] = useState("");
   const [sampai, setSampai] = useState("");
+
+  const handlePeriodeChange = (opt: PeriodeType) => {
+    setPeriode(opt);
+    if (opt === "Harian" && !hari) {
+      setHari(getTodayDateString());
+    } else if (opt === "Mingguan" && !minggu) {
+      setMinggu(getCurrentWeekString());
+    } else if (opt === "Bulanan" && !bulan) {
+      setBulan(currentMonthStr);
+    }
+  };
 
   // Load filter options on mount
   useEffect(() => {
@@ -345,7 +324,8 @@ export default function UnduhHasilPage() {
     const options: string[] = [];
 
     filterOptions.children.forEach((c) => {
-      const label = `${c.child_name} (${c.medical_record_number})`;
+      const rm = c.medical_record_number || (c as any).no_rm || "-";
+      const label = `${c.child_name} (${rm})`;
       mapping[label] = c.id;
       mapping[c.child_name] = c.id;
       options.push(label);
@@ -362,6 +342,15 @@ export default function UnduhHasilPage() {
 
     async function loadPreview() {
       try {
+        if (!selectedAnak) {
+          if (isMounted) {
+            setExportRecords([]);
+            setTotalFilteredCount(0);
+            setIsLoadingData(false);
+          }
+          return;
+        }
+
         const res = await getTherapySessions({
           status: "completed",
           my_sessions: true,
@@ -372,16 +361,14 @@ export default function UnduhHasilPage() {
 
         let sessions = res.items || [];
 
-        // Filter by selected children
-        if (selectedAnak.length > 0) {
-          const selectedIds = selectedAnak
-            .map((name) => childNameToId[name])
-            .filter(Boolean);
-          if (selectedIds.length > 0) {
-            sessions = sessions.filter(
-              (s) => s.child_id && selectedIds.includes(s.child_id)
-            );
-          }
+        // Filter by selected child
+        const selectedId = childNameToId[selectedAnak];
+        if (selectedId) {
+          sessions = sessions.filter(
+            (s) => s.child_id && s.child_id === selectedId
+          );
+        } else {
+          sessions = [];
         }
 
         // Filter by period
@@ -456,18 +443,18 @@ export default function UnduhHasilPage() {
 
   const handleExportPdf = async () => {
     if (isExporting) return;
+    if (!selectedAnak) {
+      showErrorToast("Silakan pilih anak / pasien terlebih dahulu untuk mengunduh PDF.");
+      return;
+    }
     setIsExporting(true);
 
     try {
       const apiFilters: ExportTherapySoapFilters = {};
 
-      if (selectedAnak.length > 0) {
-        const selectedIds = selectedAnak
-          .map((name) => childNameToId[name])
-          .filter(Boolean);
-        if (selectedIds.length > 0) {
-          apiFilters.child_id = selectedIds;
-        }
+      const selectedId = childNameToId[selectedAnak];
+      if (selectedId) {
+        apiFilters.child_id = selectedId;
       }
 
       if (periode === "Harian") {
@@ -511,10 +498,10 @@ export default function UnduhHasilPage() {
   };
 
   const handleReset = () => {
-    setSelectedAnak([]);
+    setSelectedAnak("");
     setPeriode("Bulanan");
-    setHari("");
-    setMinggu("");
+    setHari(getTodayDateString());
+    setMinggu(getCurrentWeekString());
     setBulan(currentMonthStr);
     setDari("");
     setSampai("");
@@ -551,13 +538,13 @@ export default function UnduhHasilPage() {
   activeChips.push({ key: "terapis", label: therapistName, disabled: true });
   activeChips.push({ key: "section", label: therapistSection, disabled: true });
 
-  selectedAnak.forEach((nama) => {
+  if (selectedAnak) {
     activeChips.push({
-      key: `anak-${nama}`,
-      label: `Anak: ${nama}`,
-      onRemove: () => setSelectedAnak((prev) => prev.filter((a) => a !== nama)),
+      key: `anak-${selectedAnak}`,
+      label: `Anak: ${selectedAnak}`,
+      onRemove: () => setSelectedAnak(""),
     });
-  });
+  }
 
   let labelPeriode = "";
   if (periode === "Harian" && hari) labelPeriode = `${hari}`;
@@ -579,8 +566,6 @@ export default function UnduhHasilPage() {
       },
     });
   }
-
-  // Catatan: Ekspor berkas PDF ditunda sementara menunggu rilis endpoint pengiriman PDF langsung dari backend.
 
   return (
     <div className="p-6 md:p-8 space-y-6 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">
@@ -607,11 +592,11 @@ export default function UnduhHasilPage() {
         <div className="p-6 space-y-6">
           <div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <FilterMultiSelect
+              <FilterSingleSelect
                 label="Anak / Pasien"
-                selectedValues={selectedAnak}
+                value={selectedAnak}
                 onChange={setSelectedAnak}
-                allLabel="Semua anak"
+                placeholder="Pilih anak..."
                 options={anakOptions}
               />
 
@@ -651,7 +636,7 @@ export default function UnduhHasilPage() {
                       <button
                         key={opt}
                         type="button"
-                        onClick={() => setPeriode(opt)}
+                        onClick={() => handlePeriodeChange(opt)}
                         className={`cursor-pointer flex-1 whitespace-nowrap px-4 py-2 rounded-lg text-sm transition-all ${isActive
                           ? "bg-[#1E5C58] text-white font-bold shadow-sm"
                           : "text-gray-400 font-semibold hover:text-[#2B7A75]"
@@ -759,17 +744,24 @@ export default function UnduhHasilPage() {
 
         {/* ── Export ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-[#F4F9F8]/50">
-          <p className="text-xs font-semibold text-gray-500">
-            Mengekspor data SOAP mencakup kolom:{" "}
-            <span className="font-bold text-[#1E5C58]">
-              S, O, A, P, I, A Lanjutan, P Lanjutan.
-            </span>
-          </p>
+          <div>
+            <p className="text-xs font-semibold text-gray-500">
+              Mengekspor data SOAP mencakup kolom:{" "}
+              <span className="font-bold text-[#1E5C58]">
+                S, O, A, P, I, A Lanjutan, P Lanjutan.
+              </span>
+            </p>
+            {!selectedAnak && (
+              <p className="text-[11px] font-bold text-amber-600 mt-1">
+                * Pilih anak / pasien terlebih dahulu untuk mengunduh laporan PDF.
+              </p>
+            )}
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-3 shrink-0">
             <button
               type="button"
               onClick={handleExportPdf}
-              disabled={isExporting}
+              disabled={isExporting || !selectedAnak}
               className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#1E5C58]/90 rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               {isExporting ? (
@@ -855,7 +847,9 @@ export default function UnduhHasilPage() {
                       colSpan={6}
                       className="px-6 py-8 text-sm text-center text-gray-400"
                     >
-                      Data tidak ditemukan sesuai filter.
+                      {!selectedAnak
+                        ? "Silakan pilih anak / pasien terlebih dahulu untuk menampilkan catatan SOAP."
+                        : "Data catatan SOAP tidak ditemukan sesuai filter di atas."}
                     </td>
                   </tr>
                 )}
