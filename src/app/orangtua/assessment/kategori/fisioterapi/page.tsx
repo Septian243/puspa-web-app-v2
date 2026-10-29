@@ -9,6 +9,11 @@ import {
   getParentAssessmentQuestions,
   submitParentAssessment,
 } from "@/lib/api/asesmentTerapiOrtu";
+import { useToast } from "@/hooks/useToast";
+import { ToastContainer } from "@/components/ui/Toast";
+import { useAssessmentSteps } from "@/hooks/useAssessmentSteps";
+import { usePersistAnswers, loadSavedAnswers } from "@/hooks/usePersistAnswers";
+import StepNavigator from "../data-umum/components/StepNavigator";
 
 function FisioterapiContent() {
   const router = useRouter();
@@ -21,6 +26,16 @@ function FisioterapiContent() {
   const [keluhanJawaban, setKeluhanJawaban] = useState("");
   const [riwayatJawaban, setRiwayatJawaban] = useState("");
   const [loading, setLoading] = useState(false);
+  const [answersReady, setAnswersReady] = useState(false);
+  const { toasts, addToast, dismissToast } = useToast();
+  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId);
+
+  // Bangun objek jawaban untuk persist (key: question_id)
+  const answersObj: Record<string, any> = {
+    keluhan: keluhanJawaban,
+    riwayat: riwayatJawaban,
+  };
+  usePersistAnswers(assessmentId, "fisio", answersObj, answersReady);
 
   useEffect(() => {
     async function fetchQuestions() {
@@ -30,16 +45,34 @@ function FisioterapiContent() {
 
         setKeluhanQuestion(questions.find((q: any) => q.question_number === 1));
         setRiwayatQuestion(questions.find((q: any) => q.question_number === 2));
+
+        // Restore dari localStorage
+        const saved = loadSavedAnswers(assessmentId, "fisio");
+        if (saved) {
+          if (saved.keluhan) setKeluhanJawaban(saved.keluhan);
+          if (saved.riwayat) setRiwayatJawaban(saved.riwayat);
+        }
+        setAnswersReady(true);
       } catch (err) {
         console.error(err);
       }
     }
 
     fetchQuestions();
-  }, []);
+  }, [assessmentId]);
 
   const handleSubmit = async () => {
-    if (!assessmentId) return alert("Assessment ID tidak ditemukan.");
+    if (!assessmentId) return addToast("error", "Assessment ID tidak ditemukan", "Pastikan URL sudah benar.");
+
+    // Validasi field wajib
+    if (!keluhanJawaban.trim()) {
+      addToast("warning", "Data belum lengkap", "Kolom keluhan utama wajib diisi.");
+      return;
+    }
+    if (!riwayatJawaban.trim()) {
+      addToast("warning", "Data belum lengkap", "Kolom riwayat medis wajib diisi.");
+      return;
+    }
 
     const payload = {
       answers: [
@@ -51,27 +84,30 @@ function FisioterapiContent() {
     try {
       setLoading(true);
       await submitParentAssessment(assessmentId, "fisio_parent", payload);
-      alert("Berhasil menyimpan data fisioterapi!");
-      router.push(`/orangtua/assessment/kategori?assessment_id=${assessmentId}`);
+      addToast("success", "Data fisioterapi berhasil disimpan!", "Mengarahkan ke halaman berikutnya...");
+      setTimeout(() => {
+        router.push(`/orangtua/assessment/kategori/okupasi?assessment_id=${assessmentId}`);
+      }, 800);
     } catch (err) {
       console.error(err);
-      alert("Gagal menyimpan data.");
+      addToast("error", "Gagal menyimpan data", "Terjadi kesalahan pada server.");
     } finally {
       setLoading(false);
     }
   };
 
-  const steps = [
-    { label: "Data Umum", path: "/orangtua/assessment/kategori/data-umum" },
-    { label: "Data Fisioterapi", path: "/orangtua/assessment/kategori/fisioterapi" },
-    { label: "Data Terapi Okupasi", path: "/orangtua/assessment/kategori/okupasi" },
-    { label: "Data Terapi Wicara", path: "/orangtua/assessment/kategori/wicara" },
-    { label: "Data Paedagog", path: "/orangtua/assessment/kategori/paedagog" },
-  ];
-
   const activeStep = steps.findIndex((step) => pathname.includes(step.path));
 
+  // Navigasi kembali ke data-umum, ke kategori terakhir
+  const backToDataUmum = () => {
+    router.push(
+      `/orangtua/assessment/kategori/data-umum?assessment_id=${assessmentId}&last_category=last`
+    );
+  };
+
   return (
+    <>
+    <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     <ResponsiveOrangtuaLayout maxWidth="max-w-none">
       {/* Header section with back & close actions */}
       <div className="flex flex-row items-center justify-between gap-4 mb-6 text-[#1E5C58]">
@@ -88,41 +124,11 @@ function FisioterapiContent() {
         </button>
       </div>
 
-      {/* Indikator Langkah (Stepper) */}
-      <div className="mb-6 md:mb-10 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-        <div className="flex items-center min-w-max md:min-w-0 md:justify-center px-4 md:px-0">
-          {steps.map((step, i) => (
-            <div key={i} className="flex items-center">
-              <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-2 cursor-pointer group" onClick={() => router.push(`${step.path}?assessment_id=${assessmentId}`)}>
-                <div
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-2xl flex items-center justify-center text-[10px] md:text-sm font-extrabold border-2 transition-all duration-300 ${
-                    i === activeStep
-                      ? "bg-[#2B7A75] border-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                      : i < activeStep
-                        ? "bg-teal-50/50 border-[#2B7A75]/30 text-[#2B7A75]"
-                        : "bg-gray-100 border-gray-200 text-gray-400"
-                  }`}
-                >
-                  {i + 1}
-                </div>
-                <span
-                  className={`text-[10px] md:text-xs font-bold transition-colors ${
-                    i === activeStep ? "text-[#1E5C58]" : "text-gray-400 group-hover:text-gray-600"
-                  } max-w-[70px] md:max-w-none leading-tight`}
-                >
-                  {step.label}
-                </span>
-              </div>
-              {i < steps.length - 1 && (
-                <div
-                  className={`h-0.5 transition-all duration-300 mx-2 md:mx-4 translate-y-[-10px] md:translate-y-[-14px] rounded-full ${
-                    i < activeStep ? "bg-[#2B7A75] w-6 md:w-16" : "bg-gray-200 w-4 md:w-12"
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+      {/* Stepper Dinamis - hanya tampilkan terapi yang dibutuhkan anak */}
+      <div className="w-full mb-6 md:mb-10">
+        {!stepsLoading && (
+          <StepNavigator steps={steps} activeStep={activeStep} assessmentId={assessmentId} />
+        )}
       </div>
 
       <div className="bg-white rounded-3xl border border-teal-50 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] p-5 md:p-8 w-full">
@@ -168,7 +174,7 @@ function FisioterapiContent() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
-              onClick={() => router.push(`/orangtua/assessment/kategori/data-umum?assessment_id=${assessmentId}`)}
+              onClick={backToDataUmum}
               className="px-8 py-3.5 bg-gray-100 hover:bg-gray-200 text-[#1E5C58] rounded-2xl font-bold active:scale-95 transition-all w-full sm:w-auto text-xs cursor-pointer text-center"
             >
               Sebelumnya
@@ -182,12 +188,13 @@ function FisioterapiContent() {
                   : "bg-[#2B7A75] hover:bg-[#1E5C58]"
               }`}
             >
-              {loading ? "Menyimpan..." : "Simpan Jawaban"}
+              {loading ? "Menyimpan..." : "Simpan & Lanjutkan"}
             </button>
           </div>
         </div>
       </div>
     </ResponsiveOrangtuaLayout>
+    </>
   );
 }
 

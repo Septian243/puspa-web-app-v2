@@ -11,9 +11,10 @@ interface Step {
 interface StepNavigatorProps {
     steps: Step[];
     activeStep: number;
+    assessmentId?: string | null;
 }
 
-export default function StepNavigator({ steps, activeStep }: StepNavigatorProps) {
+export default function StepNavigator({ steps, activeStep, assessmentId }: StepNavigatorProps) {
     const router = useRouter();
 
     return (
@@ -27,7 +28,7 @@ export default function StepNavigator({ steps, activeStep }: StepNavigatorProps)
                         {/* Kontainer Step */}
                         <div
                             className="flex flex-col items-center text-center space-y-1.5 md:space-y-2 cursor-pointer group"
-                            onClick={() => router.push(step.path)}
+                            onClick={() => router.push(`${step.path}${assessmentId ? `?assessment_id=${assessmentId}` : ""}`)}
                         >
                             {/* Lingkaran Angka */}
                             <div

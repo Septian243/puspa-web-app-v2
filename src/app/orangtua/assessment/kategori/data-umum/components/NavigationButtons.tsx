@@ -48,7 +48,7 @@ export default function NavigationButtons({
                     disabled={submitting}
                     className="bg-[#2B7A75] hover:bg-[#1E5C58] text-white px-6 md:px-8 py-3 rounded-2xl disabled:opacity-60 text-xs md:text-sm font-bold shadow-md shadow-teal-500/10 transition-all active:scale-95 cursor-pointer text-center order-1 sm:order-2"
                 >
-                    {submitting ? "Mengirim..." : "Kirim Jawaban"}
+                    {submitting ? "Menyimpan..." : "Simpan & Lanjutkan"}
                 </button>
             )}
         </div>

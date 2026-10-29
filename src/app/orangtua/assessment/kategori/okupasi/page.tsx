@@ -3,13 +3,18 @@
 
 import React, { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X, ArrowLeft, CheckCircle2, ChevronRight } from "lucide-react";
+import { X, ChevronRight } from "lucide-react";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
 
 import {
   getParentAssessmentQuestions,
   submitParentAssessment,
 } from "@/lib/api/asesmentTerapiOrtu";
+import { useToast } from "@/hooks/useToast";
+import { ToastContainer } from "@/components/ui/Toast";
+import { useAssessmentSteps } from "@/hooks/useAssessmentSteps";
+import { usePersistAnswers, loadSavedAnswers } from "@/hooks/usePersistAnswers";
+import StepNavigator from "../data-umum/components/StepNavigator";
 
 type Question = {
   id: number;
@@ -46,8 +51,15 @@ function OkupasiAssessmentContent() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const [activeIdx, setActiveIdx] = useState(0);
+  const { toasts, addToast, dismissToast } = useToast();
+  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId);
+  const activeStep = steps.findIndex((s) => s.code === "okupasi");
+
+  // Persist jawaban ke localStorage
+  usePersistAnswers(assessmentId, "okupasi", answers as Record<string, any>, !loading);
 
   const lastIndex = categories.length - 1;
 
@@ -69,6 +81,11 @@ function OkupasiAssessmentContent() {
             })),
           }))
         );
+        // Restore dari localStorage
+        const saved = loadSavedAnswers(assessmentId, "okupasi");
+        if (saved && Object.keys(saved).length > 0) {
+          setAnswers(saved as Record<number, any>);
+        }
       } catch (e) {
         console.error("Gagal load pertanyaan okupasi:", e);
       } finally {
@@ -77,21 +94,10 @@ function OkupasiAssessmentContent() {
     }
 
     load();
-  }, []);
+  }, [assessmentId]);
 
   const currentCategory = categories[activeIdx];
 
-  const steps = [
-    { label: "Data Umum", path: "/orangtua/assessment/kategori/data-umum" },
-    { label: "Data Fisioterapi", path: "/orangtua/assessment/kategori/fisioterapi" },
-    { label: "Data Terapi Okupasi", path: "/orangtua/assessment/kategori/okupasi" },
-    { label: "Data Terapi Wicara", path: "/orangtua/assessment/kategori/wicara" },
-    { label: "Data Paedagog", path: "/orangtua/assessment/kategori/paedagog" },
-  ];
-
-  const activeStep = steps.findIndex(
-    (step) => step.label === "Data Terapi Okupasi"
-  );
 
   const setAnswer = (qid: number, val: any) =>
     setAnswers((s) => ({ ...s, [qid]: val }));
@@ -108,7 +114,7 @@ function OkupasiAssessmentContent() {
 
   const onSubmitAll = async () => {
     if (!assessmentId) {
-      alert("Assessment ID tidak ditemukan!");
+      addToast("error", "Assessment ID tidak ditemukan!", "Pastikan URL sudah benar.");
       return;
     }
 
@@ -145,12 +151,17 @@ function OkupasiAssessmentContent() {
     };
 
     try {
+      setSubmitting(true);
       await submitParentAssessment(assessmentId, "okupasi_parent", payload);
-      alert("Jawaban berhasil dikirim!");
-      router.push(`/orangtua/assessment/kategori?assessment_id=${assessmentId}`);
+      addToast("success", "Data terapi okupasi berhasil disimpan!", "Mengarahkan ke halaman berikutnya...");
+      setTimeout(() => {
+        router.push(`/orangtua/assessment/kategori/wicara?assessment_id=${assessmentId}`);
+      }, 800);
     } catch (e) {
       console.error("Error submit okupasi:", e);
-      alert("Gagal mengirim jawaban.");
+      addToast("error", "Gagal mengirim jawaban", "Terjadi kesalahan pada server.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -166,6 +177,8 @@ function OkupasiAssessmentContent() {
   if (!currentCategory) return null;
 
   return (
+    <>
+    <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     <ResponsiveOrangtuaLayout maxWidth="max-w-none">
       {/* Header section with back & close actions */}
       <div className="flex flex-row items-center justify-between gap-4 mb-6 text-[#1E5C58]">
@@ -182,44 +195,11 @@ function OkupasiAssessmentContent() {
         </button>
       </div>
 
-      {/* STEP INDICATOR */}
-      <div className="mb-6 md:mb-10 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-        <div className="flex items-center min-w-max md:min-w-0 md:justify-center px-4 md:px-0">
-          {steps.map((step, i) => (
-            <div key={i} className="flex items-center">
-              <div 
-                className="flex flex-col items-center text-center space-y-1.5 md:space-y-2 cursor-pointer group" 
-                onClick={() => router.push(`${step.path}?assessment_id=${assessmentId}`)}
-              >
-                <div
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-2xl flex items-center justify-center text-[10px] md:text-sm font-extrabold border-2 transition-all duration-300 ${
-                    i === activeStep
-                      ? "bg-[#2B7A75] border-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                      : i < activeStep
-                        ? "bg-teal-50/50 border-[#2B7A75]/30 text-[#2B7A75]"
-                        : "bg-gray-100 border-gray-200 text-gray-400"
-                  }`}
-                >
-                  {i + 1}
-                </div>
-                <span
-                  className={`text-[10px] md:text-xs font-bold transition-colors ${
-                    i === activeStep ? "text-[#1E5C58]" : "text-gray-400 group-hover:text-gray-600"
-                  } max-w-[70px] md:max-w-none leading-tight`}
-                >
-                  {step.label}
-                </span>
-              </div>
-              {i < steps.length - 1 && (
-                <div
-                  className={`h-0.5 transition-all duration-300 mx-2 md:mx-4 translate-y-[-10px] md:translate-y-[-14px] rounded-full ${
-                    i < activeStep ? "bg-[#2B7A75] w-6 md:w-16" : "bg-gray-200 w-4 md:w-12"
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+      {/* Stepper Dinamis */}
+      <div className="w-full mb-6 md:mb-10">
+        {!stepsLoading && (
+          <StepNavigator steps={steps} activeStep={activeStep} assessmentId={assessmentId} />
+        )}
       </div>
 
       {/* FORM CARD */}
@@ -358,9 +338,8 @@ function OkupasiAssessmentContent() {
         <div className="flex flex-col sm:flex-row justify-between mt-10 gap-4 pt-6 border-t border-gray-100">
           <button
             type="button"
-            onClick={goPrev}
-            disabled={activeIdx === 0}
-            className="px-6 py-3.5 rounded-2xl border border-gray-200 text-[#1E5C58] font-bold bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs order-2 sm:order-1 active:scale-95 cursor-pointer text-center"
+            onClick={activeIdx > 0 ? goPrev : () => router.push(`/orangtua/assessment/kategori/fisioterapi?assessment_id=${assessmentId}`)}
+            className="px-6 py-3.5 rounded-2xl border border-gray-200 text-[#1E5C58] font-bold bg-white hover:bg-gray-50 transition-all text-xs order-2 sm:order-1 active:scale-95 cursor-pointer text-center"
           >
             Sebelumnya
           </button>
@@ -378,14 +357,16 @@ function OkupasiAssessmentContent() {
               <button
                 type="button"
                 onClick={onSubmitAll}
-                className="px-10 py-3.5 bg-[#2B7A75] hover:bg-[#1E5C58] text-white rounded-2xl font-bold transition-all shadow-md shadow-teal-500/10 active:scale-95 text-xs w-full sm:w-auto cursor-pointer text-center flex items-center justify-center gap-1.5"
+                disabled={submitting}
+                className="px-10 py-3.5 bg-[#2B7A75] hover:bg-[#1E5C58] disabled:opacity-60 text-white rounded-2xl font-bold transition-all shadow-md shadow-teal-500/10 active:scale-95 text-xs w-full sm:w-auto cursor-pointer text-center flex items-center justify-center gap-1.5"
               >
-                Simpan & Kirim Jawaban
+                {submitting ? "Menyimpan..." : "Simpan & Lanjutkan"}
               </button>
             )}
           </div>
         </div>
       </div>
     </ResponsiveOrangtuaLayout>
+    </>
   );
 }

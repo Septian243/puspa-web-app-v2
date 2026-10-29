@@ -14,6 +14,10 @@ import NavigationButtons from "./components/NavigationButtons";
 
 import { useAssessmentData } from "./hooks/useAssessmentData";
 import { useAnswers } from "./hooks/useAnswers";
+import { useToast } from "@/hooks/useToast";
+import { ToastContainer } from "@/components/ui/Toast";
+import { useAssessmentSteps } from "@/hooks/useAssessmentSteps";
+import { usePersistAnswers, loadSavedAnswers } from "@/hooks/usePersistAnswers";
 
 import {
   submitParentAssessment,
@@ -21,7 +25,7 @@ import {
 } from "@/lib/api/asesmentTerapiOrtu";
 import { getMyAssessments } from "@/lib/api/childrenAsesment";
 
-import { ASSESSMENT_STEPS, INITIAL_PARENT_IDENTITY } from "./utils/constants";
+import { INITIAL_PARENT_IDENTITY } from "./utils/constants";
 
 export default function FormAssessmentOrangtua() {
   const router = useRouter();
@@ -30,21 +34,56 @@ export default function FormAssessmentOrangtua() {
 
   const assessmentIdFromQuery = searchParams?.get("assessment_id") || null;
 
+  // ---- State ----
   const [activeCategory, setActiveCategory] = useState<string>("identitas");
   const [submitting, setSubmitting] = useState<boolean>(false);
-
   const [childName, setChildName] = useState<string>("");
   const [childBirthInfo, setChildBirthInfo] = useState<string>("");
-
   const [parentIdentity, setParentIdentity] = useState<any>(INITIAL_PARENT_IDENTITY);
+  const [answersReady, setAnswersReady] = useState(false);
 
+  // ---- Hooks ----
+  const { toasts, addToast, dismissToast } = useToast();
+  const { steps: dynamicSteps, loading: stepsLoading } = useAssessmentSteps(assessmentIdFromQuery);
   const { groups, loading, answers, setAnswers } = useAssessmentData();
   const { setAnswer, toggleCheckboxValue, handleTableCell } = useAnswers(answers, setAnswers);
 
-  const activeStep = ASSESSMENT_STEPS.findIndex((step) => pathname?.includes(step.path));
+  // Persist jawaban ke localStorage
+  usePersistAnswers(assessmentIdFromQuery, "umum", answers, answersReady);
+
+  // Step navigator
+  const activeStep = dynamicSteps.findIndex((step) => pathname?.includes(step.path));
   const currentQuestions = groups.find((g) => g.group_key === activeCategory)?.questions || [];
   const categoryOrder = groups.map((g) => g.group_key);
   const currentIndex = categoryOrder.indexOf(activeCategory);
+
+  /* =======================
+     RESTORE ANSWERS DARI LOCALSTORAGE
+  ========================== */
+  useEffect(() => {
+    if (loading) return; // Tunggu data questions selesai dimuat
+    const saved = loadSavedAnswers(assessmentIdFromQuery, "umum");
+    if (saved && Object.keys(saved).length > 0) {
+      setAnswers((prev: any) => ({ ...prev, ...saved }));
+    }
+    setAnswersReady(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  /* =======================
+     RESTORE KATEGORI TERAKHIR (dari searchParams jika ada)
+  ========================== */
+  useEffect(() => {
+    if (categoryOrder.length === 0) return;
+    const lastCat = searchParams?.get("last_category");
+    if (!lastCat) return;
+    if (lastCat === "last") {
+      setActiveCategory(categoryOrder[categoryOrder.length - 1]);
+    } else if (categoryOrder.includes(lastCat)) {
+      setActiveCategory(lastCat);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryOrder.length]);
 
   /* =======================
      LOAD CHILD INFO
@@ -87,6 +126,9 @@ export default function FormAssessmentOrangtua() {
     if (currentIndex > 0) {
       setActiveCategory(categoryOrder[currentIndex - 1]);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (currentIndex === 0 || currentIndex === -1) {
+      setActiveCategory("identitas");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -99,6 +141,19 @@ export default function FormAssessmentOrangtua() {
 
   const handleSubmitIdentity = async (e?: any) => {
     if (e) e.preventDefault();
+
+    // Validasi: minimal nama ayah atau nama ibu wajib diisi
+    const fatherName = (parentIdentity.father_name || "").trim();
+    const motherName = (parentIdentity.mother_name || "").trim();
+    if (!fatherName && !motherName) {
+      addToast(
+        "warning",
+        "Data belum lengkap",
+        "Nama lengkap Ayah atau Ibu wajib diisi minimal salah satu."
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -126,11 +181,12 @@ export default function FormAssessmentOrangtua() {
       };
 
       await updateParentIdentity(payload);
-      alert("Identitas berhasil disimpan.");
-      goNextCategory();
+      addToast("success", "Identitas berhasil disimpan", "Melanjutkan ke bagian berikutnya...");
+      // Tunggu sebentar agar toast terlihat lalu navigasi
+      setTimeout(() => goNextCategory(), 800);
     } catch (err: any) {
       console.error("Gagal update identitas:", err);
-      alert(err?.message || "Gagal menyimpan identitas");
+      addToast("error", "Gagal menyimpan identitas", err?.message || "Terjadi kesalahan pada server.");
     } finally {
       setSubmitting(false);
     }
@@ -141,7 +197,24 @@ export default function FormAssessmentOrangtua() {
   ========================== */
   const handleSubmitAssessment = async () => {
     if (!assessmentIdFromQuery) {
-      alert("assessment_id tidak ditemukan di URL.");
+      addToast("error", "Assessment ID tidak ditemukan", "Pastikan URL sudah benar.");
+      return;
+    }
+
+    // Validasi: semua pertanyaan wajib harus terisi
+    const currentQuestionsList = groups
+      .filter((g) => g.group_key !== "identitas")
+      .flatMap((g) => g.questions || []);
+    const emptyRequired = currentQuestionsList.filter(
+      (q: any) => !q.is_optional && (answers[q.id] === "" || answers[q.id] === null || answers[q.id] === undefined ||
+        (Array.isArray(answers[q.id]) && answers[q.id].length === 0))
+    );
+    if (emptyRequired.length > 0) {
+      addToast(
+        "warning",
+        "Data belum lengkap",
+        `Masih ada ${emptyRequired.length} pertanyaan wajib yang belum diisi.`
+      );
       return;
     }
 
@@ -171,17 +244,21 @@ export default function FormAssessmentOrangtua() {
       };
 
       await submitParentAssessment(assessmentIdFromQuery, "umum_parent", payload);
-      alert("Jawaban assessment berhasil dikirim.");
-      router.push(`/orangtua/assessment/kategori?assessment_id=${assessmentIdFromQuery}`);
+      addToast("success", "Data umum berhasil disimpan!", "Mengarahkan ke halaman berikutnya...");
+      setTimeout(() => {
+        router.push(`/orangtua/assessment/kategori/fisioterapi?assessment_id=${assessmentIdFromQuery}`);
+      }, 800);
     } catch (err: any) {
       console.error("Gagal submit assessment:", err);
-      alert(err?.message || "Gagal mengirim jawaban assessment");
+      addToast("error", "Gagal mengirim data", err?.message || "Terjadi kesalahan pada server.");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
+    <>
+    <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     <ResponsiveOrangtuaLayout maxWidth="max-w-none">
       {/* Header section with back & close actions */}
       <div className="flex flex-row items-center justify-between gap-4 mb-6 text-[#1E5C58]">
@@ -202,9 +279,11 @@ export default function FormAssessmentOrangtua() {
         </button>
       </div>
 
-      {/* Step Navigator */}
+      {/* Step Navigator - Dinamis sesuai terapi anak */}
       <div className="w-full mb-6">
-        <StepNavigator steps={ASSESSMENT_STEPS} activeStep={activeStep} />
+        {!stepsLoading && (
+          <StepNavigator steps={dynamicSteps} activeStep={activeStep} assessmentId={assessmentIdFromQuery} />
+        )}
       </div>
 
       {/* Content Section */}
@@ -221,6 +300,7 @@ export default function FormAssessmentOrangtua() {
               onChange={(e) => setActiveCategory(e.target.value)}
               className="appearance-none border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-xs md:text-sm text-[#1E5C58] font-bold w-full bg-white cursor-pointer focus:ring-2 focus:ring-[#2B7A75] focus:border-transparent outline-none transition-all"
             >
+              <option value="identitas">Identitas Orang Tua & Anak</option>
               {groups.map((g) => (
                 <option key={g.group_key} value={g.group_key}>
                   {g.title}
@@ -284,5 +364,6 @@ export default function FormAssessmentOrangtua() {
         )}
       </section>
     </ResponsiveOrangtuaLayout>
+    </>
   );
 }

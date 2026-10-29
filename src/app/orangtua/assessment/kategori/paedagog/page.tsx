@@ -10,6 +10,11 @@ import {
   submitParentAssessment,
   ParentAssessmentType,
 } from "@/lib/api/asesmentTerapiOrtu";
+import { useToast } from "@/hooks/useToast";
+import { ToastContainer } from "@/components/ui/Toast";
+import { useAssessmentSteps } from "@/hooks/useAssessmentSteps";
+import { usePersistAnswers, loadSavedAnswers } from "@/hooks/usePersistAnswers";
+import StepNavigator from "../data-umum/components/StepNavigator";
 
 type Question = {
   id: number;
@@ -27,33 +32,35 @@ type Group = {
   questions: Question[];
 };
 
-type Step = { label: string; path: string };
-
 function PaedagogFormContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("assessment_id");
 
-  const steps: Step[] = [
-    { label: "Data Umum", path: "/orangtua/assessment/kategori/data-umum" },
-    { label: "Data Fisioterapi", path: "/orangtua/assessment/kategori/fisioterapi" },
-    { label: "Data Terapi Okupasi", path: "/orangtua/assessment/kategori/okupasi" },
-    { label: "Data Terapi Wicara", path: "/orangtua/assessment/kategori/wicara" },
-    { label: "Data Paedagog", path: "/orangtua/assessment/kategori/paedagog" },
-  ];
-
-  const activeStep = steps.findIndex((step) => step.path.includes("/paedagog"));
+  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId);
+  const activeStep = steps.findIndex((s) => pathname.includes(s.path));
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [answers, setAnswers] = useState<Record<string, Record<number, any>>>({});
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const { toasts, addToast, dismissToast } = useToast();
+
+  // Persist jawaban ke localStorage (flatten ke satu Record)
+  const flatAnswers: Record<string, any> = {};
+  Object.entries(answers).forEach(([gk, qmap]) => {
+    Object.entries(qmap).forEach(([qid, val]) => {
+      flatAnswers[`${gk}__${qid}`] = val;
+    });
+  });
+  usePersistAnswers(assessmentId, "paedagog", flatAnswers, !loading);
 
   useEffect(() => {
     const fetchQuestions = async () => {
       if (!assessmentId) {
-        alert("Assessment ID tidak ditemukan");
+        addToast("error", "Assessment ID tidak ditemukan", "Pastikan URL sudah benar.");
         return;
       }
       try {
@@ -74,16 +81,31 @@ function PaedagogFormContent() {
 
         setGroups(dataGroups);
 
-        const initAnswers: Record<string, Record<number, any>> = {};
-        dataGroups.forEach((g) => {
-          initAnswers[g.group_key] = {};
-          g.questions.forEach((q) => (initAnswers[g.group_key][q.id] = ""));
-        });
-
-        setAnswers(initAnswers);
+        // Restore dari localStorage jika ada
+        const saved = loadSavedAnswers(assessmentId, "paedagog");
+        if (saved && Object.keys(saved).length > 0) {
+          // Unflatten kembali ke struktur {groupKey: {questionId: value}}
+          const restored: Record<string, Record<number, any>> = {};
+          Object.entries(saved).forEach(([key, val]) => {
+            const parts = key.split("__");
+            if (parts.length === 2) {
+              const [gk, qid] = parts;
+              if (!restored[gk]) restored[gk] = {};
+              restored[gk][Number(qid)] = val;
+            }
+          });
+          setAnswers(restored);
+        } else {
+          const initAnswers: Record<string, Record<number, any>> = {};
+          dataGroups.forEach((g) => {
+            initAnswers[g.group_key] = {};
+            g.questions.forEach((q) => (initAnswers[g.group_key][q.id] = ""));
+          });
+          setAnswers(initAnswers);
+        }
       } catch (error) {
         console.error(error);
-        alert("Gagal mengambil pertanyaan");
+        addToast("error", "Gagal mengambil pertanyaan", "Terjadi kesalahan pada server.");
       } finally {
         setLoading(false);
       }
@@ -106,8 +128,9 @@ function PaedagogFormContent() {
   const handlePreviousGroup = () => currentStep > 0 && setCurrentStep(currentStep - 1);
 
   const onSave = async () => {
-    if (!assessmentId) return alert("Assessment ID tidak ditemukan");
+    if (!assessmentId) return addToast("error", "Assessment ID tidak ditemukan", "Pastikan URL sudah benar.");
     try {
+      setSubmitting(true);
       const formattedAnswers = Object.values(answers).flatMap((group) =>
         Object.entries(group)
           .filter(([_, answer]) => answer !== "" && answer !== null)
@@ -115,11 +138,15 @@ function PaedagogFormContent() {
       );
 
       await submitParentAssessment(assessmentId, "paedagog_parent", { answers: formattedAnswers });
-      alert("Jawaban berhasil disimpan");
-      router.push(`/orangtua/assessment/kategori?assessment_id=${assessmentId}`);
+      addToast("success", "Semua data assessment berhasil disimpan!", "Assessment selesai. Mengarahkan...");
+      setTimeout(() => {
+        router.push(`/orangtua/assessment/kategori?assessment_id=${assessmentId}`);
+      }, 800);
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Gagal submit jawaban");
+      addToast("error", "Gagal submit jawaban", error.message || "Terjadi kesalahan pada server.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -137,6 +164,8 @@ function PaedagogFormContent() {
   const group = groups[currentStep];
 
   return (
+    <>
+    <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     <ResponsiveOrangtuaLayout maxWidth="max-w-none">
       {/* Header section with back & close actions */}
       <div className="flex flex-row items-center justify-between gap-4 mb-6 text-[#1E5C58]">
@@ -153,44 +182,11 @@ function PaedagogFormContent() {
         </button>
       </div>
 
-      {/* Step Progress - Responsive */}
-      <div className="mb-6 md:mb-10 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-        <div className="flex items-center min-w-max md:min-w-0 md:justify-center px-4 md:px-0">
-          {steps.map((step, i) => (
-            <div key={i} className="flex items-center">
-              <div 
-                className="flex flex-col items-center text-center space-y-1.5 md:space-y-2 cursor-pointer group" 
-                onClick={() => router.push(`${step.path}?assessment_id=${assessmentId}`)}
-              >
-                <div
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-2xl flex items-center justify-center text-[10px] md:text-sm font-extrabold border-2 transition-all duration-300 ${
-                    i === activeStep
-                      ? "bg-[#2B7A75] border-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                      : i < activeStep
-                        ? "bg-teal-50/50 border-[#2B7A75]/30 text-[#2B7A75]"
-                        : "bg-gray-100 border-gray-200 text-gray-400"
-                  }`}
-                >
-                  {i + 1}
-                </div>
-                <span
-                  className={`text-[10px] md:text-xs font-bold transition-colors ${
-                    i === activeStep ? "text-[#1E5C58]" : "text-gray-400 group-hover:text-gray-600"
-                  } max-w-[70px] md:max-w-none leading-tight`}
-                >
-                  {step.label}
-                </span>
-              </div>
-              {i < steps.length - 1 && (
-                <div
-                  className={`h-0.5 transition-all duration-300 mx-2 md:mx-4 translate-y-[-10px] md:translate-y-[-14px] rounded-full ${
-                    i < activeStep ? "bg-[#2B7A75] w-6 md:w-16" : "bg-gray-200 w-4 md:w-12"
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+      {/* Stepper Dinamis */}
+      <div className="w-full mb-6 md:mb-10">
+        {!stepsLoading && (
+          <StepNavigator steps={steps} activeStep={activeStep} assessmentId={assessmentId} />
+        )}
       </div>
 
       {/* Card Pertanyaan - Responsive */}
@@ -265,9 +261,8 @@ function PaedagogFormContent() {
         {/* Navigation Buttons - Responsive */}
         <div className="flex flex-col sm:flex-row justify-between mt-10 gap-4 pt-6 border-t border-gray-100">
           <button
-            onClick={handlePreviousGroup}
-            disabled={currentStep === 0}
-            className="px-6 py-3.5 rounded-2xl border border-gray-200 text-[#1E5C58] font-bold bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs order-2 sm:order-1 active:scale-95 cursor-pointer text-center"
+            onClick={currentStep > 0 ? handlePreviousGroup : () => router.push(`/orangtua/assessment/kategori/wicara?assessment_id=${assessmentId}`)}
+            className="px-6 py-3.5 rounded-2xl border border-gray-200 text-[#1E5C58] font-bold bg-white hover:bg-gray-50 transition-all text-xs order-2 sm:order-1 active:scale-95 cursor-pointer text-center"
           >
             Sebelumnya
           </button>
@@ -283,15 +278,17 @@ function PaedagogFormContent() {
             ) : (
               <button
                 onClick={onSave}
-                className="px-10 py-3.5 bg-[#2B7A75] hover:bg-[#1E5C58] text-white rounded-2xl font-bold transition-all shadow-md shadow-teal-500/10 active:scale-95 text-xs w-full sm:w-auto cursor-pointer text-center flex items-center justify-center gap-1.5"
+                disabled={submitting}
+                className="px-10 py-3.5 bg-[#2B7A75] hover:bg-[#1E5C58] disabled:opacity-60 text-white rounded-2xl font-bold transition-all shadow-md shadow-teal-500/10 active:scale-95 text-xs w-full sm:w-auto cursor-pointer text-center flex items-center justify-center gap-1.5"
               >
-                Simpan & Kirim Jawaban
+                {submitting ? "Menyimpan..." : "Simpan & Selesai"}
               </button>
             )}
           </div>
         </div>
       </div>
     </ResponsiveOrangtuaLayout>
+    </>
   );
 }
 

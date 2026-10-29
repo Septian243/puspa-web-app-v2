@@ -12,6 +12,7 @@ import {
   getParentAssessmentQuestions,
   ParentAssessmentType,
 } from "@/lib/api/asesmentTerapiOrtu";
+import { useAssessmentSteps } from "@/hooks/useAssessmentSteps";
 
 type AnswerItem = {
   question_id: string;
@@ -32,19 +33,13 @@ function PaedagogRiwayatContent() {
   const submitType: ParentSubmitType = "paedagog_parent";
   const questionType: ParentAssessmentType = "parent_paedagog";
 
+  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId || null);
+  const activeStep = steps.findIndex((s) => s.code === "paedagog");
+
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState<AnswerItem[]>([]);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [activeAspectKey, setActiveAspectKey] = useState("");
-
-  const steps = [
-    { label: "Data Umum", path: "/orangtua/assessment/kategori/data-umumRiwayat" },
-    { label: "Data Fisioterapi", path: "/orangtua/assessment/kategori/fisioterapiRiwayat" },
-    { label: "Data Terapi Okupasi", path: "/orangtua/assessment/kategori/okupasiRiwayat" },
-    { label: "Data Terapi Wicara", path: "/orangtua/assessment/kategori/wicaraRiwayat" },
-    { label: "Data Paedagog", path: "/orangtua/assessment/kategori/paedagogRiwayat" },
-  ];
-  const activeStep = 4;
 
   useEffect(() => {
     if (!assessmentId) return;
@@ -148,48 +143,49 @@ function PaedagogRiwayatContent() {
         </button>
       </div>
 
-      {/* STEP PROGRESS - Horizontal Scroll pada Mobile */}
-      <div className="mb-6 md:mb-10 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-        <div className="flex items-center min-w-max md:min-w-0 md:justify-center px-4 md:px-0">
-          {steps.map((step, i) => {
-            const isCompleted = i < activeStep;
-            const isActive = i === activeStep;
-            return (
-              <div key={i} className="flex items-center">
-                <div 
-                  className="flex flex-col items-center text-center space-y-1.5 md:space-y-2 cursor-pointer group" 
-                  onClick={() => router.push(`${step.path}?assessment_id=${assessmentId}`)}
-                >
-                  <div
-                    className={`w-8 h-8 md:w-10 md:h-10 rounded-2xl flex items-center justify-center text-[10px] md:text-sm font-extrabold border-2 transition-all duration-300 ${
-                      isActive
-                        ? "bg-[#2B7A75] border-[#2B7A75] text-white shadow-md shadow-teal-500/20"
-                        : isCompleted
-                          ? "bg-teal-50/50 border-[#2B7A75]/30 text-[#2B7A75]"
-                          : "bg-gray-100 border-gray-200 text-gray-400"
-                    }`}
-                  >
-                    {i + 1}
+      {/* Stepper Dinamis */}
+      <div className="w-full mb-6 md:mb-10">
+        {!stepsLoading && (
+          <div className="mb-6 md:mb-10 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+            <div className="flex items-center min-w-max md:min-w-0 md:justify-center px-4 md:px-0">
+              {steps.map((step, i) => {
+                const isCompleted = i < activeStep;
+                const isActive = i === activeStep;
+                const riwayatPath = step.code === "umum" ? "data-umumRiwayat" : `${step.code}Riwayat`;
+                return (
+                  <div key={i} className="flex items-center">
+                    <div
+                      className="flex flex-col items-center text-center space-y-1.5 md:space-y-2 cursor-pointer group"
+                      onClick={() => router.push(`/orangtua/assessment/kategori/${riwayatPath}?assessment_id=${assessmentId}`)}
+                    >
+                      <div
+                        className={`w-8 h-8 md:w-10 md:h-10 rounded-2xl flex items-center justify-center text-[10px] md:text-sm font-extrabold border-2 transition-all duration-300 ${
+                          isActive
+                            ? "bg-[#2B7A75] border-[#2B7A75] text-white shadow-md shadow-teal-500/20"
+                            : isCompleted
+                              ? "bg-teal-50/50 border-[#2B7A75]/30 text-[#2B7A75]"
+                              : "bg-gray-100 border-gray-200 text-gray-400"
+                        }`}
+                      >
+                        {i + 1}
+                      </div>
+                      <span className={`text-[10px] md:text-xs font-bold transition-colors ${
+                        isActive ? "text-[#1E5C58]" : "text-gray-400 group-hover:text-gray-600"
+                      } max-w-[70px] md:max-w-none leading-tight`}>
+                        {step.label}
+                      </span>
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div className={`h-0.5 transition-all duration-300 mx-2 md:mx-4 translate-y-[-10px] md:translate-y-[-14px] rounded-full ${
+                        i < activeStep ? "bg-[#2B7A75] w-6 md:w-16" : "bg-gray-200 w-4 md:w-12"
+                      }`} />
+                    )}
                   </div>
-                  <span
-                    className={`text-[10px] md:text-xs font-bold transition-colors ${
-                      isActive ? "text-[#1E5C58]" : "text-gray-400 group-hover:text-gray-600"
-                    } max-w-[70px] md:max-w-none leading-tight`}
-                  >
-                    {step.label}
-                  </span>
-                </div>
-                {i < steps.length - 1 && (
-                  <div
-                    className={`h-0.5 transition-all duration-300 mx-2 md:mx-4 translate-y-[-10px] md:translate-y-[-14px] rounded-full ${
-                      i < activeStep ? "bg-[#2B7A75] w-6 md:w-16" : "bg-gray-200 w-4 md:w-12"
-                    }`}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ASPEK SELECT */}
