@@ -35,6 +35,8 @@ export interface SessionAttendanceItem {
     new_session_date: string;
     requested_by: string;
     reason?: string;
+    start_time?: string;
+    end_time?: string;
   } | null;
   created_at?: string;
 }
@@ -70,8 +72,15 @@ export interface RescheduleItem {
 
 export interface AttendanceFilters {
   date?: string;
+  date_from?: string;
+  date_to?: string;
+  child_id?: string;
+  child_ids?: string[];
   therapist_id?: string;
+  therapist_ids?: string[];
   therapy_type?: string;
+  therapy_types?: string[];
+  therapy_type_ids?: string[];
   status?: string;
   search?: string;
   page?: number;
@@ -239,8 +248,12 @@ export async function exportAttendance(filters: {
   date_from?: string;
   date_to?: string;
   therapy_type?: string;
+  therapy_types?: string[];
+  therapy_type_ids?: string[];
   therapist_id?: string;
+  therapist_ids?: string[];
   child_id?: string;
+  child_ids?: string[];
   status?: string;
   format?: "excel" | "pdf";
 }) {

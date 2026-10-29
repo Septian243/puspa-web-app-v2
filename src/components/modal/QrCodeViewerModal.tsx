@@ -10,8 +10,10 @@ interface QrCodeViewerModalProps {
   onClose: () => void;
   sessionData: {
     sessionId: string;
+    childId?: string;
     childName: string;
     medicalRecordNumber: string;
+    guardianName?: string;
     therapyType: string;
     therapistName: string;
     sessionDate: string;
@@ -29,14 +31,23 @@ export default function QrCodeViewerModal({
 
   if (!open || !sessionData) return null;
 
+  const isPermanentRM =
+    Boolean(sessionData.medicalRecordNumber) &&
+    sessionData.medicalRecordNumber !== "-" &&
+    sessionData.medicalRecordNumber !== "RM-N/A";
+
+  const permanentToken = isPermanentRM
+    ? sessionData.medicalRecordNumber
+    : sessionData.childId || sessionData.attendanceToken;
+
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
-    sessionData.attendanceToken
+    permanentToken
   )}`;
 
   const handleCopyToken = () => {
-    navigator.clipboard.writeText(sessionData.attendanceToken);
+    navigator.clipboard.writeText(permanentToken);
     setCopied(true);
-    showSuccessToast("Token QR berhasil disalin!", "Disalin");
+    showSuccessToast(`Kode presensi (${permanentToken}) berhasil disalin!`, "Disalin");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -48,26 +59,56 @@ export default function QrCodeViewerModal({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>QR Presensi - ${sessionData.childName}</title>
+          <title>Kartu QR Pasien - ${sessionData.childName}</title>
           <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 30px; }
-            .card { border: 2px solid #1E5C58; border-radius: 16px; padding: 20px; max-width: 320px; margin: 0 auto; }
-            h2 { color: #1E5C58; margin-bottom: 4px; font-size: 18px; }
-            p { margin: 4px 0; color: #555; font-size: 12px; }
-            img { margin: 15px 0; width: 200px; height: 200px; }
-            .rm { background: #f3f4f6; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 30px; background: #fafafa; }
+            .card {
+              border: 2px solid #1E5C58;
+              border-radius: 18px;
+              padding: 24px;
+              max-width: 320px;
+              margin: 0 auto;
+              background: #ffffff;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            }
+            .header { border-bottom: 2px solid #EAF6F4; padding-bottom: 12px; margin-bottom: 14px; }
+            h2 { color: #1E5C58; margin: 0; font-size: 18px; font-weight: 800; letter-spacing: 0.5px; }
+            .subtitle { color: #2B7A75; font-size: 11px; font-weight: bold; margin-top: 4px; text-transform: uppercase; }
+            img { margin: 12px 0; width: 190px; height: 190px; }
+            h3 { margin: 8px 0 4px; color: #1f2937; font-size: 16px; font-weight: 800; }
+            .rm-badge {
+              display: inline-block;
+              background: #EAF6F4;
+              color: #1E5C58;
+              padding: 4px 10px;
+              border-radius: 8px;
+              font-weight: 800;
+              font-size: 12px;
+              letter-spacing: 0.5px;
+            }
+            .footer-note {
+              margin-top: 14px;
+              font-size: 10px;
+              color: #6b7280;
+              line-height: 1.4;
+              border-top: 1px dashed #e5e7eb;
+              padding-top: 10px;
+            }
           </style>
         </head>
         <body>
           <div class="card">
-            <h2>PUSPA HOLISTIC</h2>
-            <p>Kartu Presensi Terapi Anak</p>
-            <img src="${qrUrl}" alt="QR Code" />
-            <h3 style="margin: 6px 0;">${sessionData.childName}</h3>
-            <span class="rm">No. RM: ${sessionData.medicalRecordNumber}</span>
-            <p style="margin-top: 10px;"><b>${sessionData.therapyType}</b> • ${sessionData.sessionTime}</p>
-            <p>Terapis: ${sessionData.therapistName}</p>
-            <p style="font-size: 10px; color: #888;">Tanggal: ${sessionData.sessionDate}</p>
+            <div class="header">
+              <h2>PUSPA HOLISTIC</h2>
+              <div class="subtitle">Kartu QR Presensi Pasien</div>
+            </div>
+            <img src="${qrUrl}" alt="QR Code Pasien" />
+            <h3>${sessionData.childName}</h3>
+            <div class="rm-badge">No. RM: ${sessionData.medicalRecordNumber}</div>
+            ${sessionData.guardianName ? `<p style="margin: 6px 0 0; font-size: 11px; color: #4b5563;">Wali: <b>${sessionData.guardianName}</b></p>` : ""}
+            <div class="footer-note">
+              Tunjukkan kartu ini ke petugas atau kamera scan saat tiba di klinik untuk presensi otomatis setiap sesi terapi.
+            </div>
           </div>
           <script>
             window.onload = function() { window.print(); }
@@ -91,9 +132,11 @@ export default function QrCodeViewerModal({
           <div className="flex items-center justify-between px-6 py-4 text-white bg-linear-to-r from-[#1E5C58] to-[#2B7A75]">
             <div className="flex items-center gap-2">
               <QrCode className="w-5 h-5 text-emerald-300" />
-              <h3 className="text-base font-extrabold tracking-tight">
-                QR Code Presensi Sesi
-              </h3>
+              <div>
+                <h3 className="text-base font-extrabold tracking-tight leading-tight">
+                  Kartu QR Presensi Pasien
+                </h3>
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -106,6 +149,9 @@ export default function QrCodeViewerModal({
           {/* Body */}
           <div className="p-6 text-center space-y-4">
             <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mb-1.5 text-[10px] font-extrabold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
+                <span>1 QR Tetap untuk Seluruh Sesi</span>
+              </div>
               <h4 className="text-base font-extrabold text-gray-800">
                 {sessionData.childName}
               </h4>
@@ -114,6 +160,11 @@ export default function QrCodeViewerModal({
                 <span className="text-[#1E5C58] font-bold">
                   {sessionData.medicalRecordNumber}
                 </span>
+                {sessionData.guardianName && (
+                  <span className="text-gray-400 ml-1.5 font-normal">
+                    &bull; Wali: <b className="text-gray-600">{sessionData.guardianName}</b>
+                  </span>
+                )}
               </p>
             </div>
 
@@ -129,18 +180,12 @@ export default function QrCodeViewerModal({
               </span>
             </div>
 
-            <div className="p-3 text-xs bg-gray-50 rounded-xl text-gray-600 text-left space-y-1 border border-gray-100">
-              <p className="flex justify-between">
-                <span className="text-gray-400 font-medium">Terapis:</span>
-                <span className="font-bold text-[#1E5C58]">
-                  {sessionData.therapistName}
-                </span>
+            <div className="p-3 text-[11px] bg-[#F4F9F8] rounded-xl text-teal-900 text-left border border-teal-100/70 space-y-1">
+              <p className="font-bold text-[#1E5C58] flex items-center gap-1">
+                <span>💡</span> QR Code Berlaku Permanen
               </p>
-              <p className="flex justify-between">
-                <span className="text-gray-400 font-medium">Tanggal:</span>
-                <span className="font-bold text-gray-700">
-                  {sessionData.sessionDate}
-                </span>
+              <p className="text-gray-600 leading-relaxed text-[10.5px]">
+                Pasien cukup mencetak atau menyimpan QR ini satu kali. Sistem otomatis mengenali jadwal sesi terapi hari ini saat kartu di-scan.
               </p>
             </div>
           </div>
@@ -157,7 +202,7 @@ export default function QrCodeViewerModal({
               ) : (
                 <Copy className="w-3.5 h-3.5" />
               )}
-              {copied ? "Tercopy" : "Salin Token"}
+              {copied ? "Tercopy" : "Salin Kode"}
             </button>
             <button
               type="button"
@@ -165,7 +210,7 @@ export default function QrCodeViewerModal({
               className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl hover:bg-[#1E5C58] shadow-xs transition-colors cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              Cetak QR
+              Cetak Kartu
             </button>
           </div>
         </motion.div>

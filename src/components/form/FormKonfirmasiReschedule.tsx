@@ -37,6 +37,14 @@ export default function FormKonfirmasiReschedule({
                         <span className="text-gray-400">Tanggal</span>
                         <span className="font-bold text-right text-[#1E5C58]">{day}/{month}/{year}</span>
                     </div>
+                    {payload.jamMulaiBaru && payload.jamSelesaiBaru && (
+                        <div className="flex justify-between gap-4">
+                            <span className="text-gray-400">Jam</span>
+                            <span className="font-bold text-right text-[#1E5C58]">
+                                {payload.jamMulaiBaru} - {payload.jamSelesaiBaru} WIB
+                            </span>
+                        </div>
+                    )}
                     <p className="pt-2 text-xs leading-relaxed text-gray-500 border-t border-gray-100">
                         Data presensi dan reschedule akan disimpan setelah dikonfirmasi.
                     </p>

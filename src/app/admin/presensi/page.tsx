@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   Users,
@@ -23,6 +24,7 @@ import {
   RefreshCw,
   QrCode,
   Loader2,
+  Check,
 } from "lucide-react";
 import QrCodeViewerModal from "@/components/modal/QrCodeViewerModal";
 import { motion, AnimatePresence } from "framer-motion";
@@ -46,7 +48,7 @@ import {
   SessionAttendanceItem,
   RescheduleItem,
 } from "@/lib/api/presensi";
-import { getTherapists, getChildren } from "@/lib/api/jadwal_terapi";
+import { getTherapists, getSchedules } from "@/lib/api/jadwal_terapi";
 import { showSuccessToast, showErrorToast, handleApiError } from "@/lib/toast";
 import { Html5Qrcode } from "html5-qrcode";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -124,6 +126,14 @@ function mapSessionToPresensiData(item: SessionAttendanceItem): PresensiData {
   const tanggal = `${d}/${m}/${y}`;
   const waktu = `Pukul ${item.start_time.replace(":", ".")} - ${item.end_time.replace(":", ".")}`;
 
+  const resInfo = item.reschedule_info as any;
+  const resStartTime = resInfo?.start_time || resInfo?.new_start_time || resInfo?.new_session?.start_time;
+  const resEndTime = resInfo?.end_time || resInfo?.new_end_time || resInfo?.new_session?.end_time;
+  let rescheduleWaktu = "";
+  if (resStartTime && resEndTime) {
+    rescheduleWaktu = `Pukul ${resStartTime.replace(":", ".")} - ${resEndTime.replace(":", ".")}`;
+  }
+
   return {
     id: item.id,
     pasienName: item.child_name,
@@ -138,7 +148,7 @@ function mapSessionToPresensiData(item: SessionAttendanceItem): PresensiData {
     reschedule: item.reschedule_info
       ? {
         tanggal: item.reschedule_info.new_session_date,
-        waktu,
+        waktu: rescheduleWaktu,
       }
       : undefined,
     rawSession: item,
@@ -451,7 +461,16 @@ function MobilePresensiCard({
       </div>
       <div className="p-3 mt-3 text-xs leading-relaxed text-gray-500 rounded-xl bg-gray-50">
         <span className="font-bold text-gray-600">Keterangan: </span>
-        {item.keterangan}
+        {formatKeteranganPresensi(item.keterangan) !== "-" ? (
+          <span>{formatKeteranganPresensi(item.keterangan)}</span>
+        ) : null}
+        {item.reschedule?.tanggal ? (
+          <div className="mt-1 text-[11px] font-bold text-[#1E5C58]">
+            Reschedule: {formatDateDDMMYYYY(item.reschedule.tanggal)}
+          </div>
+        ) : (
+          formatKeteranganPresensi(item.keterangan) === "-" && <span>-</span>
+        )}
       </div>
       <div className="flex flex-wrap gap-2 pt-3 mt-4 border-t border-gray-100">
         {isBelumPresensi ? (
@@ -480,36 +499,150 @@ function MobilePresensiCard({
   );
 }
 
+function formatDateDDMMYYYY(dateStr?: string): string {
+  if (!dateStr) return "-";
+  if (dateStr.includes("/")) return dateStr;
+  const parts = dateStr.split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+  }
+  return dateStr;
+}
+
+function formatKeteranganPresensi(keterangan?: string | null): string {
+  if (!keterangan || keterangan === "-") return "-";
+
+  if (keterangan.toLowerCase().includes("reschedule dari sesi tanggal")) {
+    const match = keterangan.match(/Reschedule dari sesi tanggal\s+([^\s]+)(?:\s+pukul\s+.*)?/i);
+    if (match) {
+      const datePart = match[1];
+      return `Reschedule dari sesi tanggal ${formatDateDDMMYYYY(datePart)}`;
+    }
+    return keterangan.replace(/\s+pukul\s+.*$/i, "").trim();
+  }
+
+  if (keterangan.toLowerCase().includes("reschedule") && keterangan.toLowerCase().includes("pukul")) {
+    return keterangan.replace(/\s+pukul\s+.*$/i, "").trim();
+  }
+
+  return keterangan;
+}
+
+function formatTimeRange(start?: string, end?: string): string {
+  if (!start && !end) return "-";
+  const formatSingle = (t?: string) => {
+    if (!t) return "";
+    return t.slice(0, 5).replace(":", ".");
+  };
+  const s = formatSingle(start);
+  const e = formatSingle(end);
+  if (s && e) return `Pukul ${s} – ${e}`;
+  if (s) return `Pukul ${s}`;
+  return "-";
+}
+
+function getDayDifference(originalDate?: string, newDate?: string): number | null {
+  if (!originalDate || !newDate) return null;
+  const d1 = new Date(originalDate.split("T")[0]);
+  const d2 = new Date(newDate.split("T")[0]);
+  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return null;
+  const diffTime = Math.abs(d2.getTime() - d1.getTime());
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+}
+
 function MobileRescheduleCard({ item }: { item: RescheduleItem }) {
-  const originalDate = item.original_session?.session_date || "-";
-  const newDate = item.new_session?.session_date || "-";
+  const originalDate = formatDateDDMMYYYY(item.original_session?.session_date);
+  const originalTime = formatTimeRange(
+    item.original_session?.start_time,
+    item.original_session?.end_time
+  );
+  const newDate = formatDateDDMMYYYY(item.new_session?.session_date);
+  const newTime = formatTimeRange(
+    item.new_session?.start_time,
+    item.new_session?.end_time
+  );
+  const diffDays = getDayDifference(
+    item.original_session?.session_date,
+    item.new_session?.session_date
+  );
+
+  const origTherapist = item.original_session?.therapist_name?.trim() || "";
+  const newTherapist = item.new_session?.therapist_name?.trim() || "";
+  const isDifferentTherapist = Boolean(
+    origTherapist && newTherapist && origTherapist.toLowerCase() !== newTherapist.toLowerCase()
+  );
 
   return (
     <article className="p-4 bg-white border border-teal-100 shadow-sm rounded-2xl">
-      <h4 className="text-sm font-extrabold text-gray-800">
-        {item.child_name} ({item.medical_record_number})
-      </h4>
-      <div className="grid gap-3 mt-4 sm:grid-cols-2">
-        <div className="p-3 text-xs rounded-xl bg-gray-50">
-          <p className="mb-2 font-bold tracking-wide text-gray-400 uppercase">
-            Jadwal semula
-          </p>
-          <p className="font-bold text-gray-800">{originalDate}</p>
-          <p className="mt-1 text-gray-500">
-            {item.original_session?.therapist_name}
-          </p>
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="text-sm font-extrabold text-gray-800">
+          {item.child_name}
+        </h4>
+        <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-[10px] font-bold border border-orange-200 shrink-0">
+          RM: {item.medical_record_number}
+        </span>
+      </div>
+
+      <div className="mt-3 p-2.5 rounded-xl bg-gray-50/80 border border-gray-100">
+        <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">
+          Terapis
         </div>
-        <div className="p-3 text-xs rounded-xl bg-teal-50/60">
-          <p className="mb-2 font-bold uppercase tracking-wide text-[#2B7A75]">
-            Jadwal baru
+        {isDifferentTherapist ? (
+          <div className="space-y-1">
+            <div className="text-xs font-bold text-[#1E5C58]">
+              <span>Terapis baru : </span>
+              <span className="text-gray-900">{newTherapist}</span>
+            </div>
+            <div className="text-[11px] font-medium text-gray-400">
+              <span>Terapis lama : </span>
+              <span className="text-gray-500">{origTherapist}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-xs font-bold text-gray-800">
+            {newTherapist || origTherapist || "-"}
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-3 mt-3 sm:grid-cols-2">
+        <div className="p-3 text-xs border border-gray-100 rounded-xl bg-gray-50">
+          <p className="mb-2 font-bold tracking-wide text-gray-400 uppercase text-[10px]">
+            Jadwal Semula
           </p>
-          <p className="font-bold text-[#1E5C58]">{newDate}</p>
-          <p className="mt-1 text-gray-500">
-            {item.new_session?.therapist_name}
+          <div className="flex items-center gap-1.5 font-bold text-gray-800">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <span>{originalDate}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1 text-gray-500 font-medium">
+            <Clock className="w-3.5 h-3.5 text-gray-400" />
+            <span>{originalTime}</span>
+          </div>
+        </div>
+
+        <div className="p-3 text-xs rounded-xl bg-[#EAF6F4] border border-teal-100/50">
+          <p className="mb-2 font-bold uppercase tracking-wide text-[#2B7A75] text-[10px]">
+            Jadwal Baru
           </p>
+          <div className="flex items-center gap-1.5 font-bold text-[#1E5C58]">
+            <Calendar className="w-3.5 h-3.5 text-[#1E5C58]" strokeWidth={2.2} />
+            <span>{newDate}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1 text-[#2B7A75] font-medium">
+            <Clock className="w-3.5 h-3.5 text-[#2B7A75]" />
+            <span>{newTime}</span>
+          </div>
+          {diffDays !== null && (
+            <div className="mt-2 text-[11px] font-bold text-[#1E5C58]">
+              Bergeser {diffDays} hari
+            </div>
+          )}
         </div>
       </div>
+
       <p className="mt-3 text-xs leading-relaxed text-gray-500">
+        <span className="font-bold text-[#1E5C58]">Oleh: {item.requested_by} - </span>
         <span className="font-bold text-gray-600">Alasan: </span>
         {item.reason || "-"}
       </p>
@@ -544,14 +677,44 @@ const BULAN_SINGKAT = [
   "Nov",
   "Des",
 ];
+function getTodayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentMonthString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getCurrentWeekString(): string {
+  const now = new Date();
+  const target = new Date(now.valueOf());
+  const dayNr = (now.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  }
+  const weekNum = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+  const year = new Date(firstThursday).getFullYear();
+  return `${year}-W${String(weekNum).padStart(2, "0")}`;
+}
+
 const PERIODE_OPTIONS: Periode[] = ["Harian", "Mingguan", "Bulanan", "Custom"];
 const PREVIEW_LIMIT = 10;
 
 const DEFAULT_PERIODE: Periode = "Bulanan";
 const DEFAULT_PERIODE_VALUES: PeriodeValues = {
-  hari: "",
-  minggu: "",
-  bulan: new Date().toISOString().slice(0, 7),
+  hari: getTodayDateString(),
+  minggu: getCurrentWeekString(),
+  bulan: getCurrentMonthString(),
   dari: "",
   sampai: "",
 };
@@ -579,144 +742,361 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
   );
 }
 
-function FilterSelect({
+interface MultiSelectOption {
+  id: string;
+  name: string;
+}
+
+function MultiSelect({
   label,
-  value,
-  onChange,
-  allLabel,
+  values,
   options,
+  onChange,
+  placeholder,
 }: {
   label: string;
-  value: string;
-  onChange: (value: string) => void;
-  allLabel: string;
-  options: { id: string; name: string }[];
+  values: string[];
+  options: (MultiSelectOption | string)[];
+  onChange: (value: string[]) => void;
+  placeholder?: string;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+  const normalizedOptions: MultiSelectOption[] = useMemo(() => {
+    return options.map((opt) =>
+      typeof opt === "string" ? { id: opt, name: opt } : opt
+    );
+  }, [options]);
+
+  const filteredOptions = normalizedOptions.filter((option) =>
+    option.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selectedOptions = normalizedOptions.filter((opt) => values.includes(opt.id));
+  const text =
+    values.length === 0
+      ? ""
+      : values.length === 1
+        ? selectedOptions[0]?.name || values[0]
+        : `${selectedOptions[0]?.name || values[0]} (+${values.length - 1} lainnya)`;
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+        setSearch("");
       }
     };
-
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  useEffect(() => {
-    if (isOpen) {
-      setHighlightedIndex(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [isOpen]);
-
-  const filteredOptions = options.filter((option) =>
-    option.name.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  const selectedOption = options.find((opt) => opt.id === value);
-  const displayValue = isOpen ? search : (selectedOption ? selectedOption.name : "");
-
   return (
     <div ref={dropdownRef} className="relative">
-      <FieldLabel>{label}</FieldLabel>
-      <div
-        className={`${rekapInputClass} relative flex items-center pr-11 cursor-text`}
-        onClick={() => setIsOpen(true)}
-      >
+      <label className="mb-1.5 block text-xs font-bold text-gray-500">{label}</label>
+      <div className="relative flex items-center rounded-xl border border-teal-100 bg-white px-4 py-2.5 pr-11 text-sm font-medium text-gray-700 shadow-sm focus-within:border-[#2B7A75] focus-within:ring-2 focus-within:ring-[#2B7A75]/20">
         <input
           ref={inputRef}
           type="text"
-          value={displayValue}
-          onFocus={() => {
-            setIsOpen(true);
-            setSearch("");
-          }}
+          value={open ? search : text}
+          onFocus={() => setOpen(true)}
           onChange={(event) => {
             setSearch(event.target.value);
-            setIsOpen(true);
-            setHighlightedIndex(0);
+            setOpen(true);
           }}
           onKeyDown={(event) => {
-            const optionCount = filteredOptions.length + 1;
-
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              setIsOpen(true);
-              setHighlightedIndex((index) => (index + 1) % optionCount);
-            }
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              setHighlightedIndex((index) => (index - 1 + optionCount) % optionCount);
-            }
-            if (event.key === "Enter") {
-              event.preventDefault();
-              if (highlightedIndex === 0) {
-                onChange("");
-              } else {
-                const opt = filteredOptions[highlightedIndex - 1];
-                if (opt) onChange(opt.id);
-              }
+            if (event.key === "Escape") {
+              setOpen(false);
               setSearch("");
-              setIsOpen(false);
             }
-            if (event.key === "Escape") setIsOpen(false);
           }}
-          placeholder={allLabel}
-          aria-label={`Cari ${label.toLowerCase()}`}
-          className="w-full p-0 text-sm text-gray-700 bg-transparent border-0 outline-none placeholder:text-gray-500"
+          placeholder={
+            open
+              ? values.length
+                ? `${values.length} dipilih - cari...`
+                : `Cari ${label.toLowerCase()}...`
+              : placeholder || `Semua ${label.toLowerCase()}`
+          }
+          aria-label={`Pilih ${label.toLowerCase()}`}
+          className="w-full p-0 text-sm bg-transparent outline-none placeholder:text-gray-400"
         />
         <button
           type="button"
-          onClick={() => setIsOpen((open) => !open)}
-          aria-label={`Buka pilihan ${label.toLowerCase()}`}
           tabIndex={-1}
-          className="absolute right-0 flex items-center justify-center h-full cursor-pointer w-11"
+          onClick={() => {
+            if (open) {
+              setOpen(false);
+              setSearch("");
+            } else {
+              setOpen(true);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }
+          }}
+          className="absolute right-0 flex items-center h-full pr-3 cursor-pointer"
+          aria-label={`${open ? "Tutup" : "Buka"} pilihan ${label.toLowerCase()}`}
         >
+          {values.length > 0 && (
+            <span className="mr-1 rounded-full bg-[#2B7A75] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {values.length}
+            </span>
+          )}
           <ChevronDown
-            className={`w-4 h-4 text-gray-700 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            className={`h-4 w-4 text-gray-500 transition-transform ${open ? "rotate-180" : ""}`}
           />
         </button>
       </div>
 
-      {isOpen && (
-        <div className="absolute left-0 right-0 z-30 mt-2 overflow-hidden bg-white border border-gray-100 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.12)]">
-          <div className="max-h-56 overflow-y-auto p-1.5" role="listbox">
+      {open && (
+        <div className="absolute left-0 right-0 z-40 mt-2 flex max-h-[250px] flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xl">
+          <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-[#F4F9F8]/60 px-3 py-2">
             <button
               type="button"
-              onClick={() => {
-                onChange("");
-                setSearch("");
-                setIsOpen(false);
-              }}
-              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${highlightedIndex === 0 ? "bg-teal-50" : "hover:bg-gray-50"} ${!value ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onChange([])}
+              className="text-xs font-bold text-[#1E5C58] cursor-pointer"
             >
-              {allLabel}
+              Semua {label.toLowerCase()}
             </button>
-            {filteredOptions.map((option, index) => (
+            {values.length > 0 && (
               <button
-                key={option.id}
                 type="button"
-                role="option"
-                aria-selected={value === option.id}
-                onClick={() => {
-                  onChange(option.id);
-                  setSearch("");
-                  setIsOpen(false);
-                }}
-                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${highlightedIndex === index + 1 ? "bg-teal-50" : "hover:bg-gray-50"} ${value === option.id ? "font-semibold text-[#1E5C58]" : "text-gray-700"}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onChange([])}
+                className="text-[11px] font-bold text-red-500 cursor-pointer"
               >
-                {option.name}
+                Hapus Pilihan ({values.length})
               </button>
-            ))}
+            )}
+          </div>
+          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5">
+            {filteredOptions.map((option) => {
+              const selected = values.includes(option.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    onChange(
+                      selected
+                        ? values.filter((item) => item !== option.id)
+                        : [...values, option.id]
+                    )
+                  }
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm cursor-pointer transition-colors ${selected
+                    ? "bg-teal-50/70 font-bold text-[#1E5C58]"
+                    : "font-medium text-gray-700 hover:bg-gray-50"
+                    }`}
+                >
+                  <span className="flex items-center gap-2.5 truncate">
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected
+                        ? "border-[#2B7A75] bg-[#2B7A75]"
+                        : "border-gray-300 bg-white"
+                        }`}
+                    >
+                      {selected && (
+                        <Check
+                          className="w-3 h-3 text-white"
+                          strokeWidth={3}
+                        />
+                      )}
+                    </span>
+                    <span className="truncate">{option.name}</span>
+                  </span>
+                </button>
+              );
+            })}
             {filteredOptions.length === 0 && (
-              <p className="px-3 py-3 text-sm text-gray-400">Data tidak ditemukan.</p>
+              <p className="px-3 py-4 text-xs text-center text-gray-400">
+                Data tidak ditemukan.
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center justify-between border-t border-gray-100 bg-gray-50/50 px-3 py-2 text-[11px] font-medium text-gray-400">
+            <span>
+              {values.length === 0
+                ? "Semua dipilih"
+                : `${values.length} dari ${normalizedOptions.length} dipilih`}
+            </span>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setOpen(false);
+                setSearch("");
+              }}
+              className="font-bold text-[#2B7A75] cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SingleSelectOption {
+  id: string;
+  name: string;
+}
+
+function SingleSelect({
+  label,
+  value,
+  onChange,
+  options,
+  isLoading = false,
+  placeholder = "Pilih anak...",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: (SingleSelectOption | string)[];
+  isLoading?: boolean;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const normalizedOptions: SingleSelectOption[] = useMemo(() => {
+    return options.map((opt) =>
+      typeof opt === "string" ? { id: opt, name: opt } : opt
+    );
+  }, [options]);
+
+  const filteredOptions = normalizedOptions.filter((option) =>
+    option.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selectedOption = normalizedOptions.find(
+    (opt) => opt.id === value || opt.name === value
+  );
+  const displayText = selectedOption ? selectedOption.name : value;
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <label className="mb-1.5 block text-xs font-bold text-gray-500">
+        {label}
+      </label>
+      <div className="relative flex items-center rounded-xl border border-teal-100 bg-white px-4 py-2.5 pr-11 text-sm font-medium text-gray-700 shadow-sm focus-within:border-[#2B7A75] focus-within:ring-2 focus-within:ring-[#2B7A75]/20">
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? search : displayText}
+          onFocus={() => setOpen(true)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setOpen(false);
+              setSearch("");
+            }
+          }}
+          placeholder={
+            isLoading
+              ? "Memuat data..."
+              : open
+                ? "Cari nama anak / no RM..."
+                : placeholder
+          }
+          aria-label={`Pilih ${label.toLowerCase()}`}
+          className="w-full p-0 text-sm bg-transparent outline-none placeholder:text-gray-400"
+        />
+
+        {value && !open && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              setSearch("");
+            }}
+            aria-label="Hapus pilihan anak"
+            className="absolute flex items-center justify-center p-1 text-gray-400 transition-colors rounded-full cursor-pointer right-8 hover:text-red-500"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            if (open) {
+              setOpen(false);
+              setSearch("");
+            } else {
+              setOpen(true);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }
+          }}
+          className="absolute right-0 flex items-center h-full pr-3 cursor-pointer"
+          aria-label={`${open ? "Tutup" : "Buka"} pilihan ${label.toLowerCase()}`}
+        >
+          <ChevronDown
+            className={`h-4 w-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""
+              }`}
+          />
+        </button>
+      </div>
+
+      {open && (
+        <div className="absolute left-0 right-0 z-40 mt-2 flex max-h-[250px] flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xl">
+          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5">
+            {filteredOptions.map((option) => {
+              const isSelected = value === option.id || value === option.name;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm cursor-pointer ${isSelected
+                    ? "bg-teal-50/70 font-bold text-[#1E5C58]"
+                    : "font-medium text-gray-700 hover:bg-gray-50"
+                    }`}
+                >
+                  <span className="truncate">{option.name}</span>
+                  {isSelected && (
+                    <Check className="w-4 h-4 text-[#2B7A75]" strokeWidth={2.5} />
+                  )}
+                </button>
+              );
+            })}
+            {filteredOptions.length === 0 && (
+              <p className="px-3 py-4 text-xs text-center text-gray-400">
+                {isLoading ? "Memuat data..." : "Data tidak ditemukan."}
+              </p>
             )}
           </div>
         </div>
@@ -772,40 +1152,307 @@ const jenisTerapiOptions = [
   { id: "paedagog", name: "PLB (Paedagog)" }
 ];
 
+interface RekapTherapistItem {
+  id: string;
+  name: string;
+  therapyType?: string;
+}
+
 function RekapKehadiran() {
-  const [anakId, setAnakId] = useState("");
-  const [terapisId, setTerapisId] = useState("");
-  const [jenisTerapi, setJenisTerapi] = useState("");
+  const [selectedAnakId, setSelectedAnakId] = useState<string>("");
+  const [selectedTerapisIds, setSelectedTerapisIds] = useState<string[]>([]);
+  const [selectedJenisTerapi, setSelectedJenisTerapi] = useState<string[]>([]);
   const [periode, setPeriode] = useState<Periode>(DEFAULT_PERIODE);
   const [periodeValues, setPeriodeValues] = useState<PeriodeValues>(
     DEFAULT_PERIODE_VALUES
   );
 
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [childrenList, setChildrenList] = useState<{ id: string; name: string }[]>([]);
-  const [therapistsList, setTherapistsList] = useState<{ id: string; name: string }[]>([]);
+  const [therapistsList, setTherapistsList] = useState<RekapTherapistItem[]>([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
 
   useEffect(() => {
     async function loadOptions() {
-      const [cRes, tRes] = await Promise.all([getChildren(), getTherapists()]);
-      if (Array.isArray(cRes)) {
-        setChildrenList(
-          cRes.map((c: any) => ({
-            id: c.child_id ?? c.id,
-            name: `${c.child_name} (${c.medical_record_number || "-"})`,
-          }))
-        );
-      }
-      if (Array.isArray(tRes)) {
-        setTherapistsList(
-          tRes.map((t: any) => ({
-            id: t.therapist_id ?? t.id,
-            name: t.therapist_name,
-          }))
-        );
+      setIsLoadingOptions(true);
+      try {
+        const [schedulesRes, tRes] = await Promise.all([
+          getSchedules({ per_page: 500 }),
+          getTherapists(),
+        ]);
+
+        if (schedulesRes && Array.isArray(schedulesRes.items)) {
+          setSchedules(schedulesRes.items);
+
+          const childMap = new Map<string, { id: string; rawName: string; rm: string }>();
+          schedulesRes.items.forEach((item: any) => {
+            const childId = item.child_id ? String(item.child_id) : "";
+            const childName = item.child_name || "";
+            const rm = item.medical_record_number || item.no_rm || "";
+            if (childId && childName && childName !== "-") {
+              if (!childMap.has(childId)) {
+                childMap.set(childId, { id: childId, rawName: childName, rm });
+              } else if (rm && rm !== "-" && (!childMap.get(childId)!.rm || childMap.get(childId)!.rm === "-")) {
+                childMap.get(childId)!.rm = rm;
+              }
+            }
+          });
+
+          const scheduledChildren = Array.from(childMap.values())
+            .map((c) => ({
+              id: c.id,
+              name: c.rm && c.rm !== "-" ? `${c.rawName} (${c.rm})` : `${c.rawName} (-)`,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name, "id-ID"));
+
+          setChildrenList(scheduledChildren);
+        }
+
+        const therapistMap = new Map<string, RekapTherapistItem>();
+
+        if (Array.isArray(tRes)) {
+          tRes.forEach((t: any) => {
+            const id = String(t.therapist_id ?? t.id);
+            const name = t.therapist_name || t.name;
+            const rawType = t.therapist_section || t.section || "";
+            let therapyType = "";
+            if (rawType) {
+              const lower = rawType.toLowerCase();
+              if (lower.includes("okupasi")) therapyType = "okupasi";
+              else if (lower.includes("fisio")) therapyType = "fisio";
+              else if (lower.includes("wicara")) therapyType = "wicara";
+              else if (lower.includes("paedagog") || lower.includes("plb")) therapyType = "paedagog";
+              else therapyType = lower;
+            }
+            if (id && name) {
+              therapistMap.set(id, { id, name, therapyType });
+            }
+          });
+        }
+
+        if (schedulesRes && Array.isArray(schedulesRes.items)) {
+          schedulesRes.items.forEach((item: any) => {
+            const tId = item.therapist_id ? String(item.therapist_id) : "";
+            const rawType = item.therapy_type || item.section || "";
+            if (tId && rawType && therapistMap.has(tId)) {
+              const existing = therapistMap.get(tId)!;
+              if (!existing.therapyType) {
+                const lower = rawType.toLowerCase();
+                if (lower.includes("okupasi")) existing.therapyType = "okupasi";
+                else if (lower.includes("fisio")) existing.therapyType = "fisio";
+                else if (lower.includes("wicara")) existing.therapyType = "wicara";
+                else if (lower.includes("paedagog") || lower.includes("plb")) existing.therapyType = "paedagog";
+                else existing.therapyType = lower;
+              }
+            }
+          });
+        }
+
+        setTherapistsList(Array.from(therapistMap.values()));
+      } catch (err) {
+        console.error("Gagal memuat opsi filter rekap kehadiran:", err);
+      } finally {
+        setIsLoadingOptions(false);
       }
     }
     loadOptions();
   }, []);
+
+  // Relasi Jadwal: Memetakan hubungan Anak <-> Jenis Terapi <-> Terapis
+  const relations = useMemo(() => {
+    const childTherapies = new Map<string, Set<string>>();
+    const childTherapists = new Map<string, Set<string>>();
+    const therapistChildren = new Map<string, Set<string>>();
+    const therapyChildren = new Map<string, Set<string>>();
+
+    schedules.forEach((sch: any) => {
+      const cId = sch.child_id ? String(sch.child_id) : "";
+      const tId = sch.therapist_id ? String(sch.therapist_id) : "";
+      let type = sch.therapy_type ? String(sch.therapy_type).toLowerCase() : "";
+      if (type.includes("okupasi")) type = "okupasi";
+      else if (type.includes("wicara")) type = "wicara";
+      else if (type.includes("paedagog") || type.includes("plb")) type = "paedagog";
+      else if (type.includes("fisio")) type = "fisio";
+
+      if (cId) {
+        if (type) {
+          if (!childTherapies.has(cId)) childTherapies.set(cId, new Set());
+          childTherapies.get(cId)!.add(type);
+
+          if (!therapyChildren.has(type)) therapyChildren.set(type, new Set());
+          therapyChildren.get(type)!.add(cId);
+        }
+        if (tId) {
+          if (!childTherapists.has(cId)) childTherapists.set(cId, new Set());
+          childTherapists.get(cId)!.add(tId);
+
+          if (!therapistChildren.has(tId)) therapistChildren.set(tId, new Set());
+          therapistChildren.get(tId)!.add(cId);
+        }
+      }
+    });
+
+    return {
+      childTherapies,
+      childTherapists,
+      therapistChildren,
+      therapyChildren,
+    };
+  }, [schedules]);
+
+  // Filter anak berdasarkan Jenis Terapi dan Terapis yang sedang dipilih
+  const availableChildren = useMemo(() => {
+    if (!childrenList.length) return [];
+
+    const hasTherapyFilter = selectedJenisTerapi.length > 0;
+    const hasTherapistFilter = selectedTerapisIds.length > 0;
+
+    if (!hasTherapyFilter && !hasTherapistFilter) {
+      return childrenList;
+    }
+
+    return childrenList.filter((child) => {
+      if (hasTherapyFilter) {
+        const childTypes = relations.childTherapies.get(child.id);
+        if (childTypes && childTypes.size > 0) {
+          const match = selectedJenisTerapi.some((jt) => childTypes.has(jt));
+          if (!match) return false;
+        }
+      }
+
+      if (hasTherapistFilter) {
+        const childTherapists = relations.childTherapists.get(child.id);
+        if (childTherapists && childTherapists.size > 0) {
+          const match = selectedTerapisIds.some((tId) => childTherapists.has(tId));
+          if (!match) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [childrenList, selectedJenisTerapi, selectedTerapisIds, relations]);
+
+  // Filter jenis terapi berdasarkan Anak yang sedang dipilih
+  const availableJenisTerapi = useMemo(() => {
+    if (!selectedAnakId) {
+      return jenisTerapiOptions;
+    }
+
+    const childTypes = relations.childTherapies.get(selectedAnakId);
+    if (!childTypes || childTypes.size === 0) {
+      return jenisTerapiOptions;
+    }
+
+    return jenisTerapiOptions.filter((jt) => childTypes.has(jt.id));
+  }, [selectedAnakId, relations]);
+
+  // Filter terapis berdasarkan Jenis Terapi dan Anak yang sedang dipilih
+  const availableTherapists = useMemo(() => {
+    if (!therapistsList.length) return [];
+
+    let filtered = therapistsList;
+
+    if (selectedJenisTerapi.length > 0) {
+      filtered = filtered.filter((t) =>
+        t.therapyType ? selectedJenisTerapi.includes(t.therapyType) : true
+      );
+    }
+
+    if (selectedAnakId) {
+      const allowedTherapists = relations.childTherapists.get(selectedAnakId);
+      if (allowedTherapists && allowedTherapists.size > 0) {
+        filtered = filtered.filter((t) => allowedTherapists.has(t.id));
+      }
+    }
+
+    return filtered;
+  }, [therapistsList, selectedJenisTerapi, selectedAnakId, relations]);
+
+  // Ketika Anak diubah (Single Select): sinkronkan dan pangkas pilihan terapi & terapis
+  const handleAnakChange = (newChildId: string) => {
+    setSelectedAnakId(newChildId);
+
+    if (newChildId) {
+      const childTypes = relations.childTherapies.get(newChildId);
+      const childTherapistIds = relations.childTherapists.get(newChildId);
+
+      if (childTypes && childTypes.size > 0 && selectedJenisTerapi.length > 0) {
+        setSelectedJenisTerapi((current) =>
+          current.filter((jt) => childTypes.has(jt))
+        );
+      }
+
+      if (childTherapistIds && childTherapistIds.size > 0 && selectedTerapisIds.length > 0) {
+        setSelectedTerapisIds((current) =>
+          current.filter((tId) => childTherapistIds.has(tId))
+        );
+      }
+    }
+  };
+
+  // Ketika Jenis Terapi diubah: pangkas terapis terpilih & reset anak jika tidak cocok
+  const handleJenisTerapiChange = (newJenis: string[]) => {
+    setSelectedJenisTerapi(newJenis);
+
+    if (newJenis.length > 0) {
+      setSelectedTerapisIds((current) =>
+        current.filter((tId) => {
+          const t = therapistsList.find((item) => item.id === tId);
+          return t?.therapyType ? newJenis.includes(t.therapyType) : true;
+        })
+      );
+
+      if (selectedAnakId) {
+        const childTypes = relations.childTherapies.get(selectedAnakId);
+        if (childTypes && childTypes.size > 0) {
+          const hasMatch = newJenis.some((jt) => childTypes.has(jt));
+          if (!hasMatch) {
+            setSelectedAnakId("");
+          }
+        }
+      }
+    }
+  };
+
+  // Ketika Terapis diubah: otomatis sinkronkan Jenis Terapi & reset anak jika tidak cocok
+  const handleTerapisChange = (newTerapisIds: string[]) => {
+    setSelectedTerapisIds(newTerapisIds);
+
+    if (newTerapisIds.length > 0) {
+      const neededTypes = new Set<string>();
+      newTerapisIds.forEach((tId) => {
+        const t = therapistsList.find((item) => item.id === tId);
+        if (t?.therapyType) {
+          neededTypes.add(t.therapyType);
+        }
+      });
+      if (neededTypes.size > 0) {
+        setSelectedJenisTerapi(Array.from(neededTypes));
+      }
+
+      if (selectedAnakId) {
+        const childTherapists = relations.childTherapists.get(selectedAnakId);
+        if (childTherapists && childTherapists.size > 0) {
+          const hasMatch = newTerapisIds.some((tId) => childTherapists.has(tId));
+          if (!hasMatch) {
+            setSelectedAnakId("");
+          }
+        }
+      }
+    }
+  };
+
+  // Ketika Periode diubah: otomatis isi default tanggal/minggu/bulan jika masih kosong
+  const handlePeriodeChange = (opt: Periode) => {
+    setPeriode(opt);
+    if (opt === "Harian" && !periodeValues.hari) {
+      setPeriodeValues((prev) => ({ ...prev, hari: getTodayDateString() }));
+    } else if (opt === "Mingguan" && !periodeValues.minggu) {
+      setPeriodeValues((prev) => ({ ...prev, minggu: getCurrentWeekString() }));
+    } else if (opt === "Bulanan" && !periodeValues.bulan) {
+      setPeriodeValues((prev) => ({ ...prev, bulan: getCurrentMonthString() }));
+    }
+  };
 
   const [previewItems, setPreviewItems] = useState<SessionAttendanceItem[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -843,17 +1490,23 @@ function RekapKehadiran() {
   useEffect(() => {
     let isSubscribed = true;
     async function fetchPreview() {
+      if (!selectedAnakId) {
+        setPreviewItems([]);
+        setTotalFiltered(0);
+        return;
+      }
       setLoadingPreview(true);
       try {
         const res = await getTodaySessions({
           date_from: computedDateRange.dateFrom || undefined,
           date_to: computedDateRange.dateTo || undefined,
-          child_id: anakId || undefined,
-          therapist_id: terapisId || undefined,
-          therapy_type: jenisTerapi || undefined,
+          child_id: selectedAnakId || undefined,
+          child_ids: selectedAnakId ? [selectedAnakId] : undefined,
+          therapist_ids: selectedTerapisIds.length > 0 ? selectedTerapisIds : undefined,
+          therapy_types: selectedJenisTerapi.length > 0 ? selectedJenisTerapi : undefined,
           per_page: 10,
           page: 1,
-        } as any);
+        });
 
         if (isSubscribed) {
           setPreviewItems(res.items || []);
@@ -870,24 +1523,30 @@ function RekapKehadiran() {
     return () => {
       isSubscribed = false;
     };
-  }, [anakId, terapisId, jenisTerapi, computedDateRange]);
+  }, [selectedAnakId, selectedTerapisIds, selectedJenisTerapi, computedDateRange]);
 
   const handleExportClick = async (format: "excel" | "pdf") => {
     if (exportingFormat) return;
+    if (!selectedAnakId) {
+      showErrorToast("Silakan pilih anak / pasien terlebih dahulu untuk mengunduh rekap kehadiran.");
+      return;
+    }
     setExportingFormat(format);
     try {
       await exportAttendance({
         date_from: computedDateRange.dateFrom || undefined,
         date_to: computedDateRange.dateTo || undefined,
-        therapy_type: jenisTerapi || undefined,
-        therapist_id: terapisId || undefined,
-        child_id: anakId || undefined,
+        therapy_types: selectedJenisTerapi.length > 0 ? selectedJenisTerapi : undefined,
+        therapist_ids: selectedTerapisIds.length > 0 ? selectedTerapisIds : undefined,
+        child_id: selectedAnakId || undefined,
+        child_ids: selectedAnakId ? [selectedAnakId] : undefined,
         format,
       });
 
       showSuccessToast(
         `Rekap kehadiran berhasil di-export ke format ${format.toUpperCase()}`
       );
+      handleReset();
     } catch (err: any) {
       handleApiError(err, "Gagal meng-export rekap kehadiran");
     } finally {
@@ -907,26 +1566,44 @@ function RekapKehadiran() {
     );
 
   const handleReset = () => {
-    setAnakId("");
-    setTerapisId("");
-    setJenisTerapi("");
+    setSelectedAnakId("");
+    setSelectedTerapisIds([]);
+    setSelectedJenisTerapi([]);
     setPeriode(DEFAULT_PERIODE);
     setPeriodeValues(DEFAULT_PERIODE_VALUES);
   };
 
   const chips: { key: string; label: string; onRemove: () => void }[] = [];
-  if (anakId) {
-    const name = childrenList.find(c => c.id === anakId)?.name || anakId;
-    chips.push({ key: "anak", label: name, onRemove: () => setAnakId("") });
+  if (selectedAnakId) {
+    const item = childrenList.find((c) => c.id === selectedAnakId);
+    chips.push({
+      key: `anak-${selectedAnakId}`,
+      label: `Anak: ${item?.name || selectedAnakId}`,
+      onRemove: () => handleAnakChange(""),
+    });
   }
-  if (terapisId) {
-    const name = therapistsList.find(t => t.id === terapisId)?.name || terapisId;
-    chips.push({ key: "terapis", label: name, onRemove: () => setTerapisId("") });
-  }
-  if (jenisTerapi) {
-    const name = jenisTerapiOptions.find(j => j.id === jenisTerapi)?.name || jenisTerapi;
-    chips.push({ key: "jenis", label: name, onRemove: () => setJenisTerapi("") });
-  }
+  selectedJenisTerapi.forEach((id) => {
+    const item = jenisTerapiOptions.find((j) => j.id === id);
+    chips.push({
+      key: `jenis-${id}`,
+      label: `Terapi: ${item?.name || id}`,
+      onRemove: () => {
+        const next = selectedJenisTerapi.filter((val) => val !== id);
+        handleJenisTerapiChange(next);
+      },
+    });
+  });
+  selectedTerapisIds.forEach((id) => {
+    const item = therapistsList.find((t) => t.id === id);
+    chips.push({
+      key: `terapis-${id}`,
+      label: `Terapis: ${item?.name || id}`,
+      onRemove: () => {
+        const next = selectedTerapisIds.filter((val) => val !== id);
+        handleTerapisChange(next);
+      },
+    });
+  });
   const labelPeriode = periodeLabel(periode, periodeValues);
   if (labelPeriode) chips.push({ key: "periode", label: labelPeriode, onRemove: clearPeriode });
 
@@ -945,26 +1622,36 @@ function RekapKehadiran() {
             Filter Data
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <FilterSelect
+            <SingleSelect
               label="Anak / Pasien"
-              value={anakId}
-              onChange={setAnakId}
-              allLabel="Semua Anak"
-              options={childrenList}
+              value={selectedAnakId}
+              options={availableChildren}
+              onChange={handleAnakChange}
+              isLoading={isLoadingOptions}
+              placeholder={
+                selectedJenisTerapi.length > 0 || selectedTerapisIds.length > 0
+                  ? `Pilih anak (${availableChildren.length} tersedia)...`
+                  : "Pilih anak..."
+              }
             />
-            <FilterSelect
-              label="Terapis"
-              value={terapisId}
-              onChange={setTerapisId}
-              allLabel="Semua Terapis"
-              options={therapistsList}
-            />
-            <FilterSelect
+            <MultiSelect
               label="Jenis Terapi"
-              value={jenisTerapi}
-              onChange={setJenisTerapi}
-              allLabel="Semua Jenis Terapi"
-              options={jenisTerapiOptions}
+              values={selectedJenisTerapi}
+              options={availableJenisTerapi}
+              onChange={handleJenisTerapiChange}
+            />
+            <MultiSelect
+              label="Terapis"
+              values={selectedTerapisIds}
+              options={availableTherapists}
+              onChange={handleTerapisChange}
+              placeholder={
+                selectedJenisTerapi.length > 0
+                  ? `Terapis ${selectedJenisTerapi
+                    .map((id) => jenisTerapiOptions.find((j) => j.id === id)?.name || id)
+                    .join(", ")}...`
+                  : undefined
+              }
             />
           </div>
         </div>
@@ -981,7 +1668,7 @@ function RekapKehadiran() {
                   <button
                     key={opt}
                     type="button"
-                    onClick={() => setPeriode(opt)}
+                    onClick={() => handlePeriodeChange(opt)}
                     className={`cursor-pointer flex-1 whitespace-nowrap px-4 py-2 rounded-lg text-sm transition-all ${isActive
                       ? "bg-[#1E5C58] text-white font-bold shadow-sm"
                       : "text-gray-400 font-semibold hover:text-[#2B7A75]"
@@ -1075,38 +1762,49 @@ function RekapKehadiran() {
         </button>
       </div>
 
-      {/* ── Export & Preview Table ── */}
-      <div className="flex flex-wrap justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
-        <button
-          type="button"
-          onClick={() => handleExportClick("excel")}
-          disabled={totalFiltered === 0 || exportingFormat !== null}
-          className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-            exportingFormat === "excel" ? "cursor-wait" : "cursor-pointer"
-          }`}
-        >
-          {exportingFormat === "excel" ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+      {/* ── Action / Export Bar ── */}
+      <div className="flex flex-col justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-[#F4F9F8]/50 sm:flex-row sm:items-center">
+        <div>
+          {!selectedAnakId ? (
+            <p className="text-[11px] font-bold text-amber-600">
+              * Pilih anak / pasien terlebih dahulu untuk mengunduh rekap kehadiran.
+            </p>
           ) : (
-            <Download className="w-4 h-4" strokeWidth={2.5} />
+            <p className="text-xs font-semibold text-gray-500">
+              Total <b className="text-[#1E5C58]">{totalFiltered}</b> sesi kehadiran ditemukan untuk anak ini.
+            </p>
           )}
-          {exportingFormat === "excel" ? "Mengekspor Excel..." : "Export Excel (.xlsx)"}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleExportClick("pdf")}
-          disabled={totalFiltered === 0 || exportingFormat !== null}
-          className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl shadow-sm hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-            exportingFormat === "pdf" ? "cursor-wait" : "cursor-pointer"
-          }`}
-        >
-          {exportingFormat === "pdf" ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Download className="w-4 h-4" strokeWidth={2.5} />
-          )}
-          {exportingFormat === "pdf" ? "Mengekspor PDF..." : "Export PDF"}
-        </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleExportClick("excel")}
+            disabled={!selectedAnakId || totalFiltered === 0 || exportingFormat !== null}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportingFormat === "excel" ? "cursor-wait" : "cursor-pointer"
+              }`}
+          >
+            {exportingFormat === "excel" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" strokeWidth={2.5} />
+            )}
+            {exportingFormat === "excel" ? "Mengekspor Excel..." : "Export Excel (.xlsx)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportClick("pdf")}
+            disabled={!selectedAnakId || totalFiltered === 0 || exportingFormat !== null}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl shadow-sm hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportingFormat === "pdf" ? "cursor-wait" : "cursor-pointer"
+              }`}
+          >
+            {exportingFormat === "pdf" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" strokeWidth={2.5} />
+            )}
+            {exportingFormat === "pdf" ? "Mengekspor PDF..." : "Export PDF"}
+          </button>
+        </div>
       </div>
 
       <div className="border-t border-teal-50/80">
@@ -1115,7 +1813,7 @@ function RekapKehadiran() {
             <span>Preview ({PREVIEW_LIMIT} baris pertama)</span>
           </h3>
           <span className="px-3 py-1 text-[11px] font-bold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
-            Total terfilter: {totalFiltered} data
+            {selectedAnakId ? `Total terfilter: ${totalFiltered} data` : "Pilih anak"}
           </span>
         </div>
 
@@ -1134,6 +1832,12 @@ function RekapKehadiran() {
                 <tr>
                   <td colSpan={4} className="py-8 font-medium text-center text-gray-400">
                     Memuat preview data...
+                  </td>
+                </tr>
+              ) : !selectedAnakId ? (
+                <tr>
+                  <td colSpan={4} className="py-8 font-medium text-center text-gray-400">
+                    Silakan pilih anak / pasien terlebih dahulu untuk melihat preview rekap kehadiran.
                   </td>
                 </tr>
               ) : previewItems.length > 0 ? (
@@ -1183,23 +1887,58 @@ function RekapKehadiran() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ── PAGE UTAMA ────────────────────────────────────────────────────────────────
+// ── KONTEN UTAMA PRESENSI ─────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
-export default function PresensiPage() {
-  const [activeTab, setActiveTabState] = useState("Presensi");
+type PresensiTab = "Presensi" | "Scan QR" | "Reschedule" | "Rekap Kehadiran";
+
+const TAB_TO_QUERY: Record<PresensiTab, string> = {
+  "Presensi": "presensi",
+  "Scan QR": "scan-qr",
+  "Reschedule": "reschedule",
+  "Rekap Kehadiran": "rekap-kehadiran",
+};
+
+const QUERY_TO_TAB: Record<string, PresensiTab> = {
+  "presensi": "Presensi",
+  "scan-qr": "Scan QR",
+  "scan-barcode": "Scan QR",
+  "qr": "Scan QR",
+  "reschedule": "Reschedule",
+  "rekap": "Rekap Kehadiran",
+  "rekap-kehadiran": "Rekap Kehadiran",
+};
+
+function PresensiContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+
+  const [activeTab, setActiveTabState] = useState<PresensiTab>(() => {
+    if (tabParam && QUERY_TO_TAB[tabParam]) {
+      return QUERY_TO_TAB[tabParam];
+    }
+    return "Presensi";
+  });
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("puspa_presensi_tab");
-    if (saved) {
-      setActiveTabState(saved);
-    }
     setIsClient(true);
   }, []);
 
-  const setActiveTab = (tab: string) => {
-    setActiveTabState(tab);
-    localStorage.setItem("puspa_presensi_tab", tab);
+  useEffect(() => {
+    const tabFromUrl = tabParam && QUERY_TO_TAB[tabParam] ? QUERY_TO_TAB[tabParam] : "Presensi";
+    setActiveTabState(tabFromUrl);
+
+    if (!tabParam) {
+      router.replace("/admin/presensi?tab=presensi");
+    }
+  }, [tabParam, router]);
+
+  const setActiveTab = (tab: PresensiTab | string) => {
+    const validTab = (QUERY_TO_TAB[tab.toLowerCase()] || tab) as PresensiTab;
+    setActiveTabState(validTab);
+    const query = TAB_TO_QUERY[validTab] || "presensi";
+    router.replace(`/admin/presensi?tab=${query}`);
   };
 
   const queryClient = useQueryClient();
@@ -1234,6 +1973,7 @@ export default function PresensiPage() {
   const {
     data: presensiDataRes,
     isLoading: isPresensiLoading,
+    isFetching: isPresensiFetching,
     refetch: refetchTodaySessions,
   } = useQuery({
     queryKey: queryKeys.presensi.today({
@@ -1249,6 +1989,43 @@ export default function PresensiPage() {
         page: presensiPage,
         per_page: pageSize,
       });
+
+      const hasRescheduled = (res.items || []).some((item) => item.is_rescheduled || Boolean(item.reschedule_info));
+      if (hasRescheduled) {
+        try {
+          const rescRes = await getRescheduledSessions({
+            date: activePresensiDate,
+            per_page: 50,
+          });
+          const rescMap = new Map<string, { start_time?: string; end_time?: string }>();
+          (rescRes.items || []).forEach((r) => {
+            if (r.id) {
+              rescMap.set(String(r.id), {
+                start_time: r.new_session?.start_time,
+                end_time: r.new_session?.end_time,
+              });
+            }
+            if (r.original_session?.id) {
+              rescMap.set(String(r.original_session.id), {
+                start_time: r.new_session?.start_time,
+                end_time: r.new_session?.end_time,
+              });
+            }
+          });
+
+          res.items.forEach((item) => {
+            const rId = String(item.reschedule_info?.reschedule_id || "");
+            const sId = String(item.id || "");
+            const match = rescMap.get(rId) || rescMap.get(sId);
+            if (match?.start_time && match?.end_time && item.reschedule_info) {
+              item.reschedule_info.start_time = match.start_time;
+              item.reschedule_info.end_time = match.end_time;
+            }
+          });
+        } catch (err) {
+          console.error("Gagal menggabungkan waktu dari endpoint reschedule:", err);
+        }
+      }
 
       let mapped = (res.items || []).map(mapSessionToPresensiData);
       mapped.sort((a, b) => {
@@ -1277,6 +2054,7 @@ export default function PresensiPage() {
   const {
     data: rescheduleDataRes,
     isLoading: isRescheduleLoading,
+    isFetching: isRescheduleFetching,
     refetch: refetchReschedules,
   } = useQuery({
     queryKey: queryKeys.presensi.rescheduled({
@@ -1303,7 +2081,9 @@ export default function PresensiPage() {
   const rescheduleItems = rescheduleDataRes?.items || [];
   const rescheduleMeta = rescheduleDataRes?.meta || { current_page: 1, last_page: 1, total: 0 };
 
-  const loading = (activeTab === "Presensi" && isPresensiLoading) || (activeTab === "Reschedule" && isRescheduleLoading);
+  const loading =
+    (activeTab === "Presensi" && (isPresensiLoading || isPresensiFetching)) ||
+    (activeTab === "Reschedule" && (isRescheduleLoading || isRescheduleFetching));
 
   const fetchTodaySessions = () => refetchTodaySessions();
   const fetchReschedules = () => refetchReschedules();
@@ -1316,8 +2096,10 @@ export default function PresensiPage() {
   const [activeSession, setActiveSession] = useState<SessionAttendanceItem | null>(null);
   const [qrModalData, setQrModalData] = useState<{
     sessionId: string;
+    childId?: string;
     childName: string;
     medicalRecordNumber: string;
+    guardianName?: string;
     therapyType: string;
     therapistName: string;
     sessionDate: string;
@@ -1343,9 +2125,9 @@ export default function PresensiPage() {
     setReschedulePage(1);
   }, [rescheduleDate, rescheduleSearch]);
 
-  const tabs = [
+  const tabs: { id: PresensiTab; label: string; icon: React.ElementType }[] = [
     { id: "Presensi", label: "Presensi", icon: CheckCircle2 },
-    { id: "Scan Barcode", label: "Scan Barcode / QR", icon: Activity },
+    { id: "Scan QR", label: "Scan QR", icon: QrCode },
     { id: "Reschedule", label: "Reschedule", icon: Calendar },
     { id: "Rekap Kehadiran", label: "Rekap Kehadiran", icon: CalendarDays },
   ];
@@ -1364,14 +2146,54 @@ export default function PresensiPage() {
     });
   };
 
-  const handleEdit = (item: PresensiData) => {
+  const handleEdit = async (item: PresensiData) => {
     setPresensiMode("edit");
     setActiveSession(item.rawSession || null);
+
+    let jamMulai = "";
+    let jamSelesai = "";
+    const rawReschedule = item.rawSession?.reschedule_info as any;
+    let rStart = rawReschedule?.start_time || rawReschedule?.new_start_time || rawReschedule?.new_session?.start_time;
+    let rEnd = rawReschedule?.end_time || rawReschedule?.new_end_time || rawReschedule?.new_session?.end_time;
+
+    // Jika belum ada jam baru, ambil dari endpoint reschedule
+    if ((!rStart || !rEnd) && (item.reschedule || item.rawSession?.is_rescheduled)) {
+      try {
+        const rescRes = await getRescheduledSessions({
+          search: item.pasienName !== "-" ? item.pasienName : undefined,
+          per_page: 50,
+        });
+        const matched = (rescRes.items || []).find(
+          (r) =>
+            String(r.id) === String(rawReschedule?.reschedule_id) ||
+            String(r.original_session?.id) === String(item.id)
+        );
+        if (matched?.new_session?.start_time && matched?.new_session?.end_time) {
+          rStart = matched.new_session.start_time;
+          rEnd = matched.new_session.end_time;
+        }
+      } catch (err) {
+        console.error("Gagal mengambil jam baru dari endpoint reschedule:", err);
+      }
+    }
+
+    if (rStart && rEnd) {
+      jamMulai = rStart.slice(0, 5);
+      jamSelesai = rEnd.slice(0, 5);
+    }
+
     setPresensiInitialValues({
       status: item.status === "Belum Presensi" ? undefined : item.status,
       keterangan: item.keterangan === "-" ? "" : item.keterangan,
       reschedule: Boolean(item.reschedule),
-      rescheduleInfo: item.reschedule,
+      rescheduleInfo: {
+        ...item.reschedule,
+        waktu: (jamMulai && jamSelesai) ? `Pukul ${jamMulai.replace(":", ".")} - ${jamSelesai.replace(":", ".")}` : item.reschedule?.waktu,
+      },
+      tanggalBaru: item.reschedule?.tanggal,
+      jamMulaiBaru: jamMulai,
+      jamSelesaiBaru: jamSelesai,
+      terapisBaru: item.reschedule?.terapisName || item.terapisName,
     });
     setPresensiTarget({
       id: item.id,
@@ -1412,8 +2234,10 @@ export default function PresensiPage() {
 
       setQrModalData({
         sessionId: item.id,
+        childId: raw?.child_id,
         childName: item.pasienName,
-        medicalRecordNumber: raw?.medical_record_number || "RM-N/A",
+        medicalRecordNumber: raw?.medical_record_number || item.medicalRecordNumber || "RM-N/A",
+        guardianName: item.waliName,
         therapyType: item.tipeTermi,
         therapistName: item.terapisName,
         sessionDate: item.tanggal,
@@ -1430,6 +2254,17 @@ export default function PresensiPage() {
     mutationFn: async (payload: PresensiManualPayload) => {
       const backendStatus = mapUiStatusToBackend(payload.status);
 
+      if (payload.reschedule && payload.tanggalBaru) {
+        await createReschedule(payload.id, {
+          new_date: payload.tanggalBaru,
+          start_time: payload.jamMulaiBaru || undefined,
+          end_time: payload.jamSelesaiBaru || undefined,
+          new_therapist_id: payload.terapisBaruId || undefined,
+          reason: payload.keterangan || "Di-reschedule saat presensi",
+          requested_by: "guardian",
+        });
+      }
+
       if (presensiMode === "edit") {
         await updateAttendance(payload.id, {
           status: backendStatus,
@@ -1439,17 +2274,6 @@ export default function PresensiPage() {
         await markAttendance(payload.id, {
           status: backendStatus,
           notes: payload.keterangan,
-        });
-      }
-
-      if (payload.reschedule && payload.tanggalBaru) {
-        await createReschedule(payload.id, {
-          new_date: payload.tanggalBaru,
-          start_time: payload.jamMulaiBaru || undefined,
-          end_time: payload.jamSelesaiBaru || undefined,
-          new_therapist_id: payload.terapisBaruId || undefined,
-          reason: payload.keterangan || "Di-reschedule saat presensi",
-          requested_by: "guardian",
         });
       }
 
@@ -1469,8 +2293,8 @@ export default function PresensiPage() {
     },
   });
 
-  const handleSavePresensi = (payload: PresensiManualPayload) => {
-    attendanceMutation.mutate(payload);
+  const handleSavePresensi = async (payload: PresensiManualPayload) => {
+    return await attendanceMutation.mutateAsync(payload);
   };
 
   // Camera / QR Code Scan Handler
@@ -1523,14 +2347,24 @@ export default function PresensiPage() {
     if (!code.trim() || isProcessingScan) return;
     setIsProcessingScan(true);
 
+    let cleanToken = code.trim();
     try {
-      const res = await scanQrAttendance(code.trim());
+      const parsed = JSON.parse(cleanToken);
+      if (parsed && typeof parsed === "object") {
+        cleanToken = parsed.token || parsed.medical_record_number || parsed.child_id || cleanToken;
+      }
+    } catch {
+      // Bukan JSON, gunakan string asli
+    }
+
+    try {
+      const res = await scanQrAttendance(cleanToken);
       const childName = res.data?.child_name || "Pasien";
 
       showSuccessToast(`Presensi berhasil dicatat untuk ${childName}!`, "Scan Berhasil");
       setScanHistory((history) => [
         {
-          code: code.trim(),
+          code: cleanToken,
           patient: childName,
           time: new Date().toLocaleTimeString("id-ID", {
             hour: "2-digit",
@@ -1585,11 +2419,15 @@ export default function PresensiPage() {
           </div>
 
           <button
-            onClick={() =>
-              activeTab === "Presensi"
-                ? fetchTodaySessions()
-                : fetchReschedules()
-            }
+            onClick={async () => {
+              if (activeTab === "Presensi") {
+                await refetchTodaySessions();
+              } else if (activeTab === "Reschedule") {
+                await refetchReschedules();
+              } else {
+                await queryClient.invalidateQueries({ queryKey: queryKeys.presensi.all });
+              }
+            }}
             className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl hover:bg-teal-50 transition-colors shadow-xs"
           >
             <RefreshCw
@@ -1765,7 +2603,16 @@ export default function PresensiPage() {
                                 <StatusBadge status={item.status} />
                               </td>
                               <td className="py-4 px-6 text-xs font-medium text-gray-500 max-w-[180px] leading-relaxed">
-                                {item.keterangan}
+                                {formatKeteranganPresensi(item.keterangan) !== "-" ? (
+                                  <div>{formatKeteranganPresensi(item.keterangan)}</div>
+                                ) : null}
+                                {item.reschedule?.tanggal ? (
+                                  <div className="text-[11px] font-bold text-[#1E5C58]">
+                                    Reschedule: {formatDateDDMMYYYY(item.reschedule.tanggal)}
+                                  </div>
+                                ) : (
+                                  formatKeteranganPresensi(item.keterangan) === "-" && <span>-</span>
+                                )}
                               </td>
                               <ActionDropdown
                                 item={item}
@@ -1870,7 +2717,10 @@ export default function PresensiPage() {
                             Pasien
                           </th>
                           <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">
-                            Jadwal Semula
+                            Terapis
+                          </th>
+                          <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">
+                            Jadwal Lama
                           </th>
                           <th className="py-3 px-6 text-[10px] font-extrabold text-[#1E5C58] uppercase tracking-wider">
                             Jadwal Baru
@@ -1884,66 +2734,115 @@ export default function PresensiPage() {
                         {loading ? (
                           <tr>
                             <td
-                              colSpan={4}
+                              colSpan={5}
                               className="px-6 py-10 text-sm text-center text-gray-400"
                             >
                               Memuat data reschedule...
                             </td>
                           </tr>
                         ) : rescheduleItems.length > 0 ? (
-                          rescheduleItems.map((item) => (
-                            <tr
-                              key={item.id}
-                              className="hover:bg-[#F4F9F8]/50 transition-colors"
-                            >
-                              <td className="px-6 py-4">
-                                <div className="font-bold text-gray-800 text-sm mb-1.5">
-                                  {item.child_name}
-                                </div>
-                                <div className="inline-block px-2.5 py-1 bg-orange-100 text-orange-800 rounded-md text-[10px] font-bold border border-orange-200">
-                                  RM: {item.medical_record_number}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 text-sm">
-                                <div className="flex items-center gap-1.5 text-gray-800 font-bold mb-1">
-                                  <Calendar
-                                    className="w-4 h-4 text-[#A2E4D3]"
-                                    strokeWidth={2.5}
-                                  />{" "}
-                                  {item.original_session?.session_date}
-                                </div>
-                                <div className="flex items-center gap-1.5 text-gray-400 font-medium text-xs">
-                                  <User className="w-3.5 h-3.5" />{" "}
-                                  {item.original_session?.therapist_name}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 text-sm">
-                                <div className="inline-block px-3 py-2 bg-emerald-50 rounded-xl">
-                                  <div className="flex items-center gap-1.5 text-[#1E5C58] font-bold mb-1">
-                                    <Calendar
-                                      className="w-3.5 h-3.5 text-[#2B7A75]"
-                                      strokeWidth={2.5}
-                                    />{" "}
-                                    {item.new_session?.session_date}
+                          rescheduleItems.map((item) => {
+                            const origTherapist = item.original_session?.therapist_name?.trim() || "";
+                            const newTherapist = item.new_session?.therapist_name?.trim() || "";
+                            const isDifferentTherapist = Boolean(
+                              origTherapist && newTherapist && origTherapist.toLowerCase() !== newTherapist.toLowerCase()
+                            );
+                            const origDate = formatDateDDMMYYYY(item.original_session?.session_date);
+                            const origTime = formatTimeRange(
+                              item.original_session?.start_time,
+                              item.original_session?.end_time
+                            );
+                            const newDate = formatDateDDMMYYYY(item.new_session?.session_date);
+                            const newTime = formatTimeRange(
+                              item.new_session?.start_time,
+                              item.new_session?.end_time
+                            );
+                            const diffDays = getDayDifference(
+                              item.original_session?.session_date,
+                              item.new_session?.session_date
+                            );
+
+                            return (
+                              <tr
+                                key={item.id}
+                                className="hover:bg-[#F4F9F8]/50 transition-colors"
+                              >
+                                <td className="px-6 py-4">
+                                  <div className="font-bold text-gray-800 text-sm mb-1.5">
+                                    {item.child_name}
                                   </div>
-                                  <div className="flex items-center gap-1.5 text-gray-400 font-medium text-xs">
-                                    <User className="w-3.5 h-3.5" />{" "}
-                                    {item.new_session?.therapist_name}
+                                  <div className="inline-block px-2.5 py-1 bg-orange-100 text-orange-800 rounded-md text-[10px] font-bold border border-orange-200">
+                                    RM: {item.medical_record_number}
                                   </div>
-                                </div>
-                              </td>
-                              <td className="py-4 px-6 text-xs font-medium text-gray-500 max-w-[240px] leading-relaxed">
-                                <div className="font-bold text-[#1E5C58] mb-1 capitalize">
-                                  Oleh: {item.requested_by}
-                                </div>
-                                <div>{item.reason || "-"}</div>
-                              </td>
-                            </tr>
-                          ))
+                                </td>
+                                <td className="px-6 py-4">
+                                  {isDifferentTherapist ? (
+                                    <div className="space-y-1">
+                                      <div className="text-sm font-bold text-gray-800">
+                                        <span className="text-[#1E5C58]">Terapis baru : </span>
+                                        <span>{newTherapist}</span>
+                                      </div>
+                                      <div className="text-xs font-medium text-gray-400">
+                                        <span>Terapis lama : </span>
+                                        <span className="text-gray-500">{origTherapist}</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-sm font-bold text-gray-800">
+                                      {newTherapist || origTherapist || "-"}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-1.5 text-gray-800 font-bold">
+                                      <Calendar
+                                        className="w-4 h-4 text-gray-400"
+                                        strokeWidth={2}
+                                      />
+                                      <span>{origDate}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-gray-500 font-medium text-xs">
+                                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                      <span>{origTime}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-sm">
+                                  <div className="inline-block">
+                                    <div className="px-3.5 py-2 bg-[#EAF6F4] rounded-2xl flex flex-col gap-1">
+                                      <div className="flex items-center gap-1.5 text-sm font-bold text-[#1E5C58]">
+                                        <Calendar
+                                          className="w-4 h-4 text-[#1E5C58]"
+                                          strokeWidth={2.2}
+                                        />
+                                        <span>{newDate}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 text-xs text-[#2B7A75]">
+                                        <Clock className="w-3.5 h-3.5 text-[#2B7A75]" />
+                                        <span>{newTime}</span>
+                                      </div>
+                                    </div>
+                                    {diffDays !== null && (
+                                      <div className="mt-1.5 text-xs font-bold text-[#1E5C58]">
+                                        Bergeser {diffDays} hari
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 text-xs font-medium text-gray-500 max-w-[240px] leading-relaxed">
+                                  <div className="font-bold text-[#1E5C58] mb-1 capitalize">
+                                    Oleh: {item.requested_by}
+                                  </div>
+                                  <div>{item.reason || "-"}</div>
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td
-                              colSpan={4}
+                              colSpan={5}
                               className="px-6 py-10 text-sm text-center text-gray-400"
                             >
                               Tidak ada data reschedule.
@@ -1979,8 +2878,8 @@ export default function PresensiPage() {
             {/* ── TAB: REKAP KEHADIRAN ── */}
             {activeTab === "Rekap Kehadiran" && <RekapKehadiran />}
 
-            {/* ── TAB: SCAN BARCODE / QR ── */}
-            {activeTab === "Scan Barcode" && (
+            {/* ── TAB: SCAN QR ── */}
+            {activeTab === "Scan QR" && (
               <div className="grid items-stretch grid-cols-1 gap-6 lg:grid-cols-[1.05fr_0.95fr]">
                 <div className="overflow-hidden bg-white border border-teal-50 rounded-2xl shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
                   <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -2082,7 +2981,7 @@ export default function PresensiPage() {
                         id="manual-token-input"
                         name="manualToken"
                         type="text"
-                        placeholder="Paste Token QR (contoh: salin dari modal QR)..."
+                        placeholder="Masukkan No. RM (misal: RM-2026-0001) atau ID Pasien / Token..."
                         className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-[#2B7A75] focus:ring-1 focus:ring-[#2B7A75] bg-white"
                       />
                       <button
@@ -2111,14 +3010,13 @@ export default function PresensiPage() {
                   </div>
                   <div className="p-5">
                     <p className="mb-4 text-sm font-medium leading-relaxed text-gray-500">
-                      Terapis dapat melakukan scan pada QR Code kartu sesi
-                      pasien untuk secara otomatis mencatat kehadiran (Hadir).
+                      Terapis / admin dapat melakukan scan pada Kartu QR Pasien untuk secara otomatis mencatat kehadiran (Hadir) pada sesi terapi hari ini.
                     </p>
                     <div className="space-y-3">
                       {[
                         "Buka kamera dengan menekan tombol Buka Kamera Scan.",
-                        "Arahkan kamera ke QR Code milik sesi pasien.",
-                        "Sistem akan memverifikasi token dan mengubah status menjadi Hadir.",
+                        "Arahkan kamera ke Kartu QR Pasien (berisi No. RM tetap anak).",
+                        "Sistem otomatis mengenali sesi terapi anak hari ini dan mengubah status menjadi Hadir.",
                         "Waktu kedatangan aktual (Check-in) akan otomatis tercatat.",
                       ].map((step, index) => (
                         <div key={step} className="flex items-start gap-3">
@@ -2259,5 +3157,25 @@ export default function PresensiPage() {
           )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── WRAPPER DENGAN SUSPENSE ───────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+export default function PresensiPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-transparent w-full">
+          <div className="flex flex-col items-center gap-3 text-[#1E5C58]">
+            <RefreshCw className="h-8 w-8 animate-spin text-[#2B7A75]" />
+            <p className="text-sm font-semibold">Memuat data presensi...</p>
+          </div>
+        </div>
+      }
+    >
+      <PresensiContent />
+    </Suspense>
   );
 }

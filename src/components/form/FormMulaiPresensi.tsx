@@ -69,6 +69,28 @@ const statusOptions: StatusKehadiran[] = [
     "Sakit",
 ];
 
+const statusButtonStyles: Record<
+    StatusKehadiran,
+    { active: string; inactive: string }
+> = {
+    Hadir: {
+        active: "cursor-pointer bg-emerald-50 border-emerald-400 text-emerald-700 ring-2 ring-emerald-200",
+        inactive: "cursor-pointer bg-white border-gray-200 text-[#1E5C58] hover:border-emerald-200 hover:bg-emerald-50/30",
+    },
+    "Tidak Hadir": {
+        active: "cursor-pointer bg-red-50 border-red-400 text-red-600 ring-2 ring-red-200",
+        inactive: "cursor-pointer bg-white border-gray-200 text-[#1E5C58] hover:border-red-200 hover:bg-red-50/30",
+    },
+    Izin: {
+        active: "cursor-pointer bg-amber-50 border-amber-400 text-amber-700 ring-2 ring-amber-200",
+        inactive: "cursor-pointer bg-white border-gray-200 text-[#1E5C58] hover:border-amber-200 hover:bg-amber-50/30",
+    },
+    Sakit: {
+        active: "cursor-pointer bg-blue-50 border-blue-400 text-blue-700 ring-2 ring-blue-200",
+        inactive: "cursor-pointer bg-white border-gray-200 text-[#1E5C58] hover:border-blue-200 hover:bg-blue-50/30",
+    },
+};
+
 function TerapisSelect({
     value,
     onChange,
@@ -230,30 +252,6 @@ function formatWaktuSingkat(waktu: string) {
     return waktu.replace(/^Pukul\s*/i, "");
 }
 
-function getTherapyTimeRange(waktu: string) {
-    const match = waktu.match(/(\d{1,2})[.:](\d{2})\s*-\s*(\d{1,2})[.:](\d{2})/);
-    if (!match) return null;
-
-    return {
-        start: Number(match[1]) * 60 + Number(match[2]),
-        end: Number(match[3]) * 60 + Number(match[4]),
-        label: `${match[1].padStart(2, "0")}.${match[2]} - ${match[3].padStart(2, "0")}.${match[4]}`,
-    };
-}
-
-function isWithinTherapyTime(tanggal: string, waktu: string): boolean {
-    const [day, month, year] = tanggal.split("/").map(Number);
-    const now = new Date();
-    const isSameDate =
-        now.getFullYear() === year &&
-        now.getMonth() + 1 === month &&
-        now.getDate() === day;
-    const range = getTherapyTimeRange(waktu);
-    if (!isSameDate || !range) return false;
-
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    return currentMinutes >= range.start && currentMinutes <= range.end;
-}
 
 export default function FormCatatKehadiran({
     open,
@@ -268,7 +266,7 @@ export default function FormCatatKehadiran({
     open: boolean;
     onCloseAction: () => void;
     target: PresensiManualTarget | null;
-    onSaveAction: (payload: PresensiManualPayload) => void;
+    onSaveAction: (payload: PresensiManualPayload) => Promise<any> | void;
     initialValues?: PresensiManualInitialValues;
     mode?: "create" | "edit";
     therapistsList?: { id: string; name: string }[];
@@ -325,13 +323,18 @@ export default function FormCatatKehadiran({
 
     if (!open || !target) return null;
 
+    const isRescheduledEdit = mode === "edit" && Boolean(initialValues?.reschedule);
+    const canShowReschedule = allowReschedule && status !== "Hadir";
     const butuhKeterangan = status !== null && status !== "Hadir";
 
     const handlePilihStatus = (value: StatusKehadiran) => {
+        if (isRescheduledEdit && value === "Hadir") {
+            return;
+        }
         setStatus(value);
         setErrors((prev) => ({ ...prev, status: undefined }));
 
-        // Kalau balik pilih "Hadir", reset field lanjutan
+        // Kalau pilih "Hadir", reset keterangan dan reschedule
         if (value === "Hadir") {
             setKeterangan("");
             setReschedule(false);
@@ -351,18 +354,16 @@ export default function FormCatatKehadiran({
             return newErrors;
         }
 
-        // if (status === "Hadir" && !isWithinTherapyTime(target.tanggal, target.waktu)) {
-        //     const range = getTherapyTimeRange(target.waktu);
-        //     newErrors.status = range
-        //         ? `Presensi hadir hanya dapat dicatat pada jam terapi ${range.label}.`
-        //         : "Presensi hadir hanya dapat dicatat pada jam terapi yang sesuai.";
-        // }
+        if (isRescheduledEdit && status === "Hadir") {
+            newErrors.status = "Jadwal yang sudah di-reschedule tidak dapat berstatus Hadir";
+            return newErrors;
+        }
 
         if (butuhKeterangan && !keterangan.trim()) {
             newErrors.keterangan = "Keterangan wajib diisi";
         }
 
-        if (reschedule && allowReschedule) {
+        if (reschedule && canShowReschedule) {
             if (!terapisBaru) newErrors.terapisBaru = "Pilih terapis untuk jadwal baru";
             if (!tanggalBaru) newErrors.tanggalBaru = "Tanggal baru wajib diisi";
             if (!jamMulaiBaru) newErrors.jamMulaiBaru = "Jam mulai wajib diisi";
@@ -390,8 +391,8 @@ export default function FormCatatKehadiran({
             id: target.id,
             status: status as StatusKehadiran,
             keterangan: keterangan.trim(),
-            reschedule: allowReschedule && reschedule,
-            ...(allowReschedule && reschedule
+            reschedule: canShowReschedule && reschedule,
+            ...(canShowReschedule && reschedule
                 ? { terapisBaru, terapisBaruId, tanggalBaru, jamMulaiBaru, jamSelesaiBaru }
                 : {}),
         };
@@ -404,6 +405,8 @@ export default function FormCatatKehadiran({
         setIsSubmitting(true);
         try {
             await onSaveAction(payload);
+        } catch {
+            // Error ditangani oleh toast onError mutasi
         } finally {
             setIsSubmitting(false);
         }
@@ -465,21 +468,33 @@ export default function FormCatatKehadiran({
                                 <div className="grid grid-cols-2 gap-2.5">
                                     {statusOptions.map((value) => {
                                         const isActive = status === value;
+                                        const isOptionDisabled = isRescheduledEdit && value === "Hadir";
+                                        const btnStyle = statusButtonStyles[value];
                                         return (
                                             <button
                                                 key={value}
                                                 type="button"
+                                                disabled={isOptionDisabled}
+                                                title={isOptionDisabled ? "Tidak dapat dipilih karena jadwal sudah di-reschedule" : undefined}
                                                 onClick={() => handlePilihStatus(value)}
-                                                className={`cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-bold transition-all ${isActive
-                                                    ? "bg-[#E8F5F2] border-[#81B7A9] text-[#1E5C58] ring-2 ring-[#A2E4D3]"
-                                                    : "bg-white border-gray-200 text-[#1E5C58] hover:border-teal-200 hover:bg-teal-50/30"
-                                                    }`}
+                                                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-bold transition-all ${
+                                                    isOptionDisabled
+                                                        ? "opacity-35 cursor-not-allowed bg-gray-100 border-gray-200 text-gray-400"
+                                                        : isActive
+                                                        ? btnStyle.active
+                                                        : btnStyle.inactive
+                                                }`}
                                             >
                                                 {value}
                                             </button>
                                         );
                                     })}
                                 </div>
+                                {isRescheduledEdit && (
+                                    <p className="mt-1 text-[11px] font-medium text-amber-600 ml-1">
+                                        * Jadwal ini sudah di-reschedule, status tidak dapat diubah ke Hadir.
+                                    </p>
+                                )}
                                 {errors.status && (
                                     <p className="mt-1 text-xs font-medium text-red-500">
                                         {errors.status}
@@ -527,22 +542,24 @@ export default function FormCatatKehadiran({
                                         </div>
 
                                         {/* Reschedule toggle */}
-                                        {allowReschedule && <label className="flex items-center gap-2.5 px-4 py-3 bg-teal-50/50 border border-teal-100 rounded-xl cursor-pointer select-none">
-                                            <input
-                                                type="checkbox"
-                                                checked={reschedule}
-                                                onChange={(e) => setReschedule(e.target.checked)}
-                                                className="w-4 h-4 rounded border-gray-300 text-[#2B7A75] focus:ring-[#2B7A75]/30 cursor-pointer"
-                                            />
-                                            <CalendarClock className="w-4 h-4 text-[#2B7A75]" />
-                                            <span className="text-sm font-semibold text-[#1E5C58]">
-                                                Alihkan jadwal ini (Reschedule)
-                                            </span>
-                                        </label>}
+                                        {canShowReschedule && (
+                                            <label className="flex items-center gap-2.5 px-4 py-3 bg-teal-50/50 border border-teal-100 rounded-xl cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={reschedule}
+                                                    onChange={(e) => setReschedule(e.target.checked)}
+                                                    className="w-4 h-4 rounded border-gray-300 text-[#2B7A75] focus:ring-[#2B7A75]/30 cursor-pointer"
+                                                />
+                                                <CalendarClock className="w-4 h-4 text-[#2B7A75]" />
+                                                <span className="text-sm font-semibold text-[#1E5C58]">
+                                                    Alihkan jadwal ini (Reschedule)
+                                                </span>
+                                            </label>
+                                        )}
 
                                         {/* Field reschedule */}
                                         <AnimatePresence initial={false}>
-                                            {reschedule && allowReschedule && (
+                                            {reschedule && canShowReschedule && (
                                                 <motion.div
                                                     key="reschedule-fields"
                                                     initial={{ opacity: 0, height: 0 }}
@@ -668,9 +685,12 @@ export default function FormCatatKehadiran({
                                     <div className="min-w-0">
                                         <p className="text-sm font-bold leading-tight">Jadwal ini sudah di-reschedule</p>
                                         {initialValues.rescheduleInfo && (
-                                            <div className="mt-1.5 text-xs font-medium text-[#2B7A75]/75">
+                                            <div className="mt-1.5 text-xs font-medium text-[#2B7A75]/75 space-y-0.5">
                                                 {initialValues.rescheduleInfo.tanggal && (
                                                     <p>Tanggal baru: {initialValues.rescheduleInfo.tanggal.split("-").reverse().join("/")}</p>
+                                                )}
+                                                {initialValues.jamMulaiBaru && initialValues.jamSelesaiBaru && (
+                                                    <p>Waktu baru: {initialValues.jamMulaiBaru} - {initialValues.jamSelesaiBaru} WIB</p>
                                                 )}
                                             </div>
                                         )}
@@ -716,6 +736,8 @@ export default function FormCatatKehadiran({
                                 setIsSubmitting(true);
                                 await onSaveAction(pendingPayload);
                                 setPendingPayload(null);
+                            } catch {
+                                // Error ditangani oleh toast onError mutasi
                             } finally {
                                 setIsSubmitting(false);
                             }
