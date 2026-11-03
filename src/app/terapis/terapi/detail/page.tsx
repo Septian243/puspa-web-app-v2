@@ -187,13 +187,17 @@ function DetailJadwalContent() {
     (storedJadwal?.tanggal_lama ? formatTanggal(storedJadwal.tanggal_lama) : null) ||
     tanggalTerapi;
 
-  const waktuLama = waktu;
+  const waktuLama = storedJadwal?.waktu_lama || waktu;
   const tanggalBaru =
     sessionDetail?.reschedule_info?.new_session_date_formatted ||
     (sessionDetail?.reschedule_info?.new_session_date ? formatTanggal(sessionDetail.reschedule_info.new_session_date) : null) ||
     tanggalTerapi;
 
-  const waktuBaru = waktu;
+  const resNewStart = sessionDetail?.reschedule_info?.start_time || sessionDetail?.reschedule_info?.new_start_time;
+  const resNewEnd = sessionDetail?.reschedule_info?.end_time || sessionDetail?.reschedule_info?.new_end_time;
+  const waktuBaru = (resNewStart && resNewEnd && resNewStart !== "-" && resNewEnd !== "-")
+    ? `${resNewStart.slice(0, 5)} - ${resNewEnd.slice(0, 5)}`
+    : (storedJadwal?.waktu ?? waktu);
   const alasan = sessionDetail?.reschedule_info?.reason || storedJadwal?.alasan || params.get("alasan") || "—";
 
   const handleKembali = () => {

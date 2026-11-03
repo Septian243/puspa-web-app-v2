@@ -110,13 +110,29 @@ const transformSessionItemToRow = (
   let waktuLama: string | null = null;
   let alasan: string | null = null;
   let tanggal = item.session_date;
-  const waktu = `${item.start_time} - ${item.end_time}`;
+  let waktu = `${item.start_time} - ${item.end_time}`;
+  let terapis = item.therapist_name;
 
   if (activeFilter === "Reschedule") {
     tanggalLama = item.session_date;
     waktuLama = `${item.start_time} - ${item.end_time}`;
     tanggal = item.reschedule_info?.new_session_date || item.session_date;
     alasan = item.reschedule_info?.reason || item.notes || null;
+
+    const newStart = item.reschedule_info?.start_time || item.reschedule_info?.new_start_time;
+    const newEnd = item.reschedule_info?.end_time || item.reschedule_info?.new_end_time;
+    if (newStart && newEnd && newStart !== "-" && newEnd !== "-") {
+      waktu = `${newStart.slice(0, 5)} - ${newEnd.slice(0, 5)}`;
+    } else if (item.notes) {
+      const match = item.notes.match(/pukul\s+([0-9]{1,2}[:.][0-9]{2})\s*-\s*([0-9]{1,2}[:.][0-9]{2})/i);
+      if (match) {
+        waktu = `${match[1].replace(".", ":")} - ${match[2].replace(".", ":")}`;
+      }
+    }
+
+    if (item.reschedule_info?.new_therapist_name && item.reschedule_info.new_therapist_name !== "-") {
+      terapis = item.reschedule_info.new_therapist_name;
+    }
   } else {
     if (item.notes && item.notes.includes("Reschedule dari sesi tanggal")) {
       const match = item.notes.match(
@@ -140,7 +156,7 @@ const transformSessionItemToRow = (
     namaOrangTua: item.guardian_name,
     telepon: item.guardian_phone || "-",
     tipeTerapi: item.therapy_type_label,
-    terapis: item.therapist_name,
+    terapis,
     tanggal,
     waktu,
     status: item.has_soap ? "Selesai" : "Terjadwal",

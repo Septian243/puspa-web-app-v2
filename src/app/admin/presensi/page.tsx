@@ -1159,7 +1159,7 @@ interface RekapTherapistItem {
 }
 
 function RekapKehadiran() {
-  const [selectedAnakId, setSelectedAnakId] = useState<string>("");
+  const [selectedAnakIds, setSelectedAnakIds] = useState<string[]>([]);
   const [selectedTerapisIds, setSelectedTerapisIds] = useState<string[]>([]);
   const [selectedJenisTerapi, setSelectedJenisTerapi] = useState<string[]>([]);
   const [periode, setPeriode] = useState<Periode>(DEFAULT_PERIODE);
@@ -1334,17 +1334,24 @@ function RekapKehadiran() {
 
   // Filter jenis terapi berdasarkan Anak yang sedang dipilih
   const availableJenisTerapi = useMemo(() => {
-    if (!selectedAnakId) {
+    if (selectedAnakIds.length === 0) {
       return jenisTerapiOptions;
     }
 
-    const childTypes = relations.childTherapies.get(selectedAnakId);
-    if (!childTypes || childTypes.size === 0) {
+    const allowedTypes = new Set<string>();
+    selectedAnakIds.forEach((childId) => {
+      const childTypes = relations.childTherapies.get(childId);
+      if (childTypes) {
+        childTypes.forEach((t) => allowedTypes.add(t));
+      }
+    });
+
+    if (allowedTypes.size === 0) {
       return jenisTerapiOptions;
     }
 
-    return jenisTerapiOptions.filter((jt) => childTypes.has(jt.id));
-  }, [selectedAnakId, relations]);
+    return jenisTerapiOptions.filter((jt) => allowedTypes.has(jt.id));
+  }, [selectedAnakIds, relations]);
 
   // Filter terapis berdasarkan Jenis Terapi dan Anak yang sedang dipilih
   const availableTherapists = useMemo(() => {
@@ -1358,33 +1365,45 @@ function RekapKehadiran() {
       );
     }
 
-    if (selectedAnakId) {
-      const allowedTherapists = relations.childTherapists.get(selectedAnakId);
-      if (allowedTherapists && allowedTherapists.size > 0) {
+    if (selectedAnakIds.length > 0) {
+      const allowedTherapists = new Set<string>();
+      selectedAnakIds.forEach((childId) => {
+        const therapists = relations.childTherapists.get(childId);
+        if (therapists) {
+          therapists.forEach((tId) => allowedTherapists.add(tId));
+        }
+      });
+
+      if (allowedTherapists.size > 0) {
         filtered = filtered.filter((t) => allowedTherapists.has(t.id));
       }
     }
 
     return filtered;
-  }, [therapistsList, selectedJenisTerapi, selectedAnakId, relations]);
+  }, [therapistsList, selectedJenisTerapi, selectedAnakIds, relations]);
 
-  // Ketika Anak diubah (Single Select): sinkronkan dan pangkas pilihan terapi & terapis
-  const handleAnakChange = (newChildId: string) => {
-    setSelectedAnakId(newChildId);
+  // Ketika Anak diubah (Multi Select): sinkronkan dan pangkas pilihan terapi & terapis
+  const handleAnakChange = (newChildIds: string[]) => {
+    setSelectedAnakIds(newChildIds);
 
-    if (newChildId) {
-      const childTypes = relations.childTherapies.get(newChildId);
-      const childTherapistIds = relations.childTherapists.get(newChildId);
+    if (newChildIds.length > 0) {
+      const allAllowedTypes = new Set<string>();
+      const allAllowedTherapists = new Set<string>();
 
-      if (childTypes && childTypes.size > 0 && selectedJenisTerapi.length > 0) {
+      newChildIds.forEach((cId) => {
+        relations.childTherapies.get(cId)?.forEach((t) => allAllowedTypes.add(t));
+        relations.childTherapists.get(cId)?.forEach((tId) => allAllowedTherapists.add(tId));
+      });
+
+      if (allAllowedTypes.size > 0 && selectedJenisTerapi.length > 0) {
         setSelectedJenisTerapi((current) =>
-          current.filter((jt) => childTypes.has(jt))
+          current.filter((jt) => allAllowedTypes.has(jt))
         );
       }
 
-      if (childTherapistIds && childTherapistIds.size > 0 && selectedTerapisIds.length > 0) {
+      if (allAllowedTherapists.size > 0 && selectedTerapisIds.length > 0) {
         setSelectedTerapisIds((current) =>
-          current.filter((tId) => childTherapistIds.has(tId))
+          current.filter((tId) => allAllowedTherapists.has(tId))
         );
       }
     }
@@ -1402,15 +1421,18 @@ function RekapKehadiran() {
         })
       );
 
-      if (selectedAnakId) {
-        const childTypes = relations.childTherapies.get(selectedAnakId);
-        if (childTypes && childTypes.size > 0) {
-          const hasMatch = newJenis.some((jt) => childTypes.has(jt));
-          if (!hasMatch) {
-            setSelectedAnakId("");
-          }
-        }
+      if (selectedAnakIds.length > 0) {
+        setSelectedAnakIds((current) =>
+          current.filter((cId) => {
+            const childTypes = relations.childTherapies.get(cId);
+            if (!childTypes || childTypes.size === 0) return true;
+            return newJenis.some((jt) => childTypes.has(jt));
+          })
+        );
       }
+    } else {
+      // Jika filter jenis terapi dihapus semua isinya, maka filter terapis juga ikut terhapus
+      setSelectedTerapisIds([]);
     }
   };
 
@@ -1430,15 +1452,18 @@ function RekapKehadiran() {
         setSelectedJenisTerapi(Array.from(neededTypes));
       }
 
-      if (selectedAnakId) {
-        const childTherapists = relations.childTherapists.get(selectedAnakId);
-        if (childTherapists && childTherapists.size > 0) {
-          const hasMatch = newTerapisIds.some((tId) => childTherapists.has(tId));
-          if (!hasMatch) {
-            setSelectedAnakId("");
-          }
-        }
+      if (selectedAnakIds.length > 0) {
+        setSelectedAnakIds((current) =>
+          current.filter((cId) => {
+            const childTherapists = relations.childTherapists.get(cId);
+            if (!childTherapists || childTherapists.size === 0) return true;
+            return newTerapisIds.some((tId) => childTherapists.has(tId));
+          })
+        );
       }
+    } else {
+      // Jika filter terapis dihapus semua isinya, maka filter jenis terapi juga ikut terhapus
+      setSelectedJenisTerapi([]);
     }
   };
 
@@ -1458,6 +1483,8 @@ function RekapKehadiran() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [totalFiltered, setTotalFiltered] = useState(0);
   const [exportingFormat, setExportingFormat] = useState<"excel" | "pdf" | null>(null);
+
+  const canExport = selectedAnakIds.length > 0 || selectedTerapisIds.length > 0;
 
   // Compute date_from and date_to based on current periode state
   const computedDateRange = useMemo(() => {
@@ -1490,26 +1517,43 @@ function RekapKehadiran() {
   useEffect(() => {
     let isSubscribed = true;
     async function fetchPreview() {
-      if (!selectedAnakId) {
+      if (!canExport) {
         setPreviewItems([]);
         setTotalFiltered(0);
         return;
       }
+
+      // Hindari pengiriman therapist_ids ke endpoint /sessions/today karena adanya bug SQL ambiguous column di backend bawaan
+      const targetChildIds =
+        selectedAnakIds.length > 0
+          ? selectedAnakIds
+          : availableChildren.map((c) => c.id);
+
+      if (targetChildIds.length === 0) {
+        setPreviewItems([]);
+        setTotalFiltered(0);
+        return;
+      }
+
       setLoadingPreview(true);
       try {
         const res = await getTodaySessions({
           date_from: computedDateRange.dateFrom || undefined,
           date_to: computedDateRange.dateTo || undefined,
-          child_id: selectedAnakId || undefined,
-          child_ids: selectedAnakId ? [selectedAnakId] : undefined,
-          therapist_ids: selectedTerapisIds.length > 0 ? selectedTerapisIds : undefined,
+          child_ids: targetChildIds,
           therapy_types: selectedJenisTerapi.length > 0 ? selectedJenisTerapi : undefined,
           per_page: 10,
           page: 1,
         });
 
         if (isSubscribed) {
-          setPreviewItems(res.items || []);
+          const rawItems = res.items || [];
+          const filtered =
+            selectedTerapisIds.length > 0
+              ? rawItems.filter((item) => selectedTerapisIds.includes(item.therapist_id))
+              : rawItems;
+
+          setPreviewItems(filtered);
           setTotalFiltered(res.meta?.total || 0);
         }
       } catch (err) {
@@ -1523,12 +1567,12 @@ function RekapKehadiran() {
     return () => {
       isSubscribed = false;
     };
-  }, [selectedAnakId, selectedTerapisIds, selectedJenisTerapi, computedDateRange]);
+  }, [canExport, selectedAnakIds, selectedTerapisIds, selectedJenisTerapi, computedDateRange, availableChildren]);
 
   const handleExportClick = async (format: "excel" | "pdf") => {
     if (exportingFormat) return;
-    if (!selectedAnakId) {
-      showErrorToast("Silakan pilih anak / pasien terlebih dahulu untuk mengunduh rekap kehadiran.");
+    if (!canExport) {
+      showErrorToast("Silakan pilih anak atau terapis terlebih dahulu untuk mengunduh rekap kehadiran.");
       return;
     }
     setExportingFormat(format);
@@ -1537,9 +1581,18 @@ function RekapKehadiran() {
         date_from: computedDateRange.dateFrom || undefined,
         date_to: computedDateRange.dateTo || undefined,
         therapy_types: selectedJenisTerapi.length > 0 ? selectedJenisTerapi : undefined,
-        therapist_ids: selectedTerapisIds.length > 0 ? selectedTerapisIds : undefined,
-        child_id: selectedAnakId || undefined,
-        child_ids: selectedAnakId ? [selectedAnakId] : undefined,
+        therapist_id:
+          selectedTerapisIds.length === 1
+            ? selectedTerapisIds[0]
+            : selectedTerapisIds.length > 1
+              ? selectedTerapisIds.join(",")
+              : undefined,
+        child_id:
+          selectedAnakIds.length === 1
+            ? selectedAnakIds[0]
+            : selectedAnakIds.length > 1
+              ? selectedAnakIds.join(",")
+              : undefined,
         format,
       });
 
@@ -1566,7 +1619,7 @@ function RekapKehadiran() {
     );
 
   const handleReset = () => {
-    setSelectedAnakId("");
+    setSelectedAnakIds([]);
     setSelectedTerapisIds([]);
     setSelectedJenisTerapi([]);
     setPeriode(DEFAULT_PERIODE);
@@ -1574,14 +1627,17 @@ function RekapKehadiran() {
   };
 
   const chips: { key: string; label: string; onRemove: () => void }[] = [];
-  if (selectedAnakId) {
-    const item = childrenList.find((c) => c.id === selectedAnakId);
+  selectedAnakIds.forEach((id) => {
+    const item = childrenList.find((c) => c.id === id);
     chips.push({
-      key: `anak-${selectedAnakId}`,
-      label: `Anak: ${item?.name || selectedAnakId}`,
-      onRemove: () => handleAnakChange(""),
+      key: `anak-${id}`,
+      label: `Anak: ${item?.name || id}`,
+      onRemove: () => {
+        const next = selectedAnakIds.filter((val) => val !== id);
+        handleAnakChange(next);
+      },
     });
-  }
+  });
   selectedJenisTerapi.forEach((id) => {
     const item = jenisTerapiOptions.find((j) => j.id === id);
     chips.push({
@@ -1622,16 +1678,15 @@ function RekapKehadiran() {
             Filter Data
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <SingleSelect
+            <MultiSelect
               label="Anak / Pasien"
-              value={selectedAnakId}
+              values={selectedAnakIds}
               options={availableChildren}
               onChange={handleAnakChange}
-              isLoading={isLoadingOptions}
               placeholder={
                 selectedJenisTerapi.length > 0 || selectedTerapisIds.length > 0
                   ? `Pilih anak (${availableChildren.length} tersedia)...`
-                  : "Pilih anak..."
+                  : "Pilih anak / pasien..."
               }
             />
             <MultiSelect
@@ -1765,13 +1820,13 @@ function RekapKehadiran() {
       {/* ── Action / Export Bar ── */}
       <div className="flex flex-col justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-[#F4F9F8]/50 sm:flex-row sm:items-center">
         <div>
-          {!selectedAnakId ? (
+          {!canExport ? (
             <p className="text-[11px] font-bold text-amber-600">
-              * Pilih anak / pasien terlebih dahulu untuk mengunduh rekap kehadiran.
+              * Pilih anak atau terapis terlebih dahulu untuk mengunduh rekap kehadiran.
             </p>
           ) : (
             <p className="text-xs font-semibold text-gray-500">
-              Total <b className="text-[#1E5C58]">{totalFiltered}</b> sesi kehadiran ditemukan untuk anak ini.
+              Total <b className="text-[#1E5C58]">{totalFiltered}</b> sesi kehadiran ditemukan.
             </p>
           )}
         </div>
@@ -1779,7 +1834,12 @@ function RekapKehadiran() {
           <button
             type="button"
             onClick={() => handleExportClick("excel")}
-            disabled={!selectedAnakId || totalFiltered === 0 || exportingFormat !== null}
+            disabled={!canExport || totalFiltered === 0 || exportingFormat !== null}
+            title={
+              canExport
+                ? "Export Rekap Kehadiran ke Excel"
+                : "Pilih anak atau terapis terlebih dahulu"
+            }
             className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#2B7A75] rounded-xl shadow-sm hover:bg-[#1E5C58] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportingFormat === "excel" ? "cursor-wait" : "cursor-pointer"
               }`}
           >
@@ -1793,7 +1853,12 @@ function RekapKehadiran() {
           <button
             type="button"
             onClick={() => handleExportClick("pdf")}
-            disabled={!selectedAnakId || totalFiltered === 0 || exportingFormat !== null}
+            disabled={!canExport || totalFiltered === 0 || exportingFormat !== null}
+            title={
+              canExport
+                ? "Export Rekap Kehadiran ke PDF"
+                : "Pilih anak atau terapis terlebih dahulu"
+            }
             className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-[#1E5C58] bg-white border border-teal-100 rounded-xl shadow-sm hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${exportingFormat === "pdf" ? "cursor-wait" : "cursor-pointer"
               }`}
           >
@@ -1813,7 +1878,7 @@ function RekapKehadiran() {
             <span>Preview ({PREVIEW_LIMIT} baris pertama)</span>
           </h3>
           <span className="px-3 py-1 text-[11px] font-bold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
-            {selectedAnakId ? `Total terfilter: ${totalFiltered} data` : "Pilih anak"}
+            {canExport ? `Total terfilter: ${totalFiltered} data` : "Pilih anak atau terapis"}
           </span>
         </div>
 
@@ -1834,10 +1899,10 @@ function RekapKehadiran() {
                     Memuat preview data...
                   </td>
                 </tr>
-              ) : !selectedAnakId ? (
+              ) : !canExport ? (
                 <tr>
                   <td colSpan={4} className="py-8 font-medium text-center text-gray-400">
-                    Silakan pilih anak / pasien terlebih dahulu untuk melihat preview rekap kehadiran.
+                    Silakan pilih anak atau terapis terlebih dahulu untuk melihat preview rekap kehadiran.
                   </td>
                 </tr>
               ) : previewItems.length > 0 ? (

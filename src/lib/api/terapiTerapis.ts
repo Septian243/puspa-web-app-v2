@@ -22,6 +22,10 @@ export interface RescheduleInfo {
   new_session_date?: string;
   new_session_date_formatted?: string;
   new_therapist_name?: string;
+  start_time?: string;
+  end_time?: string;
+  new_start_time?: string;
+  new_end_time?: string;
 }
 
 export interface TherapySessionItem {
@@ -172,6 +176,65 @@ export interface ExportTherapySoapFilters {
 
 // ── API Functions ─────────────────────────────────────────────────────────────
 
+const sessionTimeCache = new Map<string, { waktu: string; therapist_name?: string }>();
+
+export async function getRescheduledSessionInfo(
+  newSessionId: string
+): Promise<{ start_time?: string; end_time?: string; waktu?: string; therapist_name?: string } | null> {
+  if (!newSessionId) return null;
+
+  const cached = sessionTimeCache.get(newSessionId);
+  if (cached) {
+    const [s, e] = cached.waktu.split(" - ");
+    return {
+      start_time: s,
+      end_time: e,
+      waktu: cached.waktu,
+      therapist_name: cached.therapist_name,
+    };
+  }
+
+  try {
+    const res = await axiosInstance.get(`/therapy_sessions/${newSessionId}`);
+    const detail = res.data?.data;
+    if (!detail) return null;
+
+    let extractedTime = "";
+    if (detail.notes) {
+      const match = detail.notes.match(
+        /pukul\s+([0-9]{1,2}[:.][0-9]{2})\s*-\s*([0-9]{1,2}[:.][0-9]{2})/i
+      );
+      if (match) {
+        extractedTime = `${match[1].replace(".", ":")} - ${match[2].replace(".", ":")}`;
+      }
+    }
+
+    if (!extractedTime && detail.start_time && detail.end_time && detail.start_time !== "-" && detail.end_time !== "-") {
+      extractedTime = `${detail.start_time.slice(0, 5)} - ${detail.end_time.slice(0, 5)}`;
+    }
+
+    if (extractedTime) {
+      sessionTimeCache.set(newSessionId, {
+        waktu: extractedTime,
+        therapist_name: detail.therapist_name,
+      });
+
+      const [s, e] = extractedTime.split(" - ");
+      return {
+        start_time: s,
+        end_time: e,
+        waktu: extractedTime,
+        therapist_name: detail.therapist_name,
+      };
+    }
+
+    return null;
+  } catch (err) {
+    console.error("Gagal mengambil waktu sesi baru reschedule:", err);
+    return null;
+  }
+}
+
 /**
  * Mengambil daftar sesi terapi dengan filter terpaginasi (GET /therapy_sessions)
  */
@@ -194,6 +257,31 @@ export async function getTherapySessions(
       ...item,
       is_rescheduled: item.is_reschedule ?? item.is_rescheduled ?? false,
     }));
+
+    // JIKA STATUS RESCHEDULED: Ambil jam sesi baru murni dari frontend jika belum ada
+    if (filters.status === "rescheduled") {
+      const itemsToResolve = items.filter(
+        (it) => it.reschedule_info?.new_session_id && (!it.reschedule_info?.start_time || it.reschedule_info.start_time === "-")
+      );
+      if (itemsToResolve.length > 0) {
+        await Promise.allSettled(
+          itemsToResolve.map(async (item) => {
+            const newSessionId = item.reschedule_info?.new_session_id;
+            if (!newSessionId) return;
+            const info = await getRescheduledSessionInfo(newSessionId);
+            if (info && item.reschedule_info) {
+              if (info.start_time) item.reschedule_info.start_time = info.start_time;
+              if (info.end_time) item.reschedule_info.end_time = info.end_time;
+              if (info.start_time) item.reschedule_info.new_start_time = info.start_time;
+              if (info.end_time) item.reschedule_info.new_end_time = info.end_time;
+              if (info.therapist_name && info.therapist_name !== "-") {
+                item.reschedule_info.new_therapist_name = info.therapist_name;
+              }
+            }
+          })
+        );
+      }
+    }
 
     return {
       items,
@@ -260,6 +348,19 @@ export async function getTherapySessionDetail(
         }
       } catch {
         // Biarkan jika belum ada SOAP
+      }
+    }
+
+    if (sessionDetail.reschedule_info?.new_session_id && (!sessionDetail.reschedule_info.start_time || sessionDetail.reschedule_info.start_time === "-")) {
+      const info = await getRescheduledSessionInfo(sessionDetail.reschedule_info.new_session_id);
+      if (info && sessionDetail.reschedule_info) {
+        if (info.start_time) sessionDetail.reschedule_info.start_time = info.start_time;
+        if (info.end_time) sessionDetail.reschedule_info.end_time = info.end_time;
+        if (info.start_time) sessionDetail.reschedule_info.new_start_time = info.start_time;
+        if (info.end_time) sessionDetail.reschedule_info.new_end_time = info.end_time;
+        if (info.therapist_name && info.therapist_name !== "-") {
+          sessionDetail.reschedule_info.new_therapist_name = info.therapist_name;
+        }
       }
     }
 
