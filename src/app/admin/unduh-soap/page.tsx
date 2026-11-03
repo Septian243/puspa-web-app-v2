@@ -397,7 +397,7 @@ export default function AdminUnduhSoapPage() {
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
 
-  const [selectedChild, setSelectedChild] = useState<string>("");
+  const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [therapists, setTherapists] = useState<string[]>([]);
   const [therapies, setTherapies] = useState<string[]>([]);
   const [period, setPeriod] = useState<Period>("Bulanan");
@@ -642,23 +642,27 @@ export default function AdminUnduhSoapPage() {
   const availableTherapyOptions = useMemo(() => {
     if (!therapyOptions.length) return [];
 
-    if (!selectedChild) {
+    if (selectedChildren.length === 0) {
       return therapyOptions;
     }
 
-    const cId = childNameToId[selectedChild];
-    if (!cId) return therapyOptions;
+    const allowedTypes = new Set<string>();
+    selectedChildren.forEach((childLabel) => {
+      const cId = childNameToId[childLabel];
+      if (cId && relations.childTherapies.has(cId)) {
+        relations.childTherapies.get(cId)!.forEach((t) => allowedTypes.add(t));
+      }
+    });
 
-    const childTypes = relations.childTherapies.get(cId);
-    if (!childTypes || childTypes.size === 0) {
+    if (allowedTypes.size === 0) {
       return therapyOptions;
     }
 
     return therapyOptions.filter((label) => {
       const val = therapyLabelToValue[label];
-      return val && childTypes.has(val);
+      return val && allowedTypes.has(val);
     });
-  }, [therapyOptions, selectedChild, childNameToId, relations, therapyLabelToValue]);
+  }, [therapyOptions, selectedChildren, childNameToId, relations, therapyLabelToValue]);
 
   const availableTherapistOptions = useMemo(() => {
     if (!therapistOptions.length) return [];
@@ -676,16 +680,20 @@ export default function AdminUnduhSoapPage() {
       });
     }
 
-    if (selectedChild) {
-      const cId = childNameToId[selectedChild];
-      if (cId && relations.childTherapists.has(cId)) {
-        const allowedTherapists = relations.childTherapists.get(cId)!;
-        if (allowedTherapists.size > 0) {
-          filtered = filtered.filter((thLabel) => {
-            const tId = therapistNameToId[thLabel];
-            return tId && allowedTherapists.has(tId);
-          });
+    if (selectedChildren.length > 0) {
+      const allowedTherapists = new Set<string>();
+      selectedChildren.forEach((childLabel) => {
+        const cId = childNameToId[childLabel];
+        if (cId && relations.childTherapists.has(cId)) {
+          relations.childTherapists.get(cId)!.forEach((tId) => allowedTherapists.add(tId));
         }
+      });
+
+      if (allowedTherapists.size > 0) {
+        filtered = filtered.filter((thLabel) => {
+          const tId = therapistNameToId[thLabel];
+          return tId && allowedTherapists.has(tId);
+        });
       }
     }
 
@@ -695,39 +703,44 @@ export default function AdminUnduhSoapPage() {
     therapies,
     therapyLabelToValue,
     therapistNameToType,
-    selectedChild,
+    selectedChildren,
     childNameToId,
     therapistNameToId,
     relations,
   ]);
 
 
-  const handleChildChange = (newChild: string) => {
-    setSelectedChild(newChild);
+  const handleChildrenChange = (newChildren: string[]) => {
+    setSelectedChildren(newChildren);
 
-    if (newChild) {
-      const cId = childNameToId[newChild];
-      if (cId) {
-        const childTypes = relations.childTherapies.get(cId);
-        const childTherapistIds = relations.childTherapists.get(cId);
+    if (newChildren.length > 0) {
+      const allAllowedTypes = new Set<string>();
+      const allAllowedTherapists = new Set<string>();
 
-        if (childTypes && childTypes.size > 0 && therapies.length > 0) {
-          setTherapies((current) =>
-            current.filter((thLabel) => {
-              const val = therapyLabelToValue[thLabel];
-              return val && childTypes.has(val);
-            })
-          );
+      newChildren.forEach((childLabel) => {
+        const cId = childNameToId[childLabel];
+        if (cId) {
+          relations.childTherapies.get(cId)?.forEach((t) => allAllowedTypes.add(t));
+          relations.childTherapists.get(cId)?.forEach((tId) => allAllowedTherapists.add(tId));
         }
+      });
 
-        if (childTherapistIds && childTherapistIds.size > 0 && therapists.length > 0) {
-          setTherapists((current) =>
-            current.filter((thLabel) => {
-              const tId = therapistNameToId[thLabel];
-              return tId && childTherapistIds.has(tId);
-            })
-          );
-        }
+      if (allAllowedTypes.size > 0 && therapies.length > 0) {
+        setTherapies((current) =>
+          current.filter((thLabel) => {
+            const val = therapyLabelToValue[thLabel];
+            return val && allAllowedTypes.has(val);
+          })
+        );
+      }
+
+      if (allAllowedTherapists.size > 0 && therapists.length > 0) {
+        setTherapists((current) =>
+          current.filter((thLabel) => {
+            const tId = therapistNameToId[thLabel];
+            return tId && allAllowedTherapists.has(tId);
+          })
+        );
       }
     }
   };
@@ -747,18 +760,20 @@ export default function AdminUnduhSoapPage() {
         })
       );
 
-      if (selectedChild) {
-        const cId = childNameToId[selectedChild];
-        if (cId && relations.childTherapies.has(cId)) {
-          const childTypes = relations.childTherapies.get(cId)!;
-          if (childTypes.size > 0) {
-            const hasMatch = selectedTherapyValues.some((v) => childTypes.has(v));
-            if (!hasMatch) {
-              setSelectedChild("");
-            }
-          }
-        }
+      if (selectedChildren.length > 0) {
+        setSelectedChildren((current) =>
+          current.filter((childLabel) => {
+            const cId = childNameToId[childLabel];
+            if (!cId || !relations.childTherapies.has(cId)) return true;
+            const childTypes = relations.childTherapies.get(cId)!;
+            if (childTypes.size === 0) return true;
+            return selectedTherapyValues.some((v) => childTypes.has(v));
+          })
+        );
       }
+    } else {
+      // Jika filter jenis terapi dihapus semua isinya, maka filter terapis juga ikut terhapus
+      setTherapists([]);
     }
   };
 
@@ -778,26 +793,29 @@ export default function AdminUnduhSoapPage() {
         setTherapies(Array.from(neededTherapyLabels));
       }
 
-      if (selectedChild) {
-        const cId = childNameToId[selectedChild];
-        if (cId && relations.childTherapists.has(cId)) {
-          const childTherapistIds = relations.childTherapists.get(cId)!;
-          if (childTherapistIds.size > 0) {
-            const selectedTherapistIds = newTherapists
-              .map((th) => therapistNameToId[th])
-              .filter(Boolean);
-            const hasMatch = selectedTherapistIds.some((tId) => childTherapistIds.has(tId));
-            if (!hasMatch) {
-              setSelectedChild("");
-            }
-          }
-        }
+      if (selectedChildren.length > 0) {
+        const selectedTherapistIds = newTherapists
+          .map((th) => therapistNameToId[th])
+          .filter(Boolean);
+
+        setSelectedChildren((current) =>
+          current.filter((childLabel) => {
+            const cId = childNameToId[childLabel];
+            if (!cId || !relations.childTherapists.has(cId)) return true;
+            const childTherapistIds = relations.childTherapists.get(cId)!;
+            if (childTherapistIds.size === 0) return true;
+            return selectedTherapistIds.some((tId) => childTherapistIds.has(tId));
+          })
+        );
       }
+    } else {
+      // Jika filter terapis dihapus semua isinya, maka filter jenis terapi juga ikut terhapus
+      setTherapies([]);
     }
   };
 
   const reset = () => {
-    setSelectedChild("");
+    setSelectedChildren([]);
     setTherapists([]);
     setTherapies([]);
     setPeriod("Bulanan");
@@ -808,10 +826,12 @@ export default function AdminUnduhSoapPage() {
     setTo("");
   };
 
+  const canExport = selectedChildren.length > 0 || therapists.length > 0;
+
   const handleExportPdf = async () => {
     if (isExporting) return;
-    if (!selectedChild) {
-      showErrorToast("Silakan pilih anak / pasien terlebih dahulu untuk mengunduh PDF.");
+    if (!canExport) {
+      showErrorToast("Silakan pilih anak atau terapis terlebih dahulu untuk mengunduh PDF.");
       return;
     }
     setIsExporting(true);
@@ -820,16 +840,30 @@ export default function AdminUnduhSoapPage() {
       const apiFilters: ExportTherapySoapFilters = {};
 
       // Filter by child_id
-      const selectedChildId = childNameToId[selectedChild];
-      if (selectedChildId) {
-        apiFilters.child_id = selectedChildId;
+      if (selectedChildren.length === 1) {
+        const selectedChildId = childNameToId[selectedChildren[0]];
+        if (selectedChildId) {
+          apiFilters.child_id = selectedChildId;
+        }
+      } else if (selectedChildren.length > 1) {
+        const selectedChildIds = selectedChildren
+          .map((c) => childNameToId[c])
+          .filter(Boolean);
+        if (selectedChildIds.length > 0) {
+          apiFilters.child_id = selectedChildIds;
+        }
       }
 
-      // Filter by therapist_id (if 1 therapist selected)
+      // Filter by therapist_id
       if (therapists.length === 1) {
         const thId = therapistNameToId[therapists[0]];
         if (thId) {
           apiFilters.therapist_id = thId;
+        }
+      } else if (therapists.length > 1) {
+        const thIds = therapists.map((t) => therapistNameToId[t]).filter(Boolean);
+        if (thIds.length > 0) {
+          apiFilters.therapist_id = thIds.join(",");
         }
       }
 
@@ -897,14 +931,13 @@ export default function AdminUnduhSoapPage() {
           : week;
 
   const activeFilters = [
-    ...(selectedChild
-      ? [
-        {
-          label: `Anak: ${selectedChild}`,
-          remove: () => handleChildChange(""),
-        },
-      ]
-      : []),
+    ...selectedChildren.map((item) => ({
+      label: `Anak: ${item}`,
+      remove: () => {
+        const updated = selectedChildren.filter((value) => value !== item);
+        handleChildrenChange(updated);
+      },
+    })),
     ...therapies.map((item) => ({
       label: `Jenis: ${item}`,
       remove: () => {
@@ -955,16 +988,16 @@ export default function AdminUnduhSoapPage() {
       <div className="overflow-hidden bg-white border shadow-sm rounded-2xl border-teal-50">
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <SingleSelect
+            <MultiSelect
               label="Anak / Pasien"
-              value={selectedChild}
+              values={selectedChildren}
               options={availableChildOptions}
-              onChange={handleChildChange}
+              onChange={handleChildrenChange}
               isLoading={isLoadingOptions}
               placeholder={
                 therapies.length > 0 || therapists.length > 0
                   ? `Pilih anak (${availableChildOptions.length} tersedia)...`
-                  : "Pilih anak..."
+                  : "Pilih anak / pasien..."
               }
             />
             <MultiSelect
@@ -974,8 +1007,8 @@ export default function AdminUnduhSoapPage() {
               onChange={handleTherapiesChange}
               isLoading={isLoadingOptions}
               placeholder={
-                selectedChild
-                  ? `Terapi ${selectedChild.split(" ")[0]}...`
+                selectedChildren.length === 1
+                  ? `Terapi ${selectedChildren[0].split(" ")[0]}...`
                   : undefined
               }
             />
@@ -986,8 +1019,8 @@ export default function AdminUnduhSoapPage() {
               onChange={handleTherapistsChange}
               isLoading={isLoadingOptions}
               placeholder={
-                selectedChild
-                  ? `Terapis ${selectedChild.split(" ")[0]}...`
+                selectedChildren.length === 1
+                  ? `Terapis ${selectedChildren[0].split(" ")[0]}...`
                   : therapies.length > 0
                     ? `Terapis ${therapies.join(", ")}...`
                     : undefined
@@ -1133,9 +1166,9 @@ export default function AdminUnduhSoapPage() {
               Mengekspor data SOAP mencakup kolom:{" "}
               <b className="text-[#1E5C58]">S, O, A, P.</b>
             </p>
-            {!selectedChild && (
+            {!canExport && (
               <p className="text-[11px] font-bold text-amber-600 mt-1">
-                * Pilih anak / pasien terlebih dahulu untuk mengunduh laporan PDF.
+                * Pilih anak atau terapis terlebih dahulu untuk mengunduh laporan PDF.
               </p>
             )}
           </div>
@@ -1143,8 +1176,12 @@ export default function AdminUnduhSoapPage() {
             <button
               type="button"
               onClick={handleExportPdf}
-              disabled={isExporting || !selectedChild}
-              title="Unduh rekap catatan SOAP dalam format PDF"
+              disabled={isExporting || !canExport}
+              title={
+                canExport
+                  ? "Unduh rekap catatan SOAP dalam format PDF"
+                  : "Pilih anak atau terapis terlebih dahulu"
+              }
               className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-5 py-2.5 text-sm font-bold text-[#1E5C58] hover:bg-teal-50 shadow-xs transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:scale-100"
             >
               {isExporting ? (
