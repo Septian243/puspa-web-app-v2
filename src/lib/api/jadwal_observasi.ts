@@ -63,7 +63,12 @@ export async function getObservations(
         waktu: isScheduled ? item.scheduled_time : item.time || "-",
 
         // Observer untuk completed, administrator untuk scheduled
-        observer: isCompleted ? item.observer : item.administrator || "-",
+        observer:
+          item.observer ||
+          item.therapist_name ||
+          (isCompleted ? item.observer : item.administrator) ||
+          item.admin_name ||
+          "-",
 
             assessment_status: item.assessment_status || "-", // ⬅ tambahkan ini
 
@@ -83,7 +88,9 @@ export async function getObservations(
 export async function updateObservationSchedule(
   observation_id: number,
   scheduled_date: string,
-  scheduled_time: string
+  scheduled_time: string,
+  petugas?: string | number,
+  petugasName?: string
 ) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -94,6 +101,15 @@ export async function updateObservationSchedule(
         scheduled_date,
         scheduled_time,
         _method: "PUT",
+        ...(petugas
+          ? {
+              therapist_id: petugas,
+              observer_id: petugas,
+              admin_id: petugas,
+              observer: petugasName || petugas,
+              administrator: petugasName || petugas,
+            }
+          : {}),
       },
       {
         headers: {
@@ -117,7 +133,9 @@ export async function updateObservationSchedule(
 export async function createObservationAgreement(
   observation_id: number,
   scheduled_date: string,
-  scheduled_time: string
+  scheduled_time: string,
+  petugas?: string | number,
+  petugasName?: string
 ) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;

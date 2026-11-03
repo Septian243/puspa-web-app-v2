@@ -90,10 +90,10 @@ export default function HeaderOwner({ onOpenSidebar }: HeaderOwnerProps) {
         <div className="flex items-center gap-3 pl-2 sm:pl-4 border-l border-gray-100/80">
           <div className="hidden sm:flex flex-col items-end">
             <span className="text-sm font-bold text-[#1E5C58]">
-              Owner Puspa
+              Manager Puspa
             </span>
             <span className="text-xs font-bold text-gray-400">
-              Owner
+              Manager
             </span>
           </div>
 

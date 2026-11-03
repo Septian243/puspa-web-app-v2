@@ -400,7 +400,7 @@ export default function SidebarOwner({ isOpen = false, onClose = () => {} }: Sid
         <div className="p-4 border-t border-gray-100 flex items-center justify-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#1E5C58]"></div>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-            Puspa Owner v1.0
+            Puspa Manager v1.0
           </p>
           <div className="w-1.5 h-1.5 rounded-full bg-[#1E5C58]"></div>
         </div>

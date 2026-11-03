@@ -389,7 +389,7 @@ export default function JadwalPage() {
                           Jadwal Observasi
                         </th>
                         <th className="py-4 px-6 text-xs font-bold text-[#1E5C58] uppercase tracking-wider">
-                          Administrator
+                          Petugas
                         </th>
                       </>
                     )}
@@ -399,7 +399,7 @@ export default function JadwalPage() {
                           Jadwal Observasi
                         </th>
                         <th className="py-4 px-6 text-xs font-bold text-[#1E5C58] uppercase tracking-wider">
-                          Administrator
+                          Petugas
                         </th>
                         <th className="py-4 px-6 text-xs font-bold text-[#1E5C58] uppercase tracking-wider">
                           Status Asesmen
@@ -893,11 +893,16 @@ export default function JadwalPage() {
           pasienName={selectedPasien.nama}
           initialDate={selectedPasien.tanggalObservasi || ""}
           initialTime={selectedPasien.waktu || ""}
+          initialPetugas={
+            selectedPasien.observer && selectedPasien.observer !== "-"
+              ? selectedPasien.observer
+              : ""
+          }
           onClose={() => {
             setOpenAsesmen(false);
             setSelectedPasien(null);
           }}
-          onSave={async (date, time) => {
+          onSave={async (date, time, petugas, petugasId) => {
             if (!selectedPasien) return;
             try {
               if (tab === "selesai") {
@@ -905,6 +910,8 @@ export default function JadwalPage() {
                   selectedPasien.observation_id,
                   date,
                   time,
+                  petugasId || petugas,
+                  petugas
                 );
                 showSuccessToast("Asesmen berhasil dijadwalkan!");
               } else {
@@ -912,6 +919,8 @@ export default function JadwalPage() {
                   selectedPasien.observation_id,
                   date,
                   time,
+                  petugasId || petugas,
+                  petugas
                 );
                 showSuccessToast("Jadwal observasi sukses disimpan!");
               }

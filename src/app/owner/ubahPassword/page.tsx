@@ -72,7 +72,7 @@ export default function PasswordOrangtuaPage() {
             Ubah Password Akun
           </h2>
           <p className="text-xs text-gray-400 font-semibold mt-1 max-w-[280px]">
-            Perbarui kata sandi Anda secara berkala untuk menjaga keamanan data akses owner.
+            Perbarui kata sandi Anda secara berkala untuk menjaga keamanan data akses manager.
           </p>
         </div>
 

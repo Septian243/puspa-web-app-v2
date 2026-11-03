@@ -378,7 +378,7 @@ export default function DashboardOwnerPage() {
         setApiTrendData([]);
       }
     } catch (err) {
-      console.error("Error loading owner dashboard:", err);
+      console.error("Error loading manager dashboard:", err);
     } finally {
       setLoading(false);
     }
@@ -575,7 +575,7 @@ export default function DashboardOwnerPage() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] w-full">
         <div className="w-10 h-10 border-4 border-teal-100 border-t-[#1E5C58] rounded-full animate-spin mb-4" />
         <p className="text-gray-400 font-medium text-sm animate-pulse">
-          Memuat dasbor owner...
+          Memuat dasbor manager...
         </p>
       </div>
     );
@@ -584,7 +584,7 @@ export default function DashboardOwnerPage() {
   return (
     <div className="relative overflow-hidden selection:bg-[#1E5C58] selection:text-white bg-[#F4F9F8] min-h-full w-full">
       <main className="relative z-10 w-full flex flex-col p-4 sm:p-6 lg:p-8 gap-6 pb-12 max-w-[1600px] mx-auto">
-        {/* ================= 1. BANNER OWNER ================= */}
+        {/* ================= 1. BANNER MANAGER ================= */}
         <motion.div
           initial={{ opacity: 0, y: -15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -593,7 +593,7 @@ export default function DashboardOwnerPage() {
         >
           <div className="relative z-10">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight mb-2">
-              Dashboard Owner
+              Dashboard Manager
             </h1>
             <p className="text-teal-50/90 text-xs sm:text-sm max-w-2xl leading-relaxed">
               Pantau laporan bulanan, statistik pendaftaran pasien, serta tren grafik

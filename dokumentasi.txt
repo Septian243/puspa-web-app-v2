@@ -5,15 +5,15 @@ Dokumentasi Project Website Puspa
 2. DESKRIPSI PROJECT: Proyek ini merupakan pengembangan Frontend website Sistem Layanan Terapi di Puspa Holistic Integrative Care yang bertujuan untuk mendukung pengelolaan data terapi anak secara terintegrasi, terstruktur, dan mudah diakses. Website ini digunakan oleh Admin, Terapis, dan Orang Tua untuk memantau, mengelola, serta meninjau proses dan hasil layanan terapi anak.
 
 3. FITUR UTAMA: 
-	a. Sistem login multi-user (Admin, Terapis, Asesor, Orang Tua, Owner) 
+	a. Sistem login multi-user (Admin, Terapis, Asesor, Orang Tua, Manager) 
 	b. Pendaftaran pasien secara online
 	c. Pengelolaan jadwal observasi dan asesmen
 	d. Observasi perkembangan anak oleh Terapis
 	e. Observasi dan pelaksanaan asesmen oleh Asesor
 	f. Pencatatan hasil observasi dan asesmen perkembangan anak
 	g. Akses riwayat hasil observasi dan asesmen perkembangan anak oleh orang tua
-	h. Verifikasi akun admin, terapis, dan asesor oleh Owner
-	i. Statistik dan laporan bulanan layanan klinik untuk Owner
+	h. Verifikasi akun admin, terapis, dan asesor oleh Manager
+	i. Statistik dan laporan bulanan layanan klinik untuk Manager
 
 4. INSTALASI:
 Ikuti langkah-langkah berikut untuk menjalankan proyek secara lokal beserta instalasi seluruh dependencies yang dibutuhkan agar website dapat berjalan dengan lancar:  
@@ -72,7 +72,7 @@ Login sesuai peran pengguna:
 	b. Terapis  : melakukan observasi perkembangan anak
 	c. Asesor   : melakukan observasi dan menjalankan asesmen anak
 	d. Orang Tua: melihat jadwal, hasil observasi dan asesmen anak
-	e. Owner    : memverifikasi akun pengguna serta melihat statistik dan laporan bulanan
+	e. Manager  : memverifikasi akun pengguna serta melihat statistik dan laporan bulanan
 	f. Gunakan fitur sesuai dengan hak akses masing-masing peran.
 
 6. TEKNOLOGI YANG DIGUNAKAN 
