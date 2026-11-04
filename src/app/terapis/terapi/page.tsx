@@ -233,8 +233,6 @@ function ActionDropdown({
     currentTab.toLowerCase().includes(mySection.toLowerCase()) ||
     (mySection.toLowerCase().includes("plb") && currentTab === "PLB (Paedagog)");
 
-  const isPresent = item.dbStatus === "present";
-
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOpen && buttonRef.current) {
@@ -300,20 +298,13 @@ function ActionDropdown({
                     <>
                       <button
                         onClick={() => {
-                          if (isPresent) {
-                            setOpenDropdownId(null);
-                            onIsiSoap(item);
-                          }
+                          setOpenDropdownId(null);
+                          onIsiSoap(item);
                         }}
-                        disabled={!isPresent}
-                        title={!isPresent ? "Presensi anak harus Hadir terlebih dahulu untuk mengisi SOAP" : undefined}
-                        className={`flex items-center w-full px-4 py-2.5 text-xs font-semibold transition-colors ${!isPresent
-                          ? "opacity-50 cursor-not-allowed text-gray-400 bg-gray-50/40"
-                          : "cursor-pointer hover:bg-teal-50/30 hover:text-[#1E5C58] text-gray-700"
-                          }`}
+                        className="cursor-pointer hover:bg-teal-50/30 hover:text-[#1E5C58] text-gray-700 flex items-center w-full px-4 py-2.5 text-xs font-semibold transition-colors"
                       >
-                        <FileText size={16} className={`mr-2 ${isPresent ? "text-[#81B7A9]" : "text-gray-400"}`} />
-                        <span>Isi SOAP {!isPresent && <span className="text-[10px] text-amber-600 block">(Belum Hadir)</span>}</span>
+                        <FileText size={16} className="mr-2 text-[#81B7A9]" />
+                        <span>Isi SOAP</span>
                       </button>
                       <button
                         onClick={() => { setOpenDropdownId(null); onDetail(item); }}
@@ -379,8 +370,6 @@ function MobileJadwalCard({
   const isMySpecialty =
     currentTab.toLowerCase().includes(mySection.toLowerCase()) ||
     (mySection.toLowerCase().includes("plb") && currentTab === "PLB (Paedagog)");
-
-  const isPresent = item.dbStatus === "present";
 
   return (
     <div className="bg-[#F4F9F8]/40 border border-teal-50 rounded-2xl p-4 space-y-3 shadow-xs text-left">
@@ -489,24 +478,13 @@ function MobileJadwalCard({
         <div className="flex gap-2 pt-3 border-t border-teal-50/50">
           {(statusFilter === "Terjadwal" || statusFilter === "Tertunda") && isMySpecialty && canEdit && (
             <>
-              {isPresent ? (
-                <button
-                  onClick={() => onIsiSoap(item)}
-                  className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold py-2 rounded-lg shadow-sm transition-colors"
-                >
-                  <FileText size={13} />
-                  Isi SOAP
-                </button>
-              ) : (
-                <button
-                  disabled
-                  title="Presensi anak harus Hadir terlebih dahulu untuk mengisi SOAP"
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-gray-400 text-xs font-semibold py-2 rounded-lg cursor-not-allowed border border-gray-200"
-                >
-                  <FileText size={13} />
-                  Isi SOAP (Belum Hadir)
-                </button>
-              )}
+              <button
+                onClick={() => onIsiSoap(item)}
+                className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold py-2 rounded-lg shadow-sm transition-colors"
+              >
+                <FileText size={13} />
+                Isi SOAP
+              </button>
               <button
                 onClick={() => onDetail(item)}
                 className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 bg-white border border-teal-100 text-[#1E5C58] hover:bg-teal-50/20 text-xs font-semibold py-2 rounded-lg transition-colors"

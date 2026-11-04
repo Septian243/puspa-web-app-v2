@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { User, Users, Calendar, ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { User, Users, Calendar, ArrowLeft, AlertCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/lib/toast";
 import {
   getTherapySessionDetail,
@@ -92,6 +93,7 @@ function IsiSoapContent() {
   const [sessionDetail, setSessionDetail] = useState<TherapySessionDetail | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showWarningModal, setShowWarningModal] = useState(false);
 
   // Fallback cache dari sessionStorage jika ada
   const storedJadwal = useMemo<StoredJadwal | null>(() => {
@@ -188,6 +190,44 @@ function IsiSoapContent() {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const doSubmit = async () => {
+    const performedAt = formatPerformedAtForApi(formData.tanggalJam);
+    const payload: CreateTherapySoapPayload = {
+      therapy_session_id: jadwalId!,
+      performed_at: performedAt,
+      therapy_diagnosis: formData.diagnosis.trim(),
+      interventions: formData.tindakan.trim(),
+      subjective: formData.subjektif.trim(),
+      objective: formData.objektif.trim(),
+      assessment: formData.assessment.trim(),
+      plan: formData.plan.trim(),
+      implementation: formData.implementasi.trim() || undefined,
+      advanced_assessment: formData.assessmentLanjutan.trim() || undefined,
+      advanced_plan: formData.planLanjutan.trim() || undefined,
+    };
+
+    setIsSubmitting(true);
+    const result = await createTherapySoap(payload);
+    setIsSubmitting(false);
+
+    if (result.success) {
+      setShowWarningModal(false);
+      showSuccessToast(result.message || "SOAP berhasil disimpan! ✅");
+
+      const getTargetType = () => {
+        const rawType = (sessionDetail?.therapy_type || tipeTerapi || "").toLowerCase();
+        if (rawType.includes("okupasi")) return "okupasi";
+        if (rawType.includes("wicara")) return "wicara";
+        if (rawType.includes("fisio")) return "fisio";
+        return "paedagog";
+      };
+
+      router.push(`/terapis/terapi?type=${getTargetType()}&status=completed`);
+    } else {
+      showErrorToast(result.message);
+    }
+  };
+
   const handleSimpan = async () => {
     if (!jadwalId) {
       showErrorToast("ID sesi terapi tidak ditemukan. Pastikan Anda membuka form melalui jadwal yang valid.");
@@ -229,55 +269,13 @@ function IsiSoapContent() {
       return;
     }
 
-    if (!formData.implementasi.trim()) {
-      showErrorToast("Catatan Implementasi (I) wajib diisi.");
+    // Jika status kehadiran bukan present (belum hadir), munculkan modal peringatan
+    if (sessionDetail && sessionDetail.status !== "present") {
+      setShowWarningModal(true);
       return;
     }
 
-    if (!formData.assessmentLanjutan.trim()) {
-      showErrorToast("Catatan Assessment Lanjutan wajib diisi.");
-      return;
-    }
-
-    if (!formData.planLanjutan.trim()) {
-      showErrorToast("Catatan Plan Lanjutan wajib diisi.");
-      return;
-    }
-
-    const performedAt = formatPerformedAtForApi(formData.tanggalJam);
-    const payload: CreateTherapySoapPayload = {
-      therapy_session_id: jadwalId,
-      performed_at: performedAt,
-      therapy_diagnosis: formData.diagnosis.trim(),
-      interventions: formData.tindakan.trim(),
-      subjective: formData.subjektif.trim(),
-      objective: formData.objektif.trim(),
-      assessment: formData.assessment.trim(),
-      plan: formData.plan.trim(),
-      implementation: formData.implementasi.trim(),
-      advanced_assessment: formData.assessmentLanjutan.trim(),
-      advanced_plan: formData.planLanjutan.trim(),
-    };
-
-    setIsSubmitting(true);
-    const result = await createTherapySoap(payload);
-    setIsSubmitting(false);
-
-    if (result.success) {
-      showSuccessToast(result.message || "SOAP berhasil disimpan! ✅");
-
-      const getTargetType = () => {
-        const rawType = (sessionDetail?.therapy_type || tipeTerapi || "").toLowerCase();
-        if (rawType.includes("okupasi")) return "okupasi";
-        if (rawType.includes("wicara")) return "wicara";
-        if (rawType.includes("fisio")) return "fisio";
-        return "paedagog";
-      };
-
-      router.push(`/terapis/terapi?type=${getTargetType()}&status=completed`);
-    } else {
-      showErrorToast(result.message);
-    }
+    await doSubmit();
   };
 
   const handleKembali = () => {
@@ -344,9 +342,9 @@ function IsiSoapContent() {
         <div className="flex items-start gap-3 p-4 text-sm border shadow-xs bg-amber-50 border-amber-200 rounded-2xl text-amber-800">
           <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
           <div>
-            <p className="font-bold">Perhatian: Status Kehadiran Bukan Hadir</p>
+            <p className="font-bold">Perhatian: Status Kehadiran Belum Hadir</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              Status kehadiran sesi ini tercatat sebagai <strong className="capitalize">{sessionDetail.status}</strong>. Pengisian SOAP umumnya dilakukan saat pasien hadir dalam sesi terapi.
+              Pengisian SOAP umumnya dilakukan saat pasien hadir dalam sesi terapi.
             </p>
           </div>
         </div>
@@ -490,32 +488,32 @@ function IsiSoapContent() {
               placeholder="Tuliskan plan..."
             />
           </InputCard>
-          <InputCard label={<SoapLabel initial="I" text="Implementasi *" />}>
+          <InputCard label={<SoapLabel initial="I" text="Implementasi" />}>
             <TextArea
               name="implementasi"
               value={formData.implementasi}
               onChange={handleChange}
-              placeholder="Tuliskan implementasi..."
+              placeholder="Tuliskan implementasi (opsional)..."
             />
           </InputCard>
           <InputCard
-            label={<SoapLabel initial="A" text="Assessment lanjutan *" />}
+            label={<SoapLabel initial="A" text="Assessment lanjutan" />}
           >
             <TextArea
               name="assessmentLanjutan"
               value={formData.assessmentLanjutan}
               onChange={handleChange}
-              placeholder="Tuliskan assessment lanjutan..."
+              placeholder="Tuliskan assessment lanjutan (opsional)..."
             />
           </InputCard>
         </div>
 
-        <InputCard label={<SoapLabel initial="P" text="Plan lanjutan *" />}>
+        <InputCard label={<SoapLabel initial="P" text="Plan lanjutan" />}>
           <TextArea
             name="planLanjutan"
             value={formData.planLanjutan}
             onChange={handleChange}
-            placeholder="Tuliskan plan lanjutan..."
+            placeholder="Tuliskan plan lanjutan (opsional)..."
           />
         </InputCard>
       </div>
@@ -548,6 +546,72 @@ function IsiSoapContent() {
           </button>
         </div>
       </div>
+
+      {/* ── Modal Peringatan Simpan SOAP (Status Kehadiran Belum Hadir) ── */}
+      <AnimatePresence>
+        {showWarningModal && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isSubmitting && setShowWarningModal(false)}
+              className="absolute inset-0 bg-[#1E5C58]/35 backdrop-blur-sm"
+            />
+
+            {/* Modal Body */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative max-w-md w-full bg-white rounded-3xl p-6 shadow-2xl border border-teal-50 space-y-5 text-center z-10"
+            >
+              {/* Icon */}
+              <div className="mx-auto w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center border border-amber-100">
+                <AlertTriangle className="w-7 h-7 text-amber-500" />
+              </div>
+
+              {/* Title & Description */}
+              <div className="space-y-2">
+                <h3 className="text-lg font-extrabold text-[#1E5C58]">
+                  Perhatian: Status Kehadiran Belum Hadir
+                </h3>
+                <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed px-2">
+                  Pengisian SOAP umumnya dilakukan saat pasien hadir dalam sesi terapi. Apakah Anda yakin ingin tetap menyimpan catatan SOAP untuk sesi ini?
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setShowWarningModal(false)}
+                  className="cursor-pointer flex-1 py-2.5 rounded-xl border border-teal-100 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={doSubmit}
+                  className="cursor-pointer flex-1 py-2.5 rounded-xl bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-bold shadow-md hover:shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <span>Tetap Simpan</span>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

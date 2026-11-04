@@ -831,7 +831,7 @@ export default function AdminUnduhSoapPage() {
   const handleExportPdf = async () => {
     if (isExporting) return;
     if (!canExport) {
-      showErrorToast("Silakan pilih anak atau terapis terlebih dahulu untuk mengunduh PDF.");
+      showErrorToast("Silakan pilih anak atau terapis terlebih dahulu untuk mengunduh SOAP.");
       return;
     }
     setIsExporting(true);
@@ -910,11 +910,11 @@ export default function AdminUnduhSoapPage() {
           "Berhasil Unduh"
         );
       } else {
-        showErrorToast(res.error || "Gagal mengunduh laporan PDF.");
+        showErrorToast(res.error || "Gagal mengunduh laporan SOAP.");
       }
     } catch (err: any) {
       showErrorToast(
-        err?.message || "Terjadi kesalahan saat mengunduh laporan PDF."
+        err?.message || "Terjadi kesalahan saat mengunduh laporan SOAP."
       );
     } finally {
       setIsExporting(false);
@@ -1168,11 +1168,23 @@ export default function AdminUnduhSoapPage() {
             </p>
             {!canExport && (
               <p className="text-[11px] font-bold text-amber-600 mt-1">
-                * Pilih anak atau terapis terlebih dahulu untuk mengunduh laporan PDF.
+                * Pilih anak atau terapis terlebih dahulu untuk mengunduh laporan SOAP.
               </p>
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled
+              title="Fitur Export Excel untuk catatan SOAP saat ini dipending karena backend belum mendukung"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#2B7A75] px-5 py-2.5 text-sm font-bold text-white shadow-xs opacity-50 cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export Excel (.xlsx)</span>
+              <span className="rounded-md bg-white/20 border border-white/30 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                Pending
+              </span>
+            </button>
             <button
               type="button"
               onClick={handleExportPdf}

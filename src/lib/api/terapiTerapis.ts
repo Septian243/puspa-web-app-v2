@@ -127,9 +127,9 @@ export interface CreateTherapySoapPayload {
   objective: string;
   assessment: string;
   plan: string;
-  implementation: string;
-  advanced_assessment: string;
-  advanced_plan: string;
+  implementation?: string;
+  advanced_assessment?: string;
+  advanced_plan?: string;
 }
 
 export interface ExportChildOption {
