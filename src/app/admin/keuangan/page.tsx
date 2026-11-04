@@ -27,7 +27,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import TabPembayaran, { PotonganData, RiwayatPembayaran } from "@/components/keuangan/TabPembayaran";
+import TabPembayaran, { PotonganData, RiwayatPembayaran, DUMMY_RIWAYAT } from "@/components/keuangan/TabPembayaran";
+import PengembalianDanaModal from "@/components/keuangan/PengembalianDanaModal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 import {
@@ -83,6 +84,24 @@ interface TerapiRow {
 
 // ── Dummy Data ────────────────────────────────────────────────────────────────
 const dummyInvoices: Invoice[] = [
+  {
+    id: "kezia-1",
+    no_invoice: "INV-LC/2026/10/3832",
+    anak: "Kezia Aurelia",
+    wali: "Ibu Aurelia",
+    tipe: "Bulanan",
+    periode: "Oktober 2026",
+    total: 265000,
+    tanggal_terbit: "01 Okt 2026",
+    status: "LUNAS",
+    pembayaran: { tanggal: "03/10/2026", metode: "Transfer bank", noResi: "TRX-3832" },
+    terapiRows: [
+      { id: "t1", jenis: "Terapi Wicara", jumlah_sesi: 4, harga_sesi: 15000 },
+      { id: "t2", jenis: "Terapi Okupasi", jumlah_sesi: 3, harga_sesi: 20000 },
+      { id: "t3", jenis: "Fisioterapi", jumlah_sesi: 7, harga_sesi: 10000 },
+      { id: "t4", jenis: "PLB (Paedagog)", jumlah_sesi: 5, harga_sesi: 15000 },
+    ],
+  },
   {
     id: "1",
     no_invoice: "INV/2025/11/0000",
@@ -262,7 +281,22 @@ function isoToDisplayDate(iso: string): string {
 }
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: InvoiceStatus }) {
+function StatusBadge({ status }: { status: InvoiceStatus | string }) {
+  if (status === "BELUM DIBAYAR") {
+    return (
+      <span className="inline-flex items-center text-[11px] text-red-500 font-extrabold">
+        Belum Dibayar
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center text-[11px] text-emerald-600 font-extrabold">
+      Lunas
+    </span>
+  );
+}
+
+function _UnusedStatusBadge({ status }: { status: any }) {
   const config: Record<
     InvoiceStatus,
     { label: string; className: string }
@@ -289,7 +323,7 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
     },
   };
 
-  const c = config[status] || { label: status, className: "text-gray-600 font-extrabold" };
+  const c = (config as any)[status] || { label: status, className: "text-gray-600 font-extrabold" };
   return (
     <span className={`inline-flex items-center text-[11px] ${c.className}`}>
       <span style={{ whiteSpace: "pre-line" }}>{c.label}</span>
@@ -443,7 +477,7 @@ function BuktiTransferModal({
 }
 
 // ── Pengembalian Dana Modal ───────────────────────────────────────────────────
-function PengembalianDanaModal({
+function _OldPengembalianDanaModal({
   invoice,
   lunasInvoices,
   onClose,
@@ -2316,8 +2350,8 @@ function BuatTagihanForm({
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 export default function KeuanganPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [riwayatList, setRiwayatList] = useState<RiwayatPembayaran[] | undefined>(undefined);
+  const [invoices, setInvoices] = useState<Invoice[]>(dummyInvoices);
+  const [riwayatList, setRiwayatList] = useState<RiwayatPembayaran[]>(DUMMY_RIWAYAT);
   const [potonganList, setPotonganList] = useState<PotonganData[]>([]);
   const [summary, setSummary] = useState({
     jumlah_tagihan: 0,
@@ -2435,7 +2469,18 @@ export default function KeuanganPage() {
             harga_sesi: parseFloat(it.price_per_session || 0),
           })),
           pembayaran: inv.payments && inv.payments.length > 0 ? {
-            tanggal: inv.payments[0].payment_date,
+            tanggal: inv.payments[0].payment_date
+              ? (() => {
+                  const raw = String(inv.payments[0].payment_date);
+                  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+                  const d = new Date(raw);
+                  if (!isNaN(d.getTime())) {
+                    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                  }
+                  return raw;
+                })()
+              : "—",
             metode: inv.payments[0].payment_method,
             noResi: inv.payments[0].receipt_number || "",
             buktiUrl: inv.payments[0].proof_file_path || undefined,
@@ -2965,11 +3010,13 @@ export default function KeuanganPage() {
                 if (mode === "dikembalikan") {
                   return {
                     ...inv,
+                    status: "LUNAS",
                     pengembalian: { tanggal: data.tanggal, jumlah: data.jumlah },
                   };
                 } else {
                   return {
                     ...inv,
+                    status: "LUNAS",
                     periodeBerikutnya: { tanggal: data.tanggal, jumlah: data.jumlah },
                   };
                 }
@@ -2988,7 +3035,7 @@ export default function KeuanganPage() {
               bukti: data.bukti || "-",
               jumlah: data.jumlah,
             };
-            setRiwayatList((prev) => [newRiwayat, ...(prev ?? [])]);
+            setRiwayatList((prev) => [newRiwayat, ...(prev ?? DUMMY_RIWAYAT)]);
 
             // Jika dialihkan ke periode berikutnya -> tambahkan ke potongan untuk tagihan berikutnya
             if (mode === "catat") {

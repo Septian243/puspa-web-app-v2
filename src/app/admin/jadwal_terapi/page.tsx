@@ -1063,22 +1063,7 @@ function EditModal({
 
   if (!form) return null;
 
-  const toggleTerapi = (name: string) => {
-    if (selectedTerapi.includes(name)) {
-      setSelectedTerapi((prev) => prev.filter((t) => t !== name));
-      setScheduleMap((prev) => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
-      });
-    } else {
-      setSelectedTerapi((prev) => [...prev, name]);
-      setScheduleMap((prev) => ({
-        ...prev,
-        [name]: [{ terapis: "", hari: "Senin", jamMulai: "", jamSelesai: "", pertemuan: 0 }],
-      }));
-    }
-  };
+
 
   const addRowForTerapi = (terapiName: string) => {
     setScheduleMap((prev) => ({
@@ -1237,26 +1222,38 @@ function EditModal({
                 {/* Row 2: Checklist Terapi + Periode */}
                 <div className="grid grid-cols-2 gap-3 items-start">
                   <div>
-                    <label className={labelCls}>Terapi</label>
-                    <div className="border border-gray-200 rounded-lg p-2.5 space-y-2 bg-gray-50/50">
+                    <label className={labelCls}>
+                      Terapi <span className="text-[10px] font-normal text-gray-400">(Tidak dapat diubah)</span>
+                    </label>
+                    <div className="border border-gray-200 rounded-lg p-2.5 space-y-2 bg-gray-50/70 select-none">
                       {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
                         const checked = selectedTerapi.includes(name);
                         const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
                         return (
-                          <label key={name} className="flex items-center gap-2.5 cursor-pointer group">
+                          <div
+                            key={name}
+                            className={`flex items-center gap-2.5 cursor-not-allowed ${
+                              checked ? "opacity-100" : "opacity-40"
+                            }`}
+                            title={checked ? "Jenis terapi jadwal ini" : "Jenis terapi tidak dapat diubah pada saat edit jadwal"}
+                          >
                             <div
-                              onClick={() => toggleTerapi(name)}
-                              className={`w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${checked ? "bg-[#1E5C58] border-[#1E5C58]" : "border-gray-300 bg-white group-hover:border-[#2B7A75]"}`}
+                              className={`w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-not-allowed ${
+                                checked
+                                  ? "bg-[#1E5C58] border-[#1E5C58]"
+                                  : "border-gray-300 bg-gray-100"
+                              }`}
                             >
                               {checked && <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />}
                             </div>
                             <span
-                              onClick={() => toggleTerapi(name)}
-                              className={`text-sm font-medium transition-colors cursor-pointer ${checked ? "text-[#1E5C58] font-semibold" : "text-gray-600"}`}
+                              className={`text-sm font-medium cursor-not-allowed ${
+                                checked ? "text-[#1E5C58] font-semibold" : "text-gray-400"
+                              }`}
                             >
                               {label}
                             </span>
-                          </label>
+                          </div>
                         );
                       })}
                     </div>

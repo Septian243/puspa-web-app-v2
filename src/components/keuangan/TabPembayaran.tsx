@@ -20,7 +20,7 @@ export interface RiwayatPembayaran {
   jumlah: number;
 }
 
-const DUMMY_RIWAYAT: RiwayatPembayaran[] = [
+export const DUMMY_RIWAYAT: RiwayatPembayaran[] = [
   {
     id: "1",
     tanggal: "29 Sep 2026",
@@ -119,8 +119,10 @@ export default function TabPembayaran({
   const [credits, setCredits] = useState<PotonganData[]>(propData || []);
   const [search, setSearch] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
+  const [transactions, setTransactions] = useState<RiwayatPembayaran[]>([]);
 
-  const activeList = riwayatList ?? DUMMY_RIWAYAT;
+
+  const activeList = (riwayatList && riwayatList.length > 0) ? riwayatList : (transactions.length > 0 ? transactions : DUMMY_RIWAYAT);
   const currentYear = new Date().getFullYear();
   const [riwayatSearch, setRiwayatSearch] = useState("");
   const [filterMetode, setFilterMetode] = useState("Semua metode");
@@ -129,7 +131,18 @@ export default function TabPembayaran({
   const [riwayatPage, setRiwayatPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const [transactions, setTransactions] = useState<RiwayatPembayaran[]>([]);
+  const filteredData = activeList.filter(item => {
+    const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
+                        item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
+                        item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
+    const matchMetode = filterMetode === "Semua metode" || item.metode === filterMetode;
+    const matchBulan = filterBulan === "Semua bulan" || item.tanggal.toLowerCase().includes(filterBulan.substring(0,3).toLowerCase());
+    const matchTahun = filterTahun === "Semua tahun" || item.tanggal.includes(filterTahun.replace("Tahun ", ""));
+    return matchSearch && matchMetode && matchBulan && matchTahun;
+  });
+  const paginatedTransactions = filteredData.slice((riwayatPage - 1) * itemsPerPage, (riwayatPage - 1) * itemsPerPage + itemsPerPage);
+
+
   const [trxMeta, setTrxMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [summaryData, setSummaryData] = useState({ total_pemasukan: 0, total_pengembalian: 0, jumlah_transaksi: 0 });
 
@@ -393,14 +406,14 @@ export default function TabPembayaran({
               </tr>
             </thead>
             <tbody>
-              {transactions.length === 0 ? (
+              {paginatedTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-sm font-semibold text-gray-400">
                     Belum ada riwayat transaksi.
                   </td>
                 </tr>
               ) : (
-                transactions.map((row) => (
+                paginatedTransactions.map((row) => (
                   <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                     <td className="py-2.5 pr-2.5">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 whitespace-nowrap">
@@ -488,7 +501,7 @@ export default function TabPembayaran({
 
             <div className="flex items-center gap-3">
               {(() => {
-                let filteredData = activeList.filter(item => {
+                const filteredData = activeList.filter(item => {
                   const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
                                       item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
                                       item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
