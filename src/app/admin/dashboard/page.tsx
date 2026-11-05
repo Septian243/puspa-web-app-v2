@@ -105,8 +105,8 @@ export default function AdminDashboard() {
       <div className="absolute top-0 left-[-10%] w-[50%] h-[50%] bg-[#b8e8db40] rounded-full blur-[120px] pointer-events-none z-0" />
       <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-[#68b2a020] rounded-full blur-[100px] pointer-events-none z-0" />
 
-      <main className="relative z-10 w-full flex flex-col">
-        <div className="p-4 sm:p-6 lg:p-8 flex flex-col gap-8 pb-12 w-full shadow-none border-none">
+      <main className="relative z-10 flex flex-col w-full">
+        <div className="flex flex-col w-full gap-8 p-4 pb-12 border-none shadow-none sm:p-6 lg:p-8">
           {/* Header Banner */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -115,22 +115,22 @@ export default function AdminDashboard() {
             className="bg-linear-to-br from-[#1E5C58] to-[#2B7A75] rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-teal-900/10 relative overflow-hidden w-full"
           >
             {/* Visual Decorations */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+            <div className="absolute top-0 right-0 w-64 h-64 transform translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none bg-white/10 blur-3xl" />
             <div className="absolute bottom-0 left-10 w-40 h-40 bg-[#A2E4D3]/20 rounded-full blur-2xl transform translate-y-1/2 pointer-events-none" />
 
-            <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="relative z-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
               <div>
-                <h1 className="text-3xl lg:text-4xl font-extrabold mb-2 tracking-tight">
-                  Dasbor Admin
+                <h1 className="mb-2 text-3xl font-extrabold tracking-tight lg:text-4xl">
+                  Dashboard Admin
                 </h1>
-                <p className="text-teal-50/90 text-sm lg:text-base max-w-lg leading-relaxed">
+                <p className="max-w-lg text-sm leading-relaxed text-teal-50/90 lg:text-base">
                   Kelola penjadwalan, statistik layanan klinik, serta penambahan
                   staf secara terintegrasi dari satu layar utama Anda.
                 </p>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 md:shrink-0">
+              <div className="flex flex-col gap-3 sm:flex-row md:shrink-0">
                 <button
                   onClick={() => setOpenTambahAdmin(true)}
                   disabled={loading}
@@ -167,12 +167,12 @@ export default function AdminDashboard() {
           </motion.div>
 
           {/* Jadwal + Chart Layout */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="w-full flex"
+              className="flex w-full"
             >
               <div className="w-full h-full">
                 <JadwalTable
@@ -187,7 +187,7 @@ export default function AdminDashboard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="w-full flex"
+              className="flex w-full"
             >
               <div className="w-full h-full">
                 <PasienChartAdmin data={patientCategories} loading={loading} />
