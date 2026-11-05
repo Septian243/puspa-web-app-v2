@@ -14,9 +14,92 @@ import {
   Calendar,
   AlertCircle,
   Clock,
+  Layers,
 } from "lucide-react";
 import { getAllAdmins } from "@/lib/api/ownerAdmin";
 import { getAdminById } from "@/lib/api/data_admin";
+
+const DEFAULT_SAMPLE_ADMINS: any[] = [
+  {
+    admin_id: "adm-001",
+    admin_name: "Super Admin",
+    jenis: "-",
+    username: "superadmin",
+    email: "superadmin@puspa.id",
+    admin_phone: "081234567890",
+    status: "Terverifikasi",
+    created_at: "10 Januari 2026",
+    updated_at: "10 Januari 2026",
+  },
+  {
+    admin_id: "adm-002",
+    admin_name: "Kaila",
+    jenis: "Admin Layanan",
+    username: "kaila",
+    email: "kaila@gmail.com",
+    admin_phone: "081234567891",
+    status: "Terverifikasi",
+    created_at: "24 April 2026",
+    updated_at: "24 April 2026",
+  },
+  {
+    admin_id: "adm-003",
+    admin_name: "Budi Santoso",
+    jenis: "Admin Keuangan",
+    username: "budisantoso",
+    email: "budi.santoso@gmail.com",
+    admin_phone: "088234567892",
+    status: "Terverifikasi",
+    created_at: "02 Mei 2026",
+    updated_at: "02 Mei 2026",
+  },
+  {
+    admin_id: "adm-004",
+    admin_name: "Siti Rahma",
+    jenis: "Admin Presensi",
+    username: "sitirahma",
+    email: "siti.rahma@gmail.com",
+    admin_phone: "081398765432",
+    status: "Terverifikasi",
+    created_at: "15 Mei 2026",
+    updated_at: "15 Mei 2026",
+  },
+];
+
+function renderJenisBadge(jenis?: string) {
+  if (!jenis || jenis === "-" || jenis.trim() === "") {
+    return <span className="text-gray-500 font-bold pl-2">-</span>;
+  }
+
+  const normalized = jenis.toLowerCase();
+  if (normalized.includes("layanan")) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-xl text-[11px] font-bold bg-[#FCE7F3] text-[#BE185D]">
+        {jenis}
+      </span>
+    );
+  }
+  if (normalized.includes("keuangan")) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-xl text-[11px] font-bold bg-[#FEF3C7] text-[#B45309]">
+        {jenis}
+      </span>
+    );
+  }
+  if (normalized.includes("presensi")) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-xl text-[11px] font-bold bg-[#D1FAE5] text-[#047857]">
+        {jenis}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-xl text-[11px] font-bold bg-teal-50 text-[#1E5C58]">
+      {jenis}
+    </span>
+  );
+}
 
 const AdminListPage: React.FC = () => {
   const [admins, setAdmins] = useState<any[]>([]);
@@ -33,23 +116,32 @@ const AdminListPage: React.FC = () => {
     try {
       setLoading(true);
       const res = await getAllAdmins();
-      if (res.success && Array.isArray(res.data)) {
-        setAdmins(res.data);
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setAdmins(
+          res.data.map((item: any) => ({
+            ...item,
+            jenis: item.jenis || item.role || item.admin_type || "-",
+          }))
+        );
+      } else {
+        setAdmins(DEFAULT_SAMPLE_ADMINS);
       }
     } catch (error) {
       console.error("Gagal mengambil data admin:", error);
+      setAdmins(DEFAULT_SAMPLE_ADMINS);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleViewAdmin(id: string) {
+  async function handleViewAdmin(adminItem: any) {
     setLoadingDetail(true);
     try {
-      const data = await getAdminById(id);
-      setSelectedAdmin(data);
+      const data = await getAdminById(adminItem.admin_id);
+      setSelectedAdmin({ ...adminItem, ...(data || {}) });
     } catch (error) {
       console.error("Gagal mengambil detail admin:", error);
+      setSelectedAdmin(adminItem);
     } finally {
       setLoadingDetail(false);
     }
@@ -61,9 +153,10 @@ const AdminListPage: React.FC = () => {
 
   const filteredAdmins = admins.filter(
     (item) =>
-      item.admin_name.toLowerCase().includes(search.toLowerCase()) ||
-      item.email.toLowerCase().includes(search.toLowerCase()) ||
-      item.username.toLowerCase().includes(search.toLowerCase())
+      item.admin_name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.email?.toLowerCase().includes(search.toLowerCase()) ||
+      item.username?.toLowerCase().includes(search.toLowerCase()) ||
+      item.jenis?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -86,7 +179,7 @@ const AdminListPage: React.FC = () => {
             </div>
             <input
               type="text"
-              placeholder="Cari nama atau username..."
+              placeholder="Cari nama, jenis, username..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 bg-white border border-teal-50 rounded-xl text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 outline-none transition-all placeholder-gray-450 font-medium text-gray-700 shadow-xs"
@@ -123,29 +216,42 @@ const AdminListPage: React.FC = () => {
           ) : (
             <>
               {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="hidden md:block w-full">
+                <table className="w-full text-left border-collapse table-fixed">
+                  <colgroup>
+                    <col className="w-[5%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[20%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[6%]" />
+                  </colgroup>
                   <thead>
-                    <tr className="border-b border-gray-100 text-gray-400">
-                      <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider w-16">
+                    <tr className="border-b border-gray-55 text-gray-400">
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider">
                         No
                       </th>
-                      <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider">
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider">
                         Nama Admin
                       </th>
-                      <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider">
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider">
+                        Jenis
+                      </th>
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider">
                         Username
                       </th>
-                      <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider">
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider">
                         Email
                       </th>
-                      <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider">
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider">
                         No. Telepon
                       </th>
-                      <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider">
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider text-center w-24">
+                      <th className="py-3.5 px-3 text-[10px] font-bold uppercase tracking-wider text-center">
                         Aksi
                       </th>
                     </tr>
@@ -153,27 +259,30 @@ const AdminListPage: React.FC = () => {
                   <tbody>
                     {filteredAdmins.map((admin, idx) => (
                       <tr
-                        key={admin.admin_id}
+                        key={admin.admin_id || idx}
                         className="border-b border-gray-55 last:border-0 hover:bg-[#F4F9F8]/50 transition-colors"
                       >
-                        <td className="py-4 px-6 text-sm font-semibold text-gray-450">
+                        <td className="py-3 px-3 text-xs font-semibold text-gray-450">
                           {idx + 1}
                         </td>
-                        <td className="py-4 px-6 text-sm font-bold text-gray-800">
+                        <td className="py-3 px-3 text-xs font-bold text-gray-800 truncate" title={admin.admin_name}>
                           {admin.admin_name}
                         </td>
-                        <td className="py-4 px-6 text-sm font-medium text-gray-500">
+                        <td className="py-3 px-3">
+                          {renderJenisBadge(admin.jenis)}
+                        </td>
+                        <td className="py-3 px-3 text-xs font-medium text-gray-500 truncate" title={admin.username}>
                           {admin.username}
                         </td>
-                        <td className="py-4 px-6 text-sm font-medium text-gray-500">
+                        <td className="py-3 px-3 text-xs font-medium text-gray-500 truncate" title={admin.email}>
                           {admin.email}
                         </td>
-                        <td className="py-4 px-6 text-sm font-medium text-gray-500">
+                        <td className="py-3 px-3 text-xs font-medium text-gray-500 whitespace-nowrap">
                           {admin.admin_phone}
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-3 px-3">
                           <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold ${
+                            className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10.5px] font-bold ${
                               admin.status === "Terverifikasi"
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
                                 : "bg-rose-50 text-rose-700 border border-rose-100"
@@ -182,14 +291,14 @@ const AdminListPage: React.FC = () => {
                             {admin.status}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-center">
+                        <td className="py-3 px-3 text-center">
                           <button
-                            onClick={() => handleViewAdmin(admin.admin_id)}
+                            onClick={() => handleViewAdmin(admin)}
                             disabled={loadingDetail}
-                            className="cursor-pointer inline-flex items-center justify-center w-9 h-9 bg-white text-[#2B7A75] border-2 border-teal-100 rounded-xl hover:bg-[#F4F9F8] hover:border-teal-200 transition-all shadow-xs"
+                            className="cursor-pointer inline-flex items-center justify-center w-8 h-8 bg-white text-[#2B7A75] border-2 border-teal-100 rounded-xl hover:bg-[#F4F9F8] hover:border-teal-200 transition-all shadow-xs"
                             title="Lihat detail admin"
                           >
-                            <Eye className="w-4.5 h-4.5" />
+                            <Eye className="w-4 h-4" />
                           </button>
                         </td>
                       </tr>
@@ -200,7 +309,7 @@ const AdminListPage: React.FC = () => {
 
               {/* Mobile Card View */}
               <div className="block md:hidden space-y-4">
-                {filteredAdmins.map((admin, idx) => (
+                {filteredAdmins.map((admin) => (
                   <div
                     key={admin.admin_id}
                     className="bg-white border border-teal-50 rounded-2xl p-4 space-y-3 shadow-xs text-left"
@@ -210,15 +319,18 @@ const AdminListPage: React.FC = () => {
                         <h4 className="text-sm font-bold text-gray-800">{admin.admin_name}</h4>
                         <p className="text-xs text-gray-400 mt-0.5">@{admin.username}</p>
                       </div>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                          admin.status === "Terverifikasi"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                            : "bg-rose-50 text-rose-700 border border-rose-100"
-                        }`}
-                      >
-                        {admin.status}
-                      </span>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            admin.status === "Terverifikasi"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                              : "bg-rose-50 text-rose-700 border border-rose-100"
+                          }`}
+                        >
+                          {admin.status}
+                        </span>
+                        {renderJenisBadge(admin.jenis)}
+                      </div>
                     </div>
 
                     <div className="pt-2.5 border-t border-teal-50/55 space-y-1.5 text-xs text-gray-600">
@@ -234,7 +346,7 @@ const AdminListPage: React.FC = () => {
 
                     <div className="pt-2 flex justify-end">
                       <button
-                        onClick={() => handleViewAdmin(admin.admin_id)}
+                        onClick={() => handleViewAdmin(admin)}
                         disabled={loadingDetail}
                         className="cursor-pointer w-full py-2.5 rounded-xl bg-white border border-teal-100 text-[#2B7A75] font-bold text-xs hover:bg-[#F4F9F8] transition-all flex items-center justify-center gap-1.5"
                       >
@@ -252,43 +364,62 @@ const AdminListPage: React.FC = () => {
         {/* Modal Detail Admin */}
         <AnimatePresence>
           {selectedAdmin && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xs p-4">
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xs p-4"
+              onClick={closeModal}
+            >
               <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-md bg-white rounded-3xl p-6 shadow-[0_20px_50px_rgba(30,92,88,0.12)] border border-teal-50 relative overflow-hidden"
+                initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                transition={{ duration: 0.2 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm sm:max-w-[400px] max-h-[85vh] bg-white rounded-3xl shadow-[0_20px_50px_rgba(30,92,88,0.12)] border border-teal-50 relative overflow-hidden flex flex-col"
               >
                 {/* Decorative header border */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-teal-400 via-[#2B7A75] to-[#1E5C58]" />
 
-                <button
-                  onClick={closeModal}
-                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-650 cursor-pointer p-1 rounded-lg hover:bg-gray-50 transition-colors"
-                  aria-label="Close modal"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-
-                <div className="flex items-center gap-3 mb-6 mt-2">
-                  <div className="w-12 h-12 bg-teal-50 border border-teal-100/50 text-[#2B7A75] rounded-2xl flex items-center justify-center">
-                    <ShieldCheck size={22} />
+                {/* Modal Header */}
+                <div className="px-6 pt-6 pb-3 shrink-0 flex items-center justify-between">
+                  <div className="flex items-center gap-3 mt-1">
+                    <div className="w-11 h-11 bg-teal-50 border border-teal-100/50 text-[#2B7A75] rounded-2xl flex items-center justify-center shrink-0">
+                      <ShieldCheck size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-extrabold text-[#1E5C58] leading-tight">
+                        Detail Akun Admin
+                      </h3>
+                      <p className="text-[11px] text-gray-400 font-semibold mt-0.5">
+                        Informasi rinci lisensi admin
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-extrabold text-[#1E5C58]">
-                      Detail Akun Admin
-                    </h3>
-                    <p className="text-xs text-gray-400 font-semibold mt-0.5">
-                      Informasi rinci lisensi admin
-                    </p>
-                  </div>
+                  <button
+                    onClick={closeModal}
+                    className="text-gray-400 hover:text-gray-650 cursor-pointer p-1.5 rounded-lg hover:bg-gray-100/70 transition-colors"
+                    aria-label="Close modal"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <div className="space-y-4">
+                {/* Modal Body (Scrollable) */}
+                <div className="px-6 py-2 overflow-y-auto flex-1 space-y-3">
                   <DetailItem
                     icon={User}
                     label="Nama Lengkap"
                     value={selectedAdmin.admin_name}
+                  />
+                  <DetailItem
+                    icon={Layers}
+                    label="Jenis Admin"
+                    value={
+                      selectedAdmin.jenis && selectedAdmin.jenis !== "-" ? (
+                        renderJenisBadge(selectedAdmin.jenis)
+                      ) : (
+                        "-"
+                      )
+                    }
                   />
                   <DetailItem
                     icon={ShieldCheck}
@@ -324,10 +455,11 @@ const AdminListPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="mt-8 flex justify-end">
+                {/* Modal Footer */}
+                <div className="px-6 py-3.5 border-t border-gray-100 shrink-0 flex justify-end bg-white">
                   <button
                     onClick={closeModal}
-                    className="cursor-pointer px-5 py-2.5 rounded-xl border border-gray-250 bg-white text-gray-500 hover:bg-gray-50 text-xs font-bold transition-all w-full sm:w-auto"
+                    className="cursor-pointer px-5 py-2 rounded-xl border border-gray-250 bg-white text-gray-600 hover:bg-gray-50 text-xs font-bold transition-all w-full sm:w-auto active:scale-95"
                   >
                     Tutup
                   </button>
@@ -362,6 +494,8 @@ function DetailItem({ icon: Icon, label, value, isBadge = false, badgeType = "su
           >
             {value}
           </span>
+        ) : typeof value === "object" ? (
+          <div className="mt-1">{value}</div>
         ) : (
           <p className="text-sm font-bold text-gray-700 mt-0.5 break-words">
             {value || "-"}

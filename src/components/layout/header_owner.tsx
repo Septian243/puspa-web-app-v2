@@ -39,8 +39,11 @@ export default function HeaderOwner({ onOpenSidebar }: HeaderOwnerProps) {
     "/owner/dashboard-Owner": "Dashboard",
     "/owner/verifAdmin": "Verifikasi Admin",
     "/owner/verifTerapis": "Verifikasi Terapis",
+    "/owner/verifSekolah": "Verifikasi Sekolah",
     "/owner/allAdmin": "Data Admin",
+    "/owner/hakAkses": "Hak Akses",
     "/owner/allTerapis": "Data Terapis",
+    "/owner/allSekolah": "Data Sekolah",
     "/owner/allPasien": "Data Pasien/Anak",
     "/owner/ubahPassword": "Pengaturan",
   };

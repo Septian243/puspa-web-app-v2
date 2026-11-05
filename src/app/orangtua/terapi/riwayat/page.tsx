@@ -9,8 +9,6 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
-  Plus,
-  Minus,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
@@ -42,7 +40,7 @@ interface RiwayatSesi {
   diagnosisTerapi: string;
   judulSesi: string;
   deskripsiSingkat: string;
-  soap: SoapNote;
+  soap?: SoapNote;
 }
 
 function getBadgeColor(jenis: string): string {
@@ -53,34 +51,7 @@ function getBadgeColor(jenis: string): string {
   return "bg-[#EAF4F2] text-[#1E5C58]";
 }
 
-// ======================
-// Soap Grid Component
-// ======================
-function SoapGrid({ soap }: { soap: SoapNote }) {
-  return (
-    <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {[
-        { key: "S (Subjektif)", val: soap.subjektif },
-        { key: "O (Objektif)", val: soap.objektif },
-        { key: "A (Assessment)", val: soap.assessment },
-        { key: "P (Plan)", val: soap.plan },
-        { key: "I (Implementasi)", val: soap.implementasi },
-        { key: "A (Assessment Lanjutan)", val: soap.assessmentLanjutan },
-        { key: "P (Plan Lanjutan)", val: soap.planLanjutan },
-      ].map(({ key, val }) => (
-        <div
-          key={key}
-          className="bg-[#F4F9F8]/80 border border-teal-100/60 rounded-xl px-4 py-3"
-        >
-          <p className="text-[9px] font-extrabold text-[#2B7A75] uppercase tracking-widest mb-1">
-            {key}
-          </p>
-          <p className="text-xs text-gray-700 leading-relaxed">{val}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
+
 
 // ======================
 // Session Card
@@ -158,38 +129,30 @@ function SesiCard({ sesi, defaultOpen = false }: { sesi: RiwayatSesi; defaultOpe
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 border-t border-gray-100">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-3.5 mt-4">
-                {/* Left column: basic info */}
-                <div className="sm:col-span-1 space-y-3">
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Nama Anak</p>
-                    <p className="text-xs font-bold text-gray-800">{sesi.namaAnak}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Jenis Terapi</p>
-                    <p className="text-xs font-bold text-gray-800">{sesi.jenisTerapi}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Terapis</p>
-                    <p className="text-xs font-bold text-gray-800">{sesi.terapis}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Tanggal & Jam</p>
-                    <p className="text-xs font-bold text-gray-800">{sesi.tanggal} pukul {sesi.jamMulai}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Durasi Sesi</p>
-                    <p className="text-xs font-bold text-gray-800">{sesi.durasi}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Diagnosis Terapi</p>
-                    <p className="text-xs font-bold text-gray-800">{sesi.diagnosisTerapi}</p>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 mt-4">
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Nama Anak</p>
+                  <p className="text-xs font-bold text-gray-800">{sesi.namaAnak}</p>
                 </div>
-
-                {/* Right column: SOAP notes */}
-                <div className="sm:col-span-2">
-                  <SoapGrid soap={sesi.soap} />
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Jenis Terapi</p>
+                  <p className="text-xs font-bold text-gray-800">{sesi.jenisTerapi}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Terapis</p>
+                  <p className="text-xs font-bold text-gray-800">{sesi.terapis}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Tanggal & Jam</p>
+                  <p className="text-xs font-bold text-gray-800">{sesi.tanggal} pukul {sesi.jamMulai}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Durasi Sesi</p>
+                  <p className="text-xs font-bold text-gray-800">{sesi.durasi}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Diagnosis Terapi</p>
+                  <p className="text-xs font-bold text-gray-800">{sesi.diagnosisTerapi}</p>
                 </div>
               </div>
             </div>

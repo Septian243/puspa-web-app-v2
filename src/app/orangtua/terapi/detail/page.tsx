@@ -2,18 +2,7 @@
 
 import React, { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  CalendarCheck,
-  User,
-  Phone,
-  MapPin,
-  School,
-  Clock,
-  CalendarDays,
-  Baby,
-  UserRound,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
 
@@ -47,20 +36,7 @@ function SectionCard({ tag, children }: { tag: string; children: React.ReactNode
   );
 }
 
-function SoapCard({ tag, content }: { tag: string; content: string }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="px-4 py-2 border-b border-gray-50">
-        <span className="inline-block px-2.5 py-0.5 bg-[#EAF4F2] text-[#1E5C58] text-[9.5px] font-extrabold uppercase tracking-widest rounded-full">
-          {tag}
-        </span>
-      </div>
-      <div className="px-4 py-3">
-        <p className="text-xs font-semibold text-gray-700">{content}</p>
-      </div>
-    </div>
-  );
-}
+
 
 function formatNoRekam(raw: string | number | undefined | null): string {
   if (!raw || raw === "-") return "-";
@@ -208,13 +184,13 @@ function DetailContent() {
           </motion.div>
         )}
 
-        {/* Selesai: Ringkasan Hasil & SOAP */}
+        {/* Selesai: Ringkasan Hasil Terapi */}
         {status === "Selesai" && (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.2 }}
-            className="space-y-6 pt-2"
+            className="pt-2"
           >
             <SectionCard tag="Ringkasan Hasil Terapi">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
@@ -232,19 +208,6 @@ function DetailContent() {
                 />
               </div>
             </SectionCard>
-
-            <div>
-              <h3 className="text-lg font-bold text-[#1E5C58] mb-4 mt-2 px-1 tracking-tight">SOAP</h3>
-              <div className="space-y-3">
-                <SoapCard tag="S (SUBJEKTIF)" content="Ibu menyampaikan anak sulit mengikuti instruksi dua langkah." />
-                <SoapCard tag="O (OBJEKTIF)" content="Mengikuti instruksi satu langkah dengan pengingat." />
-                <SoapCard tag="A (ASSESSMENT)" content="Atensi masih pendek, sekitar 5 menit." />
-                <SoapCard tag="P (PLAN)" content="Latihan atensi bertahap dengan permainan puzzle." />
-                <SoapCard tag="I (IMPLEMENTASI)" content="Puzzle 4 keping dan permainan menyusun balok." />
-                <SoapCard tag="A (ASSESSMENT LANJUTAN)" content="Anak antusias dengan permainan visual." />
-                <SoapCard tag="P (PLAN LANJUTAN)" content="Naikkan tingkat kesulitan puzzle." />
-              </div>
-            </div>
           </motion.div>
         )}
       </div>

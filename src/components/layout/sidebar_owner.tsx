@@ -19,6 +19,8 @@ import {
   ChevronRight,
   Lock,
   AlertTriangle,
+  School,
+  KeyRound,
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
 
@@ -55,8 +57,11 @@ export const menu: MenuGroup[] = [
     items: [
       { name: "Verifikasi Admin", href: "/owner/verifAdmin", icon: ShieldCheck },
       { name: "Verifikasi Terapis", href: "/owner/verifTerapis", icon: ShieldCheck },
+      { name: "Verifikasi Sekolah", href: "/owner/verifSekolah", icon: ShieldCheck },
       { name: "Admin", href: "/owner/allAdmin", icon: UserCog },
+      { name: "Hak Akses", href: "/owner/hakAkses", icon: KeyRound },
       { name: "Terapis", href: "/owner/allTerapis", icon: UserSquare2 },
+      { name: "Sekolah", href: "/owner/allSekolah", icon: School },
       { name: "Pasien / Anak", href: "/owner/allPasien", icon: Users },
     ],
   },
