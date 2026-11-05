@@ -29,15 +29,11 @@ import {
   PatientList,
   PatientDetail,
   PatientUpdatePayload,
+  toISODateString,
 } from "@/lib/api/data_patient";
 
 function formatDate(dateStr?: string | null) {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "";
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${month}-${day}`;
+  return toISODateString(dateStr);
 }
 
 function DetailPatient({
@@ -73,7 +69,7 @@ function DetailPatient({
 
           {/* Header */}
           <div className="bg-linear-to-br from-[#1E5C58] to-[#2B7A75] p-6 text-white relative overflow-hidden shrink-0">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2 pointer-events-none z-0" />
+            <div className="absolute top-0 right-0 z-0 w-32 h-32 transform translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none bg-white/10 blur-2xl" />
 
             <button
               onClick={onClose}
@@ -82,8 +78,8 @@ function DetailPatient({
               ✕
             </button>
 
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/30 text-white shrink-0">
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="flex items-center justify-center text-white border w-14 h-14 bg-white/20 rounded-2xl backdrop-blur-md border-white/30 shrink-0">
                 <Baby className="w-8 h-8" />
               </div>
               <div>
@@ -99,9 +95,9 @@ function DetailPatient({
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto scrollable-body space-y-6">
+          <div className="p-6 space-y-6 overflow-y-auto scrollable-body">
             <div>
-              <div className="flex items-center gap-2 mb-3 border-b border-teal-50 pb-2">
+              <div className="flex items-center gap-2 pb-2 mb-3 border-b border-teal-50">
                 <UserCircle2 className="w-5 h-5 text-[#2B7A75]" />
                 <h3 className="font-bold text-[#1E5C58] uppercase tracking-wider text-sm">
                   Informasi Detail Anak
@@ -144,25 +140,25 @@ function DetailPatient({
             </div>
 
             <div>
-              <div className="flex items-center gap-2 mb-3 border-b border-teal-50 pb-2">
+              <div className="flex items-center gap-2 pb-2 mb-3 border-b border-teal-50">
                 <Users className="w-5 h-5 text-[#2B7A75]" />
                 <h3 className="font-bold text-[#1E5C58] uppercase tracking-wider text-sm">
                   Data Orang Tua / Wali
                 </h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
                 <div className="bg-[#F4F9F8] p-4 rounded-xl border border-teal-50 space-y-2">
-                  <h4 className="font-bold text-teal-800 border-b border-teal-100 pb-1 mb-2">
+                  <h4 className="pb-1 mb-2 font-bold text-teal-800 border-b border-teal-100">
                     Data Ayah
                   </h4>
                   <div>
-                    <span className="text-xs text-gray-500 block">Nama</span>
+                    <span className="block text-xs text-gray-500">Nama</span>
                     <span className="font-semibold text-gray-800">
                       {patient.father_name || "-"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-500 block">
+                    <span className="block text-xs text-gray-500">
                       Pekerjaan
                     </span>
                     <span className="font-semibold text-gray-800">
@@ -170,7 +166,7 @@ function DetailPatient({
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-500 block">Kontak</span>
+                    <span className="block text-xs text-gray-500">Kontak</span>
                     <span className="font-semibold text-gray-800">
                       {patient.father_phone || "-"}
                     </span>
@@ -178,17 +174,17 @@ function DetailPatient({
                 </div>
 
                 <div className="bg-[#F4F9F8] p-4 rounded-xl border border-teal-50 space-y-2">
-                  <h4 className="font-bold text-teal-800 border-b border-teal-100 pb-1 mb-2">
+                  <h4 className="pb-1 mb-2 font-bold text-teal-800 border-b border-teal-100">
                     Data Ibu
                   </h4>
                   <div>
-                    <span className="text-xs text-gray-500 block">Nama</span>
+                    <span className="block text-xs text-gray-500">Nama</span>
                     <span className="font-semibold text-gray-800">
                       {patient.mother_name || "-"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-500 block">
+                    <span className="block text-xs text-gray-500">
                       Pekerjaan
                     </span>
                     <span className="font-semibold text-gray-800">
@@ -196,7 +192,7 @@ function DetailPatient({
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-500 block">Kontak</span>
+                    <span className="block text-xs text-gray-500">Kontak</span>
                     <span className="font-semibold text-gray-800">
                       {patient.mother_phone || "-"}
                     </span>
@@ -206,18 +202,18 @@ function DetailPatient({
             </div>
 
             <div>
-              <div className="flex items-center gap-2 mb-3 border-b border-teal-50 pb-2">
+              <div className="flex items-center gap-2 pb-2 mb-3 border-b border-teal-50">
                 <BriefcaseMedical className="w-5 h-5 text-[#2B7A75]" />
                 <h3 className="font-bold text-[#1E5C58] uppercase tracking-wider text-sm">
                   Layanan & Keluhan
                 </h3>
               </div>
-              <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 space-y-3">
+              <div className="p-4 space-y-3 border bg-amber-50 rounded-xl border-amber-100">
                 <div>
                   <p className="text-xs font-semibold text-amber-700/80 mb-0.5">
                     Keluhan Awal Anak
                   </p>
-                  <p className="font-bold text-amber-900 leading-relaxed text-sm">
+                  <p className="text-sm font-bold leading-relaxed text-amber-900">
                     {patient.child_complaint || "Belum ada catatan keluhan."}
                   </p>
                 </div>
@@ -225,7 +221,7 @@ function DetailPatient({
                   <p className="text-xs font-semibold text-amber-700/80 mb-0.5">
                     Pilihan Rawat/Layanan
                   </p>
-                  <p className="font-bold text-amber-900 leading-relaxed text-sm">
+                  <p className="text-sm font-bold leading-relaxed text-amber-900">
                     {patient.child_service_choice || "-"}
                   </p>
                 </div>
@@ -320,24 +316,24 @@ export default function PatientPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-80px)] bg-transparent w-full">
-      <div className="flex flex-col flex-1 w-full px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex flex-col flex-1 w-full px-4 py-8 sm:px-6 lg:px-8">
         {/* Page Header & Actions */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight flex items-center gap-2">
               <Baby className="w-7 h-7 text-[#2B7A75]" />
               Manajemen Data Pasien
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="mt-1 text-sm text-gray-500">
               Kelola direktori pasien anak dan rincian administratif mereka.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-3">
+          <div className="flex flex-col items-stretch w-full gap-3 sm:flex-row sm:w-auto sm:items-center">
             {/* Search */}
             <div className="relative w-full sm:w-64">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
+                <Search className="w-4 h-4 text-gray-400" />
               </div>
               <input
                 type="text"
@@ -366,7 +362,7 @@ export default function PatientPage() {
           className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden flex-1 flex flex-col"
         >
           {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto w-full flex-1">
+          <div className="flex-1 hidden w-full overflow-x-auto md:block">
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-[#F4F9F8] border-b border-teal-100">
@@ -403,7 +399,7 @@ export default function PatientPage() {
                   <tr>
                     <td colSpan={5} className="py-12 text-center text-gray-400">
                       <div className="flex flex-col items-center justify-center gap-2">
-                        <Filter className="w-10 h-10 text-gray-300 mb-2" />
+                        <Filter className="w-10 h-10 mb-2 text-gray-300" />
                         <p className="text-sm font-medium">
                           Tidak ada data pasien ditemukan.
                         </p>
@@ -416,20 +412,19 @@ export default function PatientPage() {
                       key={pasien.child_id}
                       className="hover:bg-[#F4F9F8]/50 transition-colors group"
                     >
-                      <td className="py-4 px-6 text-sm text-gray-500 font-medium text-center">
+                      <td className="px-6 py-4 text-sm font-medium text-center text-gray-500">
                         {startIndex + i + 1}
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border border-white shadow-sm ${
-                              pasien.child_gender?.toLowerCase() === "perempuan"
-                                ? "bg-pink-100 text-pink-600"
-                                : pasien.child_gender?.toLowerCase() ===
-                                    "laki-laki"
-                                  ? "bg-blue-100 text-blue-600"
-                                  : "bg-teal-100 text-teal-600"
-                            }`}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border border-white shadow-sm ${pasien.child_gender?.toLowerCase() === "perempuan"
+                              ? "bg-pink-100 text-pink-600"
+                              : pasien.child_gender?.toLowerCase() ===
+                                "laki-laki"
+                                ? "bg-blue-100 text-blue-600"
+                                : "bg-teal-100 text-teal-600"
+                              }`}
                           >
                             {pasien.child_name?.charAt(0).toUpperCase() || "A"}
                           </div>
@@ -443,18 +438,18 @@ export default function PatientPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="px-6 py-4">
                         <div className="flex flex-col gap-0.5">
                           <div className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
                             <Activity className="w-3.5 h-3.5 text-amber-500" />{" "}
                             {pasien.child_age} Tahun
                           </div>
-                          <div className="text-xs text-gray-500 font-medium">
+                          <div className="text-xs font-medium text-gray-500">
                             {pasien.child_birth_date}
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-1.5 text-xs text-gray-600 font-bold whitespace-nowrap">
                             <BookOpen className="w-3.5 h-3.5 text-gray-400" />
@@ -463,7 +458,7 @@ export default function PatientPage() {
                         </div>
                       </td>
 
-                      <td className="py-4 px-6">
+                      <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleDetail(pasien.child_id)}
@@ -484,7 +479,7 @@ export default function PatientPage() {
                                 console.error("Gagal memuat detail:", err);
                               }
                             }}
-                            className="cursor-pointer p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                            className="p-2 text-gray-400 transition-all rounded-lg cursor-pointer hover:text-amber-600 hover:bg-amber-50"
                             title="Ubah"
                           >
                             <Pencil size={18} strokeWidth={2.5} />
@@ -494,7 +489,7 @@ export default function PatientPage() {
                               setDeleteId(pasien.child_id);
                               setShowHapus(true);
                             }}
-                            className="cursor-pointer p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            className="p-2 text-gray-400 transition-all rounded-lg cursor-pointer hover:text-red-600 hover:bg-red-50"
                             title="Hapus"
                           >
                             <Trash2 size={18} strokeWidth={2.5} />
@@ -509,15 +504,15 @@ export default function PatientPage() {
           </div>
 
           {/* Mobile Card View */}
-          <div className="md:hidden flex-1 overflow-y-auto w-full p-4 space-y-4">
+          <div className="flex-1 w-full p-4 space-y-4 overflow-y-auto md:hidden">
             {isFetching ? (
-              <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-400">
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-gray-400">
                 <div className="w-8 h-8 border-4 border-teal-100 border-t-[#2B7A75] rounded-full animate-spin"></div>
                 <p className="text-sm font-medium">Memuat data pasien...</p>
               </div>
             ) : paginatedPatients.length === 0 ? (
-              <div className="py-12 flex flex-col items-center justify-center gap-2 text-gray-400">
-                <Filter className="w-10 h-10 text-gray-300 mb-2" />
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-400">
+                <Filter className="w-10 h-10 mb-2 text-gray-300" />
                 <p className="text-sm font-medium">Tidak ada data ditemukan.</p>
               </div>
             ) : (
@@ -526,16 +521,15 @@ export default function PatientPage() {
                   key={pasien.child_id}
                   className="bg-[#F4F9F8]/30 border border-teal-50 rounded-2xl p-4 shadow-xs"
                 >
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-extrabold text-sm shrink-0 border border-white shadow-sm ${
-                          pasien.child_gender?.toLowerCase() === "perempuan"
-                            ? "bg-pink-100 text-pink-600"
-                            : pasien.child_gender?.toLowerCase() === "laki-laki"
-                              ? "bg-blue-100 text-blue-600"
-                              : "bg-teal-100 text-teal-600"
-                        }`}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-extrabold text-sm shrink-0 border border-white shadow-sm ${pasien.child_gender?.toLowerCase() === "perempuan"
+                          ? "bg-pink-100 text-pink-600"
+                          : pasien.child_gender?.toLowerCase() === "laki-laki"
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-teal-100 text-teal-600"
+                          }`}
                       >
                         {pasien.child_name?.charAt(0).toUpperCase() || "A"}
                       </div>
@@ -550,7 +544,7 @@ export default function PatientPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-5 bg-white/50 p-3 rounded-xl border border-white/50">
+                  <div className="grid grid-cols-2 gap-3 p-3 mb-5 border bg-white/50 rounded-xl border-white/50">
                     <div>
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">
                         Usia / TTL
@@ -569,7 +563,7 @@ export default function PatientPage() {
                       </p>
                       <div className="flex items-start gap-1.5 text-xs font-bold text-gray-700">
                         <BookOpen className="w-3 h-3 text-blue-400 mt-0.5" />
-                        <span className="line-clamp-2 leading-tight">
+                        <span className="leading-tight line-clamp-2">
                           {pasien.child_school || "-"}
                         </span>
                       </div>
@@ -621,8 +615,8 @@ export default function PatientPage() {
 
           {/* Pagination */}
           {totalPages > 0 && (
-            <div className="bg-white border-t border-gray-100 p-4 px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-xs sm:text-sm font-medium text-gray-500">
+            <div className="flex flex-col items-center justify-between gap-4 p-4 px-6 bg-white border-t border-gray-100 sm:flex-row">
+              <p className="text-xs font-medium text-gray-500 sm:text-sm">
                 Menampilkan{" "}
                 <span className="font-bold text-[#1E5C58]">
                   {paginatedPatients.length === 0 ? 0 : startIndex + 1}
@@ -651,11 +645,10 @@ export default function PatientPage() {
                     <button
                       key={i}
                       onClick={() => setCurrentPage(i + 1)}
-                      className={`cursor-pointer shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition-all ${
-                        currentPage === i + 1
-                          ? "bg-[#2B7A75] text-white shadow-sm scale-110"
-                          : "text-gray-400 hover:bg-gray-50"
-                      }`}
+                      className={`cursor-pointer shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition-all ${currentPage === i + 1
+                        ? "bg-[#2B7A75] text-white shadow-sm scale-110"
+                        : "text-gray-400 hover:bg-gray-50"
+                        }`}
                     >
                       {i + 1}
                     </button>
@@ -691,18 +684,18 @@ export default function PatientPage() {
         initialData={
           selectedPatient
             ? {
-                ...selectedPatient,
-                child_birth_date: formatDate(selectedPatient.child_birth_date),
-                father_birth_date: formatDate(
-                  selectedPatient.father_birth_date,
-                ),
-                mother_birth_date: formatDate(
-                  selectedPatient.mother_birth_date,
-                ),
-                guardian_birth_date: formatDate(
-                  selectedPatient.guardian_birth_date,
-                ),
-              }
+              ...selectedPatient,
+              child_birth_date: formatDate(selectedPatient.child_birth_date),
+              father_birth_date: formatDate(
+                selectedPatient.father_birth_date,
+              ),
+              mother_birth_date: formatDate(
+                selectedPatient.mother_birth_date,
+              ),
+              guardian_birth_date: formatDate(
+                selectedPatient.guardian_birth_date,
+              ),
+            }
             : undefined
         }
       />

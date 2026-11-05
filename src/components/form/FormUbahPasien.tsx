@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Baby, Users, Heart, ClipboardList, Info, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import SelectSekolahPasien from "./SelectSekolahPasien";
 
 // Sinkronkan interface ini agar cocok dengan ChildDetail dari API
 interface BackendDetailAnak {
@@ -233,7 +234,7 @@ export default function FormUbahPasien({
           className="bg-white w-full h-full sm:h-auto sm:max-w-4xl rounded-none sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-screen sm:max-h-[92vh]"
         >
           {/* HEADER */}
-          <div className="p-5 md:p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10 shrink-0">
+          <div className="sticky top-0 z-10 flex items-center justify-between p-5 bg-white border-b border-gray-100 md:p-6 shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-xl text-[#2B7A75]">
                 <Baby className="w-5 h-5" />
@@ -243,20 +244,20 @@ export default function FormUbahPasien({
                 <p className="text-xs text-gray-400 font-semibold mt-0.5">Ubah rincian informasi dan wali penanggung jawab</p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 cursor-pointer hover:bg-gray-50 rounded-xl transition-colors text-gray-400">
+            <button onClick={onClose} className="p-2 text-gray-400 transition-colors cursor-pointer hover:bg-gray-50 rounded-xl">
               <X size={20} />
             </button>
           </div>
 
           {/* BODY */}
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 md:p-8 space-y-8 custom-scrollbar">
+          <form onSubmit={handleSubmit} className="flex-1 p-5 space-y-8 overflow-y-auto md:p-8 custom-scrollbar">
             {/* SECTION 1: INFORMASI ANAK */}
             <div className="space-y-4">
-              <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="flex items-center gap-2 text-xs font-extrabold tracking-widest text-gray-400 uppercase">
                 <Info className="w-3.5 h-3.5 text-[#2B7A75]" />
                 Informasi Anak
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Nama Lengkap</label>
                   <input name="child_name" value={formData.child_name} onChange={handleChange} className={inputClass} placeholder="Nama Lengkap" />
@@ -278,8 +279,14 @@ export default function FormUbahPasien({
                   <input name="child_age" value={formData.child_age} onChange={handleChange} className={inputClass} placeholder="6 Tahun 1 Bulan" />
                 </div>
                 <div>
-                  <label className={labelClass}>Sekolah</label>
-                  <input name="child_school" value={formData.child_school} onChange={handleChange} className={inputClass} placeholder="TK Aisyiyah" />
+                  <SelectSekolahPasien
+                    value={formData.child_school || ""}
+                    onChange={(val) =>
+                      setFormData((prev: any) => ({ ...prev, child_school: val }))
+                    }
+                    theme="teal"
+                    label="Sekolah"
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Jenis Kelamin</label>
@@ -298,7 +305,7 @@ export default function FormUbahPasien({
 
             {/* SECTION 2: INFORMASI ORANGTUA */}
             <div className="space-y-6">
-              <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="flex items-center gap-2 text-xs font-extrabold tracking-widest text-gray-400 uppercase">
                 <Users className="w-3.5 h-3.5 text-[#2B7A75]" />
                 Informasi Orangtua / Wali
               </h3>
@@ -306,7 +313,7 @@ export default function FormUbahPasien({
               {/* AYAH */}
               <div className="p-5 border border-teal-50/50 rounded-2xl bg-[#F4F9F8]/20 space-y-4">
                 <h4 className="text-xs font-extrabold text-[#1E5C58] tracking-wider uppercase">Ayah</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div><label className={labelClass}>Nama Ayah</label><input name="father_name" value={formData.father_name} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Hubungan</label><input name="father_relationship" value={formData.father_relationship} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Tanggal Lahir</label><input type="date" name="father_birth_date" value={formData.father_birth_date} onChange={handleChange} className={inputClass} /></div>
@@ -319,7 +326,7 @@ export default function FormUbahPasien({
               {/* IBU */}
               <div className="p-5 border border-teal-50/50 rounded-2xl bg-[#F4F9F8]/20 space-y-4">
                 <h4 className="text-xs font-extrabold text-[#1E5C58] tracking-wider uppercase">Ibu</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div><label className={labelClass}>Nama Ibu</label><input name="mother_name" value={formData.mother_name} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Hubungan</label><input name="mother_relationship" value={formData.mother_relationship} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Tanggal Lahir</label><input type="date" name="mother_birth_date" value={formData.mother_birth_date} onChange={handleChange} className={inputClass} /></div>
@@ -334,7 +341,7 @@ export default function FormUbahPasien({
                 <h4 className="text-xs font-extrabold text-[#1E5C58] tracking-wider uppercase flex items-center gap-1.5">
                   Wali <span className="text-[10px] font-medium text-gray-400 italic font-semibold">(Opsional)</span>
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div><label className={labelClass}>Nama Wali</label><input name="guardian_name" value={formData.guardian_name} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Hubungan</label><input name="guardian_relationship" value={formData.guardian_relationship} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Tanggal Lahir</label><input type="date" name="guardian_birth_date" value={formData.guardian_birth_date} onChange={handleChange} className={inputClass} /></div>
@@ -347,7 +354,7 @@ export default function FormUbahPasien({
 
             {/* SECTION 3: KELUHAN */}
             <div className="space-y-3">
-              <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="flex items-center gap-2 text-xs font-extrabold tracking-widest text-gray-400 uppercase">
                 <Heart className="w-3.5 h-3.5 text-red-500" />
                 Keluhan Utama
               </h3>
@@ -356,7 +363,7 @@ export default function FormUbahPasien({
 
             {/* SECTION 4: LAYANAN */}
             <div className="space-y-3">
-              <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="flex items-center gap-2 text-xs font-extrabold tracking-widest text-gray-400 uppercase">
                 <ClipboardList className="w-3.5 h-3.5 text-[#2B7A75]" />
                 Layanan Terpilih
               </h3>
@@ -371,7 +378,7 @@ export default function FormUbahPasien({
           </form>
 
           {/* FOOTER */}
-          <div className="p-5 md:p-6 border-t border-gray-100 flex flex-col sm:flex-row gap-3 bg-gray-50/50 shrink-0">
+          <div className="flex flex-col gap-3 p-5 border-t border-gray-100 md:p-6 sm:flex-row bg-gray-50/50 shrink-0">
             <button type="button" onClick={onClose} className="cursor-pointer w-full sm:flex-1 py-3 border border-[#2B7A75] text-[#2B7A75] rounded-xl font-bold text-xs hover:bg-teal-50/20 transition-all order-2 sm:order-1">
               Batal
             </button>

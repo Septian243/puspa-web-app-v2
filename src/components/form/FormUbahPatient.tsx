@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PatientDetail } from "@/lib/api/data_patient";
+import { PatientDetail, toISODateString } from "@/lib/api/data_patient";
 import { handleApiError } from "@/lib/api-error";
+import SelectSekolahPasien from "./SelectSekolahPasien";
 import {
   User,
   Phone,
@@ -26,16 +27,17 @@ export interface FormUbahPatientProps {
   initialData?: PatientDetail | null;
 }
 
-const toISODate = (value?: string) => {
-  if (!value || value === "-") return "";
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+const toISODate = (value?: string | null) => {
+  return toISODateString(value);
 };
 
 const parseBirthInfo = (str?: string) => {
   if (!str) return { place: "", date: "" };
-  const [place, date] = str.split(", ");
-  return { place: place || "", date: date || "" };
+  const parts = str.split(", ");
+  if (parts.length >= 2) {
+    return { place: parts[0] || "", date: parts.slice(1).join(", ") || "" };
+  }
+  return { place: "", date: str || "" };
 };
 
 export default function FormUbahPatient({
@@ -78,7 +80,8 @@ export default function FormUbahPatient({
 
     setForm({
       child_name: initialData.child_name ?? "",
-      child_birth_date: toISODate(parsed.date),
+      child_birth_date:
+        toISODate(initialData.child_birth_date) || toISODate(parsed.date),
       child_gender: initialData.child_gender ?? "",
       child_school: initialData.child_school ?? "",
       child_address: initialData.child_address ?? "",
@@ -257,15 +260,13 @@ export default function FormUbahPatient({
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-amber-700/80 mb-1 block">
-                      Asal Sekolah
-                    </label>
-                    <input
-                      type="text"
-                      name="child_school"
+                    <SelectSekolahPasien
                       value={form.child_school}
-                      onChange={handleChange}
-                      className="w-full p-2.5 bg-white border border-amber-200 rounded-xl outline-none text-sm focus:ring-2 focus:ring-amber-500/20"
+                      onChange={(val) =>
+                        setForm((prev) => ({ ...prev, child_school: val }))
+                      }
+                      theme="amber"
+                      label="Asal Sekolah"
                     />
                   </div>
                   <div>

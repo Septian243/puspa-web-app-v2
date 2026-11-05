@@ -16,6 +16,7 @@ import {
   HeartPulse,
 } from "lucide-react";
 import { addPatient } from "@/lib/api/data_patient";
+import SelectSekolahPasien from "./SelectSekolahPasien";
 
 interface FormTambahPasienProps {
   open: boolean;
@@ -249,16 +250,14 @@ export default function FormTambahPasien({
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">
-                      Sekolah (Opsional)
-                    </label>
-                    <input
-                      type="text"
-                      name="child_school"
-                      placeholder="cth. TK Pertiwi"
+                    <SelectSekolahPasien
                       value={form.child_school}
-                      onChange={handleChange}
-                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]"
+                      onChange={(val) =>
+                        setForm((prev) => ({ ...prev, child_school: val }))
+                      }
+                      error={errors.child_school}
+                      theme="teal"
+                      label="Sekolah (Opsional)"
                     />
                   </div>
 

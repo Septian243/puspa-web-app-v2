@@ -25,7 +25,8 @@ import {
   CalendarCheck,
   ClipboardCheck,
   Wallet,
-  ArchiveRestore
+  ArchiveRestore,
+  School
 } from "lucide-react";
 import { useSidebar } from "@/context/SidebarContext";
 
@@ -51,6 +52,7 @@ export const baseMenu: MenuGroup[] = [
     items: [
       { name: "Admin", href: "/admin/data_admin", icon: UserCog },
       { name: "Terapis", href: "/admin/data_terapis", icon: UserSquare2 },
+      { name: "Sekolah", href: "/admin/data_sekolah", icon: School },
       { name: "Pasien / Anak", href: "/admin/data_pasien", icon: Users },
       {
         name: "Jadwal",
@@ -66,9 +68,9 @@ export const baseMenu: MenuGroup[] = [
           { name: "Terapi", href: "/admin/jadwal_terapi", icon: CalendarCheck },
         ],
       },
-        { name: "Presensi", href: "/admin/presensi", icon: ClipboardCheck },
-        { name: "Laporan SOAP", href: "/admin/unduh-soap", icon: ArchiveRestore },
-        { name: "Keuangan", href: "/admin/keuangan", icon: Wallet },
+      { name: "Presensi", href: "/admin/presensi", icon: ClipboardCheck },
+      { name: "Laporan SOAP", href: "/admin/unduh-soap", icon: ArchiveRestore },
+      { name: "Keuangan", href: "/admin/keuangan", icon: Wallet },
     ],
   },
   {

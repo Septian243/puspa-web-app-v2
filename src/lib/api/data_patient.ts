@@ -211,3 +211,63 @@ export async function addPatient(data: PatientCreatePayload) {
   const res = await api.post("/children", data);
   return res.data ?? null;
 }
+
+const INDO_MONTH_MAP: Record<string, string> = {
+  januari: "01",
+  pebruari: "02",
+  februari: "02",
+  maret: "03",
+  april: "04",
+  mei: "05",
+  juni: "06",
+  juli: "07",
+  agustus: "08",
+  september: "09",
+  oktober: "10",
+  november: "11",
+  desember: "12",
+  january: "01",
+  february: "02",
+  march: "03",
+  may: "05",
+  june: "06",
+  july: "07",
+  august: "08",
+  october: "10",
+  december: "12",
+};
+
+/**
+ * Mengonversi tanggal dari berbagai format (termasuk format Indonesia dari backend Carbon "15 Agustus 2020")
+ * menjadi format standar ISO "YYYY-MM-DD" yang dapat dibaca oleh input type="date".
+ */
+export function toISODateString(value?: string | null): string {
+  if (!value || value === "-" || value === "0000-00-00") return "";
+
+  const trimmed = value.trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const parts = trimmed.split(/[\s-]+/);
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, "0");
+    const monthKey = parts[1].toLowerCase();
+    const year = parts[2];
+
+    if (INDO_MONTH_MAP[monthKey] && /^\d{4}$/.test(year) && /^\d{1,2}$/.test(day)) {
+      return `${year}-${INDO_MONTH_MAP[monthKey]}-${day}`;
+    }
+  }
+
+  const d = new Date(trimmed);
+  if (!isNaN(d.getTime())) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  return "";
+}
