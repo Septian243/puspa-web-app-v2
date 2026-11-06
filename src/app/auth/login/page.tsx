@@ -47,6 +47,9 @@ export default function LoginPage() {
         case "user":
           router.push("/orangtua/dashboard");
           break;
+        case "sekolah":
+          router.push("/sekolah/dashboard");
+          break;
         default:
           router.push("/");
       }
