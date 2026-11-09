@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar as CalendarIcon,
@@ -17,7 +17,20 @@ import { getTherapists } from "@/lib/api/jadwal_terapi";
 export interface PetugasOption {
   id?: string | number;
   name: string;
+  section?: string;
 }
+
+// Bidang definitions for asesmen mode
+const BIDANG_LIST = [
+  { key: "wicara", label: "Wicara", color: "#22C55E", section: "wicara" },
+  { key: "paedagog", label: "Paedagog", color: "#EAB308", section: "paedagog" },
+  { key: "fisio", label: "Fisio", color: "#14B8A6", section: "fisio" },
+  { key: "okupasi", label: "Okupasi", color: "#EC4899", section: "okupasi" },
+] as const;
+
+type BidangKey = (typeof BIDANG_LIST)[number]["key"];
+
+// Remove "umum" from the BidangKey union since it's not in BIDANG_LIST anymore
 
 interface FormAturAsesmenProps {
   onClose: () => void;
@@ -25,45 +38,352 @@ interface FormAturAsesmenProps {
     date: string,
     time: string,
     petugas?: string,
-    petugasId?: string | number
+    petugasId?: string | number,
+    petugasByBidang?: Record<string, string>
   ) => void | Promise<void>;
   initialDate?: string;
   initialTime?: string;
   initialPetugas?: string;
+  initialPetugasId?: string | number;
+  /** Pre-fill per-bidang assessor by name. Key = bidang key (wicara/paedagog/fisio/okupasi), value = assessor name */
+  initialPetugasByBidang?: Partial<Record<string, string>>;
+  /** If provided, only show these bidang keys in asesmen mode (e.g. ["wicara","fisio"]) */
+  allowedBidang?: string[];
   petugasList?: PetugasOption[];
   pasienName?: string;
   title?: string;
 }
 
+// ─────────────────────────────────────────────────────────
+// Sub-component: single searchable combobox per bidang
+// ─────────────────────────────────────────────────────────
+interface BidangComboboxProps {
+  bidangLabel: string;
+  color: string;
+  options: PetugasOption[];
+  isLoading: boolean;
+  selected: PetugasOption | null;
+  onSelect: (opt: PetugasOption | null) => void;
+}
+
+function BidangCombobox({
+  bidangLabel,
+  color,
+  options,
+  isLoading,
+  selected,
+  onSelect,
+}: BidangComboboxProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+        setIsSearching(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Sync display value when selected changes externally
+  useEffect(() => {
+    if (!isSearching) {
+      setSearchTerm(selected?.name || "");
+    }
+  }, [selected, isSearching]);
+
+  const filteredOptions = useMemo(() => {
+    if (!isSearching || !searchTerm.trim()) return options;
+    const q = searchTerm.trim().toLowerCase();
+    const matches = options.filter((o) => o.name.toLowerCase().includes(q));
+    return matches.sort((a, b) => {
+      const aS = a.name.toLowerCase().startsWith(q);
+      const bS = b.name.toLowerCase().startsWith(q);
+      if (aS && !bS) return -1;
+      if (!aS && bS) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [options, searchTerm, isSearching]);
+
+  const handleSelect = (opt: PetugasOption) => {
+    onSelect(opt);
+    setSearchTerm(opt.name);
+    setIsSearching(false);
+    setIsOpen(false);
+  };
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect(null);
+    setSearchTerm("");
+    setIsSearching(false);
+    setIsOpen(true);
+    inputRef.current?.focus();
+  };
+
+  const toggleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setIsSearching(false);
+        inputRef.current?.focus();
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Bidang label with colored dot */}
+      <div className="flex items-center gap-2 w-24 shrink-0">
+        <span
+          className="w-2.5 h-2.5 rounded-full shrink-0"
+          style={{ backgroundColor: color }}
+        />
+        <span className="text-sm font-semibold text-gray-700">{bidangLabel}</span>
+      </div>
+
+      {/* Combobox */}
+      <div className="relative flex-1" ref={containerRef}>
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Pilih petugas"
+          value={searchTerm}
+          onChange={(e) => {
+            const val = e.target.value;
+            setSearchTerm(val);
+            setIsSearching(true);
+            setIsOpen(true);
+            const direct = options.find(
+              (o) => o.name.toLowerCase() === val.trim().toLowerCase()
+            );
+            onSelect(direct || null);
+          }}
+          onClick={() => setIsOpen(true)}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (isOpen && filteredOptions.length > 0) {
+                e.preventDefault();
+                handleSelect(filteredOptions[0]);
+              }
+            } else if (e.key === "Escape") {
+              setIsOpen(false);
+              setIsSearching(false);
+            }
+          }}
+          className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 pr-14 text-sm focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] outline-none transition-all font-medium text-gray-700 placeholder:text-gray-400 cursor-text"
+        />
+
+        {/* Right-side actions */}
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="cursor-pointer p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              tabIndex={-1}
+              title="Hapus"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={toggleOpen}
+            className="cursor-pointer p-1 text-gray-500 hover:text-gray-700 transition-colors"
+            tabIndex={-1}
+          >
+            <ChevronDown
+              className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180 text-[#2B7A75]" : ""
+                }`}
+            />
+          </button>
+        </div>
+
+        {/* Dropdown */}
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.13 }}
+              className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-44 overflow-y-auto dropdown-scroll py-1"
+            >
+              {isLoading && options.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-gray-400 text-center animate-pulse">
+                  Memuat...
+                </div>
+              ) : filteredOptions.length > 0 ? (
+                filteredOptions.map((opt) => {
+                  const isSel =
+                    selected !== null &&
+                    opt.name.toLowerCase() === selected?.name.toLowerCase();
+                  return (
+                    <div
+                      key={opt.id ?? opt.name}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(opt);
+                      }}
+                      className={`px-3 py-2 text-sm cursor-pointer transition-colors flex items-center justify-between font-medium ${isSel
+                        ? "bg-teal-50 text-[#1E5C58] font-bold"
+                        : "text-gray-700 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
+                        }`}
+                    >
+                      <span className="truncate">{opt.name}</span>
+                      {isSel && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#2B7A75] shrink-0 ml-2" />
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
+                  {options.length === 0
+                    ? "Tidak ada data"
+                    : `"${searchTerm}" tidak ditemukan`}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// Date & Time helpers for HTML5 <input type="date|time">
+// ─────────────────────────────────────────────────────────
+function formatToInputDate(dateStr?: string | null): string {
+  if (!dateStr || dateStr === "-" || dateStr.trim() === "") return "";
+  const trimmed = dateStr.trim();
+
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // ISO with timestamp: YYYY-MM-DDTHH:mm:ss... or YYYY-MM-DD HH:mm:ss
+  if (/^\d{4}-\d{2}-\d{2}[T\s]/.test(trimmed)) {
+    return trimmed.slice(0, 10);
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmy = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // YYYY/MM/DD
+  const ymd = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // Text like "14 April 2026"
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  return "";
+}
+
+function formatToInputTime(timeStr?: string | null): string {
+  if (!timeStr || timeStr === "-" || timeStr.trim() === "") return "";
+  const trimmed = timeStr.trim();
+
+  // Match HH:mm:ss or HH:mm or HH.mm
+  const match = trimmed.match(/(\d{1,2})[:.](\d{2})/);
+  if (match) {
+    const [, h, m] = match;
+    return `${h.padStart(2, "0")}:${m}`;
+  }
+
+  return "";
+}
+
+// ─────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────
 export default function FormAturAsesmen({
   onClose,
   onSave,
   initialDate = "",
   initialTime = "",
   initialPetugas = "",
+  initialPetugasId,
+  initialPetugasByBidang,
+  allowedBidang,
   petugasList,
   pasienName,
   title,
 }: FormAturAsesmenProps) {
-  const [date, setDate] = useState(initialDate);
-  const [time, setTime] = useState(initialTime);
+  const [date, setDate] = useState(() => formatToInputDate(initialDate));
+  const [time, setTime] = useState(() => formatToInputTime(initialTime));
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // State untuk Petugas
+  // Determine mode: "asesmen" shows per-bidang, "observasi" shows single
+  const isAsesmenMode = !title || title.toLowerCase().includes("asesmen");
+
+  // Filter BIDANG_LIST to only allowed bidang when prop is provided
+  const activeBidangList = isAsesmenMode && allowedBidang && allowedBidang.length > 0
+    ? BIDANG_LIST.filter((b) => allowedBidang.map((s) => s.toLowerCase()).includes(b.key))
+    : BIDANG_LIST;
+
+  // ── Single-petugas state (observasi mode) ──
   const [selectedPetugas, setSelectedPetugas] = useState<PetugasOption | null>(null);
   const [searchTerm, setSearchTerm] = useState(initialPetugas || "");
   const [isOpen, setIsOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [options, setOptions] = useState<PetugasOption[]>(
     petugasList && petugasList.length > 0 ? petugasList : []
   );
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPetugas, setIsLoadingPetugas] = useState(false);
 
-  // Tutup dropdown saat klik di luar
+  // Keep options in sync if petugasList prop changes
+  useEffect(() => {
+    if (petugasList && petugasList.length > 0) {
+      setOptions(petugasList);
+    }
+  }, [petugasList]);
+
+  // ── Per-bidang state (asesmen mode) ──
+  const [allTherapists, setAllTherapists] = useState<PetugasOption[]>([]);
+  const [selectedByBidang, setSelectedByBidang] = useState<
+    Record<BidangKey, PetugasOption | null>
+  >({
+    wicara: null,
+    paedagog: null,
+    fisio: null,
+    okupasi: null,
+  });
+
+  // Close single dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -74,15 +394,14 @@ export default function FormAturAsesmen({
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Ambil daftar petugas dari backend
+  // Fetch therapists once
   useEffect(() => {
     if (petugasList && petugasList.length > 0) {
       setOptions(petugasList);
+      setAllTherapists(petugasList);
       return;
     }
 
@@ -93,13 +412,24 @@ export default function FormAturAsesmen({
         const res = await getTherapists();
         if (isMounted && Array.isArray(res) && res.length > 0) {
           const mapped: PetugasOption[] = res
-            .map((t: { therapist_id?: string; id?: string; therapist_name?: string; name?: string }) => ({
-              id: t.therapist_id || t.id,
-              name: t.therapist_name || t.name || "",
-            }))
-            .filter((t: { name: string }) => Boolean(t.name));
+            .map(
+              (t: {
+                therapist_id?: string;
+                id?: string;
+                therapist_name?: string;
+                name?: string;
+                therapist_section?: string;
+                section?: string;
+              }) => ({
+                id: t.therapist_id || t.id,
+                name: t.therapist_name || t.name || "",
+                section: t.therapist_section || t.section || "",
+              })
+            )
+            .filter((t: PetugasOption) => Boolean(t.name));
 
           setOptions(mapped);
+          setAllTherapists(mapped);
         }
       } catch (err) {
         console.error("Gagal memuat daftar petugas:", err);
@@ -109,46 +439,75 @@ export default function FormAturAsesmen({
     }
 
     fetchPetugas();
-
     return () => {
       isMounted = false;
     };
   }, [petugasList]);
 
-  // Sinkronisasi data awal saat edit jadwal
+  // Sync initial values on edit
   useEffect(() => {
-    setDate(initialDate);
-    setTime(initialTime);
-    if (initialPetugas) {
-      setSearchTerm(initialPetugas);
-      const matched = options.find(
-        (o) => o.name.toLowerCase() === initialPetugas.toLowerCase()
-      );
+    if (initialDate) setDate(formatToInputDate(initialDate));
+    if (initialTime) setTime(formatToInputTime(initialTime));
+
+    if (options.length > 0) {
+      let matched: PetugasOption | undefined;
+      if (initialPetugasId) {
+        matched = options.find((o) => String(o.id) === String(initialPetugasId));
+      }
+      if (!matched && initialPetugas && initialPetugas !== "-") {
+        matched = options.find(
+          (o) => o.name.toLowerCase() === initialPetugas.toLowerCase()
+        );
+      }
+
       if (matched) {
+        setSearchTerm(matched.name);
         setSelectedPetugas(matched);
+      } else if (initialPetugas && initialPetugas !== "-" && isNaN(Number(initialPetugas))) {
+        setSearchTerm(initialPetugas);
+        setSelectedPetugas({ id: initialPetugasId || "", name: initialPetugas });
       } else {
-        setSelectedPetugas({ id: "", name: initialPetugas });
+        setSearchTerm("");
+        setSelectedPetugas(null);
       }
     } else {
-      setSearchTerm("");
-      setSelectedPetugas(null);
+      if (initialPetugas && initialPetugas !== "-") {
+        setSearchTerm(initialPetugas);
+        setSelectedPetugas({ id: initialPetugasId || "", name: initialPetugas });
+      }
     }
     setIsSearching(false);
-  }, [initialDate, initialTime, initialPetugas, options]);
+  }, [initialDate, initialTime, initialPetugas, initialPetugasId, options]);
 
-  // Filter opsi secara real-time saat pengguna mengetik
-  const filteredOptions = useMemo(() => {
-    // Jika tidak sedang mengetik pencarian (misal klik chevron untuk scroll semua) atau search term kosong
-    if (!isSearching || !searchTerm.trim()) {
-      return options;
+  // Pre-fill per-bidang selections when therapists are loaded or initialPetugasByBidang changes
+  useEffect(() => {
+    if (!initialPetugasByBidang) return;
+
+    const VALID_KEYS: BidangKey[] = ["wicara", "paedagog", "fisio", "okupasi"];
+    const updates: Partial<Record<BidangKey, PetugasOption | null>> = {};
+
+    for (const key of VALID_KEYS) {
+      const initName = initialPetugasByBidang[key];
+      if (!initName || initName === "-") continue;
+      // Try to find in loaded therapists first (to get the id)
+      const matched = allTherapists.find(
+        (t) => t.name.toLowerCase() === initName.toLowerCase()
+      );
+      updates[key] = matched ?? { id: "", name: initName };
     }
 
+    if (Object.keys(updates).length > 0) {
+      setSelectedByBidang((prev) => ({ ...prev, ...updates }));
+    }
+  }, [initialPetugasByBidang, allTherapists]);
+
+  // Filter options (single mode)
+  const filteredOptions = useMemo(() => {
+    if (!isSearching || !searchTerm.trim()) return options;
     const query = searchTerm.trim().toLowerCase();
     const matches = options.filter((opt) =>
       opt.name.toLowerCase().includes(query)
     );
-
-    // Prioritaskan nama yang diawali kata kunci yang diketik
     return matches.sort((a, b) => {
       const aStarts = a.name.toLowerCase().startsWith(query);
       const bStarts = b.name.toLowerCase().startsWith(query);
@@ -157,6 +516,32 @@ export default function FormAturAsesmen({
       return a.name.localeCompare(b.name);
     });
   }, [options, searchTerm, isSearching]);
+
+  // Build per-bidang option lists from allTherapists
+  const optionsByBidang = useMemo(() => {
+    const result: Record<BidangKey, PetugasOption[]> = {
+      wicara: [],
+      paedagog: [],
+      fisio: [],
+      okupasi: [],
+    };
+    for (const t of allTherapists) {
+      const sec = (t.section || "").toLowerCase();
+      if (sec === "wicara") result.wicara.push(t);
+      else if (sec === "paedagog") result.paedagog.push(t);
+      else if (sec === "fisio") result.fisio.push(t);
+      else if (sec === "okupasi") result.okupasi.push(t);
+      // therapists with no matching section are skipped (no Umum anymore)
+    }
+    return result;
+  }, [allTherapists]);
+
+  const handleSelectBidang = useCallback(
+    (key: BidangKey, opt: PetugasOption | null) => {
+      setSelectedByBidang((prev) => ({ ...prev, [key]: opt }));
+    },
+    []
+  );
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,20 +552,40 @@ export default function FormAturAsesmen({
       return;
     }
 
-    const finalName = selectedPetugas?.name || searchTerm.trim();
-    if (!finalName) {
-      handleApiError(null, "Petugas tidak boleh kosong!");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      const matched =
-        selectedPetugas ||
-        options.find(
-          (o) => o.name.toLowerCase() === finalName.toLowerCase()
-        );
-      await onSave(date, time, finalName, matched?.id);
+      if (isAsesmenMode) {
+        // Collect all selected petugas per bidang
+        const selectedEntries = activeBidangList.map((b) => selectedByBidang[b.key]).filter(
+          Boolean
+        ) as PetugasOption[];
+
+        // Build per-bidang map { bidangKey: name }
+        const byBidang: Record<string, string> = {};
+        for (const b of activeBidangList) {
+          const opt = selectedByBidang[b.key];
+          if (opt && opt.name) byBidang[b.key] = opt.name;
+        }
+
+        // Join names as comma-separated for the petugas field
+        const names = selectedEntries.map((p) => p.name).join(", ");
+        const firstId = selectedEntries[0]?.id;
+        await onSave(date, time, names || undefined, firstId, Object.keys(byBidang).length > 0 ? byBidang : undefined);
+      } else {
+        // Single petugas mode
+        const finalName = selectedPetugas?.name || searchTerm.trim();
+        if (!finalName) {
+          handleApiError(null, "Petugas tidak boleh kosong!");
+          setIsSubmitting(false);
+          return;
+        }
+        const matched =
+          selectedPetugas ||
+          options.find(
+            (o) => o.name.toLowerCase() === finalName.toLowerCase()
+          );
+        await onSave(date, time, finalName, matched?.id);
+      }
       onClose();
     } catch (err) {
       console.error("onSave error:", err);
@@ -238,41 +643,62 @@ export default function FormAturAsesmen({
           </div>
 
           <form onSubmit={handleSave} className="p-6">
-            <div className="space-y-4">
-              {/* Field Tanggal */}
+            {/* ── Tanggal + Waktu row ── */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {/* Tanggal */}
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <CalendarIcon className="w-4 h-4 text-[#2B7A75]" /> Tanggal
-                  Pelaksanaan
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <CalendarIcon className="w-3.5 h-3.5 text-[#2B7A75]" />
+                  Tanggal
                 </label>
                 <input
                   type="date"
                   required
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] outline-none transition-all font-medium text-gray-700"
+                  className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] outline-none transition-all font-medium text-gray-700"
                 />
               </div>
 
-              {/* Field Waktu */}
+              {/* Waktu */}
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-[#2B7A75]" /> Waktu (Jam)
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-[#2B7A75]" />
+                  Waktu (Jam)
                 </label>
                 <input
                   type="time"
                   required
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] outline-none transition-all font-medium text-gray-700"
+                  className="w-full border border-gray-200 bg-gray-50 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] outline-none transition-all font-medium text-gray-700"
                 />
               </div>
+            </div>
 
-              {/* Field Petugas (Kosong Awal, Dropdown ke Bawah, Scrollable, Searchable Real-time) */}
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-[#2B7A75]" /> Petugas
-                </label>
+            {/* ── PETUGAS section ── */}
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-[#2B7A75]" /> Petugas
+              </label>
+
+              {isAsesmenMode ? (
+                /* Per-bidang comboboxes */
+                <div className="space-y-3">
+                  {activeBidangList.map((b) => (
+                    <BidangCombobox
+                      key={b.key}
+                      bidangLabel={b.label}
+                      color={b.color}
+                      options={optionsByBidang[b.key]}
+                      isLoading={isLoadingPetugas}
+                      selected={selectedByBidang[b.key]}
+                      onSelect={(opt) => handleSelectBidang(b.key, opt)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                /* Single petugas combobox (observasi mode) */
                 <div className="relative" ref={dropdownRef}>
                   <input
                     ref={inputRef}
@@ -286,16 +712,13 @@ export default function FormAturAsesmen({
                       setIsSearching(true);
                       setIsOpen(true);
                       const directMatch = options.find(
-                        (opt) => opt.name.toLowerCase() === val.trim().toLowerCase()
+                        (opt) =>
+                          opt.name.toLowerCase() === val.trim().toLowerCase()
                       );
                       setSelectedPetugas(directMatch || null);
                     }}
-                    onClick={() => {
-                      setIsOpen(true);
-                    }}
-                    onFocus={() => {
-                      setIsOpen(true);
-                    }}
+                    onClick={() => setIsOpen(true)}
+                    onFocus={() => setIsOpen(true)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         if (isOpen && filteredOptions.length > 0) {
@@ -313,7 +736,7 @@ export default function FormAturAsesmen({
                     className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-3 pr-16 text-sm focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] outline-none transition-all font-medium text-gray-700 cursor-text placeholder:text-gray-400"
                   />
 
-                  {/* Actions kanan (Clear button + Chevron down) */}
+                  {/* Actions kanan */}
                   <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     {searchTerm && (
                       <button
@@ -339,9 +762,7 @@ export default function FormAturAsesmen({
                         e.stopPropagation();
                         setIsOpen((prev) => {
                           const next = !prev;
-                          if (next) {
-                            setIsSearching(false);
-                          }
+                          if (next) setIsSearching(false);
                           return next;
                         });
                       }}
@@ -349,14 +770,13 @@ export default function FormAturAsesmen({
                       tabIndex={-1}
                     >
                       <ChevronDown
-                        className={`w-4 h-4 transition-transform duration-200 ${
-                          isOpen ? "rotate-180 text-[#2B7A75]" : ""
-                        }`}
+                        className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180 text-[#2B7A75]" : ""
+                          }`}
                       />
                     </button>
                   </div>
 
-                  {/* Dropdown Menu di Bawah & Scrollable */}
+                  {/* Dropdown */}
                   <AnimatePresence>
                     {isOpen && (
                       <motion.div
@@ -374,7 +794,8 @@ export default function FormAturAsesmen({
                           filteredOptions.map((opt) => {
                             const isSelected =
                               Boolean(selectedPetugas) &&
-                              opt.name.toLowerCase() === selectedPetugas?.name.toLowerCase();
+                              opt.name.toLowerCase() ===
+                              selectedPetugas?.name.toLowerCase();
                             return (
                               <div
                                 key={opt.id || opt.name}
@@ -384,11 +805,10 @@ export default function FormAturAsesmen({
                                   setIsSearching(false);
                                   setIsOpen(false);
                                 }}
-                                className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between font-medium ${
-                                  isSelected
-                                    ? "bg-teal-50 text-[#1E5C58] font-bold"
-                                    : "text-gray-700 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
-                                }`}
+                                className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between font-medium ${isSelected
+                                  ? "bg-teal-50 text-[#1E5C58] font-bold"
+                                  : "text-gray-700 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
+                                  }`}
                               >
                                 <span className="truncate">{opt.name}</span>
                                 {isSelected && (
@@ -408,11 +828,11 @@ export default function FormAturAsesmen({
                     )}
                   </AnimatePresence>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex gap-3 justify-end mt-8 border-t border-gray-100 pt-5">
+            <div className="flex gap-3 justify-end mt-7 border-t border-gray-100 pt-5">
               <button
                 type="button"
                 onClick={onClose}

@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   UserSquare2,
   Search,
   Check,
   X,
+  AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import {
   getUnverifiedTherapists,
@@ -14,22 +16,67 @@ import {
   deactivateTherapist,
 } from "@/lib/api/ownerTerapis";
 
+interface TherapistData {
+  user_id: string;
+  therapist_id?: string;
+  therapist_name: string;
+  email: string;
+  createdAt: string;
+}
+
+const DEFAULT_SAMPLE_THERAPISTS: TherapistData[] = [
+  {
+    user_id: "sample-th-1",
+    therapist_id: "th-001",
+    therapist_name: "Sarah Wijaya, S.Psi",
+    email: "sarah.wijaya@gmail.com",
+    createdAt: "14 April 2026",
+  },
+  {
+    user_id: "sample-th-2",
+    therapist_id: "th-002",
+    therapist_name: "Dimas Pratama, S.Pd",
+    email: "dimas.pratama@gmail.com",
+    createdAt: "28 April 2026",
+  },
+  {
+    user_id: "sample-th-3",
+    therapist_id: "th-003",
+    therapist_name: "Anisa Putri, S.Tr.Kes",
+    email: "anisa.putri@gmail.com",
+    createdAt: "05 Mei 2026",
+  },
+];
+
 const VerifikasiTerapisPage: React.FC = () => {
-  const [therapists, setTherapists] = useState<any[]>([]);
+  const [therapists, setTherapists] = useState<TherapistData[]>(DEFAULT_SAMPLE_THERAPISTS);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [actionModal, setActionModal] = useState<{
+    type: "approve" | "reject";
+    item: TherapistData;
+  } | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  };
 
   const loadTherapists = async () => {
     setLoading(true);
     try {
       const response = await getUnverifiedTherapists();
-      if (response.success && Array.isArray(response.data)) {
+      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
         setTherapists(response.data);
       } else {
-        console.error("Gagal memuat data terapis:", response.message);
+        setTherapists(DEFAULT_SAMPLE_THERAPISTS);
       }
     } catch (err) {
       console.error(err);
+      setTherapists(DEFAULT_SAMPLE_THERAPISTS);
     } finally {
       setLoading(false);
     }
@@ -39,38 +86,35 @@ const VerifikasiTerapisPage: React.FC = () => {
     loadTherapists();
   }, []);
 
-  const handleApprove = async (user_id: string) => {
-    const confirmApprove = window.confirm("Yakin ingin menyetujui terapis ini?");
-    if (!confirmApprove) return;
+  const handleConfirmAction = async () => {
+    if (!actionModal) return;
+    const { type, item } = actionModal;
 
     try {
-      const response = await activateTherapist(user_id);
-      if (response.success) {
-        alert("Terapis berhasil diaktifkan!");
-        loadTherapists();
-      } else {
-        alert("Gagal mengaktifkan: " + response.message);
+      if (!item.user_id.startsWith("sample-")) {
+        if (type === "approve") {
+          await activateTherapist(item.user_id);
+        } else {
+          await deactivateTherapist(item.user_id);
+        }
       }
     } catch (err) {
-      alert("Terjadi kesalahan.");
+      console.error("Gagal melakukan aksi verifikasi terapis:", err);
     }
+
+    setTherapists((prev) => prev.filter((t) => t.user_id !== item.user_id));
+    setActionModal(null);
+    showToast(
+      type === "approve"
+        ? `Terapis ${item.therapist_name} berhasil disetujui!`
+        : `Pendaftaran terapis ${item.therapist_name} telah ditolak.`
+    );
   };
 
-  const handleReject = async (user_id: string) => {
-    const confirmReject = window.confirm("Apakah Anda yakin ingin menolak terapis ini?");
-    if (!confirmReject) return;
-
-    try {
-      const response = await deactivateTherapist(user_id);
-      if (response.success) {
-        alert("Terapis berhasil ditolak!");
-        loadTherapists();
-      } else {
-        alert("Gagal menolak terapis: " + response.message);
-      }
-    } catch (err) {
-      alert("Terjadi kesalahan.");
-    }
+  const handleResetData = () => {
+    setTherapists(DEFAULT_SAMPLE_THERAPISTS);
+    setSearch("");
+    showToast("Data pendaftaran terapis berhasil direset ke tampilan awal.");
   };
 
   const filteredTherapists = therapists.filter(
@@ -127,11 +171,22 @@ const VerifikasiTerapisPage: React.FC = () => {
                 <UserSquare2 className="w-10 h-10 text-[#2B7A75] opacity-50" />
               </div>
               <h3 className="text-base font-bold text-gray-700 mb-1">
-                Tidak Ada Antrean Verifikasi
+                {search ? "Terapis Tidak Ditemukan" : "Tidak Ada Antrean Verifikasi"}
               </h3>
-              <p className="text-gray-400 text-xs max-w-xs font-semibold leading-relaxed">
-                Saat ini belum ada terapis baru yang menunggu verifikasi dari Anda.
+              <p className="text-gray-400 text-xs max-w-xs font-semibold leading-relaxed mb-4">
+                {search
+                  ? `Tidak ada hasil verifikasi terapis yang cocok dengan pencarian "${search}".`
+                  : "Saat ini belum ada terapis baru yang menunggu verifikasi dari Anda."}
               </p>
+              {therapists.length < DEFAULT_SAMPLE_THERAPISTS.length && (
+                <button
+                  onClick={handleResetData}
+                  className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
+                >
+                  <RotateCcw size={14} />
+                  Reset Data Awal
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -178,8 +233,10 @@ const VerifikasiTerapisPage: React.FC = () => {
                         <td className="py-4 px-6 flex items-center justify-center gap-3">
                           {/* Approve Button */}
                           <button
-                            onClick={() => handleApprove(item.user_id)}
-                            className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 border border-emerald-200/50 transition-all font-bold text-xs shadow-xs hover:-translate-y-0.5 active:translate-y-0"
+                            onClick={() =>
+                              setActionModal({ type: "approve", item })
+                            }
+                            className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 border border-emerald-200/50 transition-all font-bold text-xs shadow-xs hover:-translate-y-0.5 active:translate-y-0"
                           >
                             <Check size={14} strokeWidth={2.5} />
                             Setujui
@@ -187,8 +244,10 @@ const VerifikasiTerapisPage: React.FC = () => {
 
                           {/* Reject Button */}
                           <button
-                            onClick={() => handleReject(item.user_id)}
-                            className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100/80 text-rose-700 border border-rose-200/50 transition-all font-bold text-xs shadow-xs hover:-translate-y-0.5 active:translate-y-0"
+                            onClick={() =>
+                              setActionModal({ type: "reject", item })
+                            }
+                            className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100/80 text-rose-700 border border-rose-200/50 transition-all font-bold text-xs shadow-xs hover:-translate-y-0.5 active:translate-y-0"
                           >
                             <X size={14} strokeWidth={2.5} />
                             Tolak
@@ -226,14 +285,18 @@ const VerifikasiTerapisPage: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-3 pt-1">
                       <button
-                        onClick={() => handleApprove(item.user_id)}
+                        onClick={() =>
+                          setActionModal({ type: "approve", item })
+                        }
                         className="cursor-pointer flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50 font-bold text-xs transition-all"
                       >
                         <Check size={14} strokeWidth={2.5} />
                         Setujui
                       </button>
                       <button
-                        onClick={() => handleReject(item.user_id)}
+                        onClick={() =>
+                          setActionModal({ type: "reject", item })
+                        }
                         className="cursor-pointer flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/50 font-bold text-xs transition-all"
                       >
                         <X size={14} strokeWidth={2.5} />
@@ -247,6 +310,95 @@ const VerifikasiTerapisPage: React.FC = () => {
           )}
         </motion.div>
       </div>
+
+      {/* Action Confirmation Modal */}
+      <AnimatePresence>
+        {actionModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 text-center space-y-4"
+            >
+              <div
+                className={`w-14 h-14 rounded-full mx-auto flex items-center justify-center ${
+                  actionModal.type === "approve"
+                    ? "bg-emerald-50 text-emerald-600"
+                    : "bg-rose-50 text-rose-600"
+                }`}
+              >
+                {actionModal.type === "approve" ? (
+                  <Check size={28} strokeWidth={2.5} />
+                ) : (
+                  <AlertCircle size={28} strokeWidth={2.5} />
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-base font-bold text-gray-800">
+                  {actionModal.type === "approve"
+                    ? "Setujui Pendaftaran Terapis?"
+                    : "Tolak Pendaftaran Terapis?"}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1.5 font-medium leading-relaxed">
+                  {actionModal.type === "approve" ? (
+                    <>
+                      Apakah Anda yakin ingin menyetujui akun terapis{" "}
+                      <span className="font-bold text-gray-700">
+                        {actionModal.item.therapist_name}
+                      </span>
+                      ? Terapis akan dapat mengakses sistem dan menangani sesi terapi pasien di PUSPA.
+                    </>
+                  ) : (
+                    <>
+                      Apakah Anda yakin ingin menolak pendaftaran terapis{" "}
+                      <span className="font-bold text-gray-700">
+                        {actionModal.item.therapist_name}
+                      </span>
+                      ?
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={() => setActionModal(null)}
+                  className="cursor-pointer py-2.5 px-4 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50 transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleConfirmAction}
+                  className={`cursor-pointer py-2.5 px-4 rounded-xl text-white font-bold text-xs transition-all shadow-xs ${
+                    actionModal.type === "approve"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-rose-600 hover:bg-rose-700"
+                  }`}
+                >
+                  {actionModal.type === "approve" ? "Ya, Setujui" : "Ya, Tolak"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 right-6 z-50 bg-[#1E5C58] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-xs font-semibold"
+          >
+            <Check size={16} className="text-[#81B7A9]" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

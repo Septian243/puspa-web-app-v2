@@ -18,6 +18,7 @@ import {
   getObservationQuestions,
 } from "@/lib/api/observasiSubmit";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
+import { saveObservationBidangLocal } from "@/lib/api/jadwal_observasi";
 
 type Question = {
   question_id: number;
@@ -184,6 +185,15 @@ export default function FormObservasiPage() {
     try {
       const res = await submitObservation(pasien.observation_id, payload);
       if (res?.success) {
+        // Simpan bidang assessment yang dipilih ke localStorage sebagai fallback untuk admin
+        const selectedBidang: string[] = [];
+        if (payload.paedagog) selectedBidang.push("paedagog");
+        if (payload.okupasi) selectedBidang.push("okupasi");
+        if (payload.wicara) selectedBidang.push("wicara");
+        if (payload.fisio) selectedBidang.push("fisio");
+        if (selectedBidang.length > 0 && pasien.observation_id) {
+          saveObservationBidangLocal(pasien.observation_id, selectedBidang);
+        }
         showSuccessToast("Observasi berhasil disimpan! ✅");
         window.location.href = "/terapis/observasi/riwayat";
       } else {

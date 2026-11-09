@@ -1,16 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
   Calendar,
-  MapPin,
   X,
   Baby,
-  Phone,
   FileText,
-  School,
-  Clock,
   Activity,
   BriefcaseMedical,
   Briefcase,
@@ -172,10 +169,27 @@ export default function FormDetailObservasi({
                   <div className="space-y-2 text-sm">
                     <div>
                       <span className="text-gray-400 text-xs block">
+                        Terapis Observasi
+                      </span>
+                      <span className="font-bold text-[#1E5C58]">
+                        {pasien.therapist_name ||
+                          pasien.observer_name ||
+                          pasien.nama_terapis ||
+                          (typeof pasien.observer === "string" && pasien.observer !== "-" ? pasien.observer : null) ||
+                          (typeof pasien.therapist === "string" && pasien.therapist !== "-" ? pasien.therapist : null) ||
+                          pasien.therapist?.therapist_name ||
+                          pasien.therapist?.name ||
+                          pasien.observer?.therapist_name ||
+                          pasien.observer?.name ||
+                          "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 text-xs block">
                         Administrator
                       </span>
                       <span className="font-bold text-gray-800">
-                        {pasien.admin_name || "-"}
+                        {pasien.admin_name || pasien.administrator || "-"}
                       </span>
                     </div>
                   </div>

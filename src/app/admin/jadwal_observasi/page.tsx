@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -30,10 +31,19 @@ import FormDetailObservasi from "@/components/form/FormDetailObservasi";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
 import {
   getObservations,
+  getObservationDetail,
   Jadwal,
   updateObservationSchedule,
   createObservationAgreement,
+  getObservationTherapistLocal,
+  saveObservationTherapistLocal,
+  getObservationBidangLocal,
+  saveObservationBidangLocal,
+  getAssessmentBidangByObservation,
+  saveAssessmentAsessorByBidangLocal,
+  getAssessmentAsessorByBidangLocal,
 } from "@/lib/api/jadwal_observasi";
+import { getTherapists } from "@/lib/api/jadwal_terapi";
 
 export default function JadwalPage() {
   const router = useRouter();
@@ -71,12 +81,59 @@ export default function JadwalPage() {
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   const [openAsesmen, setOpenAsesmen] = useState(false);
   const [openDetail, setOpenDetail] = useState(false);
-  const [selectedObservation, setSelectedObservation] = useState<any | null>(
+  const [allowedBidang, setAllowedBidang] = useState<string[] | undefined>(undefined);
+  const [asesmenPetugasByBidang, setAsesmenPetugasByBidang] = useState<Record<string, string> | undefined>(undefined);
+  const [selectedObservation, setSelectedObservation] = useState<Record<string, unknown> | null>(
     null,
   );
 
   const [filterDate, setFilterDate] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const [therapists, setTherapists] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadTherapists() {
+      try {
+        const data = await getTherapists();
+        if (isMounted && Array.isArray(data)) {
+          setTherapists(data);
+        }
+      } catch (err) {
+        console.error("Gagal memuat data terapis:", err);
+      }
+    }
+    loadTherapists();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const resolveObserverName = (item: Jadwal, therapistList: any[]): string => {
+    if (item.observer && item.observer !== "-" && isNaN(Number(item.observer))) {
+      return item.observer;
+    }
+    const idToFind =
+      item.therapist_id ||
+      (item.observer && !isNaN(Number(item.observer)) ? item.observer : null);
+    if (idToFind && therapistList.length > 0) {
+      const found = therapistList.find(
+        (t: any) => String(t.therapist_id || t.id) === String(idToFind)
+      );
+      if (found) {
+        return found.therapist_name || found.name || "-";
+      }
+    }
+    const asessorsSaved = getAssessmentAsessorByBidangLocal(item.observation_id, item.nama);
+    if (asessorsSaved && Object.keys(asessorsSaved).length > 0) {
+      return Object.values(asessorsSaved).join(", ");
+    }
+    const localTherapist = getObservationTherapistLocal(item.observation_id);
+    if (localTherapist?.therapist_name && localTherapist.therapist_name !== "-") {
+      return localTherapist.therapist_name;
+    }
+    return item.observer && item.observer !== "-" ? item.observer : "-";
+  };
 
   // =====================
   // Fetch Jadwal
@@ -93,8 +150,12 @@ export default function JadwalPage() {
       else status = "completed";
 
       const data = await getObservations(status, debouncedSearch);
-      setJadwalList(data);
-      setOriginalList(data);
+      const resolved: Jadwal[] = data.map((j: Jadwal) => ({
+        ...j,
+        observer: resolveObserverName(j, therapists),
+      }));
+      setJadwalList(resolved);
+      setOriginalList(resolved);
     } catch (err) {
       console.error("Gagal memuat data jadwal:", err);
       setError("Gagal memuat data jadwal");
@@ -102,6 +163,23 @@ export default function JadwalPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (therapists.length > 0) {
+      setJadwalList((prev) =>
+        prev.map((j) => ({
+          ...j,
+          observer: resolveObserverName(j, therapists),
+        }))
+      );
+      setOriginalList((prev) =>
+        prev.map((j) => ({
+          ...j,
+          observer: resolveObserverName(j, therapists),
+        }))
+      );
+    }
+  }, [therapists]);
 
   useEffect(() => {
     fetchJadwal();
@@ -162,10 +240,173 @@ export default function JadwalPage() {
     router.push(`/admin/riwayat-hasil?observation_id=${observation_id}`);
   const handleLihatHasil = (id: number) =>
     router.push(`/admin/hasil-observasi?observation_id=${id}`);
-  const handleAturAsesmen = (pasien: Jadwal) => {
+  // Parse recommendation text into bidang keys
+  const parseRecommendation = (rec: string): string[] => {
+    const map: Record<string, string> = {
+      wicara: "wicara", "terapi wicara": "wicara", speech: "wicara",
+      fisio: "fisio", fisioterapi: "fisio",
+      paedagog: "paedagog", pedagog: "paedagog",
+      okupasi: "okupasi", "okupasi terapi": "okupasi",
+    };
+    const lower = rec.toLowerCase();
+    return Object.entries(map)
+      .filter(([k]) => lower.includes(k))
+      .map(([, v]) => v)
+      .filter((v, i, arr) => arr.indexOf(v) === i);
+  };
+
+  const handleAturAsesmen = async (pasien: Jadwal) => {
     setSelectedPasien(pasien);
-    setOpenAsesmen(true);
+    setAllowedBidang(undefined);
+    setAsesmenPetugasByBidang(undefined);
     setOpenDropdown(null);
+
+    // For scheduled tab: fetch detail to ensure latest therapist & schedule are prefilled
+    if (tab === "terjadwal") {
+      try {
+        const detail = await getObservationDetail(pasien.observation_id, "scheduled");
+        if (detail) {
+          const detailDate =
+            detail.scheduled_date ||
+            detail.observation_date ||
+            detail.date ||
+            detail.tanggal_observasi;
+          const detailTime =
+            detail.scheduled_time ||
+            detail.time ||
+            detail.waktu ||
+            detail.jam;
+
+          const detailTherapistId =
+            detail.therapist_id ??
+            detail.observer_id ??
+            detail.terapis_id ??
+            detail.petugas_id ??
+            detail.therapist?.therapist_id ??
+            detail.therapist?.id ??
+            detail.observer?.therapist_id ??
+            detail.observer?.id ??
+            (typeof detail.therapist === "number" ? detail.therapist : null) ??
+            (typeof detail.observer === "number" ? detail.observer : null) ??
+            null;
+
+          let detailTherapistName =
+            detail.therapist_name ||
+            detail.nama_terapis ||
+            detail.terapis_nama ||
+            detail.observer_name ||
+            detail.petugas_name ||
+            detail.nama_petugas ||
+            (typeof detail.therapist === "string" && isNaN(Number(detail.therapist)) && detail.therapist !== "-" ? detail.therapist : null) ||
+            (typeof detail.observer === "string" && isNaN(Number(detail.observer)) && detail.observer !== "-" ? detail.observer : null) ||
+            (typeof detail.terapis === "string" && isNaN(Number(detail.terapis)) && detail.terapis !== "-" ? detail.terapis : null) ||
+            (typeof detail.petugas === "string" && isNaN(Number(detail.petugas)) && detail.petugas !== "-" ? detail.petugas : null) ||
+            detail.therapist?.therapist_name ||
+            detail.therapist?.name ||
+            detail.therapist?.nama ||
+            detail.observer?.therapist_name ||
+            detail.observer?.name ||
+            detail.observer?.nama ||
+            detail.terapis?.therapist_name ||
+            detail.terapis?.name ||
+            detail.terapis?.nama ||
+            detail.petugas?.therapist_name ||
+            detail.petugas?.name ||
+            null;
+
+          const localSaved = getObservationTherapistLocal(pasien.observation_id);
+
+          if (!detailTherapistName && detailTherapistId && therapists.length > 0) {
+            const found = therapists.find(
+              (t: any) => String(t.therapist_id || t.id) === String(detailTherapistId)
+            );
+            if (found) {
+              detailTherapistName = found.therapist_name || found.name;
+            }
+          }
+
+          if (!detailTherapistName && localSaved) {
+            detailTherapistName = localSaved.therapist_name;
+          }
+
+          const finalTherapistId = detailTherapistId
+            ? String(detailTherapistId)
+            : localSaved?.therapist_id || null;
+
+          setSelectedPasien((prev) => {
+            if (!prev) return prev;
+            const finalObserver =
+              detailTherapistName && detailTherapistName !== "-"
+                ? detailTherapistName
+                : prev.observer && prev.observer !== "-"
+                  ? prev.observer
+                  : localSaved?.therapist_name || "-";
+            return {
+              ...prev,
+              tanggalObservasi: detailDate || prev.tanggalObservasi,
+              waktu: detailTime || prev.waktu,
+              therapist_id: finalTherapistId || prev.therapist_id,
+              observer: finalObserver,
+            };
+          });
+        }
+      } catch (err) {
+        console.error("Gagal mengambil detail jadwal observasi:", err);
+      }
+    }
+
+    // For completed tab: fetch bidang assessment dari berbagai sumber
+    if (tab === "selesai") {
+      try {
+        // 0. Ambil asessor per bidang yang sudah pernah disimpan (oleh admin saat Buat Jadwal Asesmen)
+        const savedAsessors = getAssessmentAsessorByBidangLocal(
+          pasien.observation_id,
+          pasien.nama
+        );
+        if (savedAsessors && Object.keys(savedAsessors).length > 0) {
+          setAsesmenPetugasByBidang(savedAsessors);
+        }
+
+        // 1. Prioritas utama: localStorage (disimpan saat terapis submit observasi)
+        const localBidang = getObservationBidangLocal(pasien.observation_id);
+        if (localBidang && localBidang.length > 0) {
+          setAllowedBidang(localBidang);
+        } else if (savedAsessors && Object.keys(savedAsessors).length > 0) {
+          setAllowedBidang(Object.keys(savedAsessors));
+        } else {
+          // 2. Fetch dari endpoint assessments/pending/admin (paling akurat untuk data lama)
+          const apiBidang = await getAssessmentBidangByObservation(pasien.observation_id);
+          if (apiBidang.length > 0) {
+            setAllowedBidang(apiBidang);
+            // Simpan ke localStorage agar tidak perlu fetch ulang
+            saveObservationBidangLocal(pasien.observation_id, apiBidang);
+          } else {
+            // 3. Fallback: cek boolean flags atau parse teks dari detail observasi
+            const detail = await getObservationDetail(pasien.observation_id, "completed");
+            if (detail) {
+              const bidangKeys = ["paedagog", "okupasi", "wicara", "fisio"] as const;
+              const fromFlags = bidangKeys.filter(
+                (k) => detail[k] === true || detail[k] === 1 || detail[k] === "1"
+              );
+              if (fromFlags.length > 0) {
+                setAllowedBidang(fromFlags);
+                saveObservationBidangLocal(pasien.observation_id, fromFlags);
+              } else if (detail.recommendation) {
+                const parsed = parseRecommendation(String(detail.recommendation));
+                if (parsed.length > 0) {
+                  setAllowedBidang(parsed);
+                  saveObservationBidangLocal(pasien.observation_id, parsed);
+                }
+              }
+            }
+            // Jika semua gagal → allowedBidang tetap undefined → tampil semua bidang
+          }
+        }
+      } catch {
+        // ignore - form tetap terbuka dengan semua bidang
+      }
+    }
+    setOpenAsesmen(true);
   };
 
   // =====================
@@ -303,7 +544,7 @@ export default function JadwalPage() {
                 return (
                   <button
                     key={t}
-                    onClick={() => setTab(t as any)}
+                    onClick={() => setTab(t as "menunggu" | "terjadwal" | "selesai")}
                     className={`cursor-pointer relative flex-1 md:w-32 py-2.5 text-sm font-bold capitalize transition-all z-10 
                       ${isActive ? "text-[#1E5C58]" : "text-gray-400 hover:text-gray-600"}`}
                   >
@@ -898,11 +1139,20 @@ export default function JadwalPage() {
               ? selectedPasien.observer
               : ""
           }
+          initialPetugasId={selectedPasien.therapist_id || undefined}
+          petugasList={therapists.map((t: any) => ({
+            id: t.therapist_id || t.id,
+            name: t.therapist_name || t.name || "",
+            section: t.therapist_section || t.section || "",
+          }))}
+          initialPetugasByBidang={tab === "selesai" ? asesmenPetugasByBidang : undefined}
+          allowedBidang={tab === "selesai" ? allowedBidang : undefined}
           onClose={() => {
             setOpenAsesmen(false);
             setSelectedPasien(null);
+            setAsesmenPetugasByBidang(undefined);
           }}
-          onSave={async (date, time, petugas, petugasId) => {
+          onSave={async (date, time, petugas, petugasId, petugasByBidang) => {
             if (!selectedPasien) return;
             try {
               if (tab === "selesai") {
@@ -913,6 +1163,15 @@ export default function JadwalPage() {
                   petugasId || petugas,
                   petugas
                 );
+                // Simpan asessor per bidang ke localStorage agar muncul di Edit Asesmen
+                if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
+                  saveAssessmentAsessorByBidangLocal(
+                    selectedPasien.observation_id,
+                    petugasByBidang,
+                    selectedPasien.nama
+                  );
+                  setAsesmenPetugasByBidang(petugasByBidang);
+                }
                 showSuccessToast("Asesmen berhasil dijadwalkan!");
               } else {
                 await updateObservationSchedule(
@@ -923,6 +1182,13 @@ export default function JadwalPage() {
                   petugas
                 );
                 showSuccessToast("Jadwal observasi sukses disimpan!");
+              }
+              if (petugas || petugasId) {
+                saveObservationTherapistLocal(
+                  selectedPasien.observation_id,
+                  petugasId || "",
+                  petugas || ""
+                );
               }
               setOpenAsesmen(false);
               setSelectedPasien(null);

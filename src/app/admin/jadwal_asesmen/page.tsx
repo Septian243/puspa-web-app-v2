@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -23,12 +24,18 @@ import "react-calendar/dist/Calendar.css";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { useRouter, useSearchParams } from "next/navigation";
-import FormEditAsesment from "@/components/form/FormEditAsesment";
+import FormAturAsesmen from "@/components/form/FormAturAsesmen";
 import {
   getAssessmentsAdmin,
   updateAsessmentSchedule,
   getAssessmentDetail,
+  getAssessmentAsessorsByBidang,
 } from "@/lib/api/jadwal_asessment";
+import {
+  getAssessmentAsessorByBidangLocal,
+  saveAssessmentAsessorByBidangLocal,
+} from "@/lib/api/jadwal_observasi";
+import { getTherapists } from "@/lib/api/jadwal_terapi";
 import FormDetailAsesment from "@/components/form/FormDetailAsesment";
 import { motion, AnimatePresence } from "framer-motion";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
@@ -51,6 +58,8 @@ export interface Jadwal {
   waktu?: string | null;
   observer?: string | null;
   status?: string | null;
+  /** Mapping bidang → nama asessor, e.g. { fisio: "Nindya Zahri", paedagog: "Alief Arifun" } */
+  assessorsByBidang?: Record<string, string>;
 }
 
 const ORTU_ACTIONS = [
@@ -69,6 +78,7 @@ const ASESSOR_ACTIONS = [
   { key: "paedagog", label: "Data Paedagog" },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ORTU_ICONS: Record<string, any> = {
   umum: User,
   fisio: Activity,
@@ -78,6 +88,7 @@ const ORTU_ICONS: Record<string, any> = {
   upload: Upload,
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ASESSOR_ICONS: Record<string, any> = {
   fisio: Activity,
   okupasi: Stethoscope,
@@ -119,8 +130,30 @@ export default function JadwalAsesmenPage() {
     assessment_id: number;
     role: "ortu" | "asessor" | "aksi";
   } | null>(null);
-  const [detailPasien, setDetailPasien] = useState<any | null>(null);
+  const [detailPasien, setDetailPasien] = useState<Record<string, unknown> | null>(null);
   const [openAsesmen, setOpenAsesmen] = useState(false);
+  const [asesmenLoading, setAsesmenLoading] = useState(false);
+  const [currentAsessorsByBidang, setCurrentAsessorsByBidang] = useState<Record<string, string> | undefined>(undefined);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [therapists, setTherapists] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadTherapists() {
+      try {
+        const data = await getTherapists();
+        if (isMounted && Array.isArray(data)) {
+          setTherapists(data);
+        }
+      } catch (err) {
+        console.error("Gagal memuat data terapis:", err);
+      }
+    }
+    loadTherapists();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const fetchJadwal = async () => {
     setLoading(true);
@@ -187,6 +220,58 @@ export default function JadwalAsesmenPage() {
       paedagog: `${base}/paedagog`,
     };
     router.push(`${routes[action]}?assessment_id=${assessment_id}`);
+  };
+
+  /** Buka modal Edit Asesmen dengan fetch asessor per bidang terlebih dahulu */
+  const handleOpenAsesmen = async (j: Jadwal) => {
+    setSelectedPasien(j);
+    setOpenAsesmen(false);
+    setAsesmenLoading(true);
+    try {
+      // 1. Cek dari localStorage (disimpan dari Buat Jadwal Asesmen di Observasi atau Edit sebelumnya)
+      const localDirect = getAssessmentAsessorByBidangLocal(j.assessment_id, j.nama);
+      let collected: Record<string, string> = localDirect ? { ...localDirect } : {};
+
+      // 2. Fetch detail assessment dari API untuk mendapatkan observation_id jika ada
+      try {
+        const detail = await getAssessmentDetail(j.assessment_id);
+        if (detail && detail.observation_id) {
+          const fromObs = getAssessmentAsessorByBidangLocal(detail.observation_id, j.nama);
+          if (fromObs) {
+            collected = { ...fromObs, ...collected };
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal fetch detail assessment:", err);
+      }
+
+      // 3. Fetch asessor per bidang dari endpoint API detail / assessor
+      try {
+        const fetched = await getAssessmentAsessorsByBidang(j.assessment_id);
+        if (fetched && Object.keys(fetched).length > 0) {
+          collected = { ...fetched, ...collected };
+        }
+      } catch (err) {
+        console.warn("Gagal fetch assessor dari API:", err);
+      }
+
+      // 4. Fallback ke j.assessorsByBidang jika ada
+      if (j.assessorsByBidang && Object.keys(j.assessorsByBidang).length > 0) {
+        collected = { ...j.assessorsByBidang, ...collected };
+      }
+
+      if (Object.keys(collected).length > 0) {
+        setCurrentAsessorsByBidang(collected);
+      } else {
+        setCurrentAsessorsByBidang(undefined);
+      }
+    } catch {
+      const fallback = getAssessmentAsessorByBidangLocal(j.assessment_id, j.nama);
+      setCurrentAsessorsByBidang(fallback || j.assessorsByBidang || undefined);
+    } finally {
+      setAsesmenLoading(false);
+      setOpenAsesmen(true);
+    }
   };
 
   useEffect(() => {
@@ -309,7 +394,7 @@ export default function JadwalAsesmenPage() {
                 return (
                   <button
                     key={t}
-                    onClick={() => setTab(t as any)}
+                    onClick={() => setTab(t as "terjadwal" | "selesai")}
                     className={`cursor-pointer relative flex-1 md:w-32 py-2.5 text-sm font-bold capitalize transition-all z-10 
                       ${isActive ? "text-[#1E5C58]" : "text-gray-400 hover:text-gray-600"}`}
                   >
@@ -535,8 +620,8 @@ export default function JadwalAsesmenPage() {
                                       >
                                         <button
                                           onClick={() => {
-                                            setOpenAsesmen(true);
                                             setOpenDropdown(null);
+                                            if (selectedPasien) handleOpenAsesmen(selectedPasien);
                                           }}
                                           className="w-full flex items-center px-4 py-3 text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#2B7A75] transition-colors"
                                         >
@@ -804,10 +889,7 @@ export default function JadwalAsesmenPage() {
                         {tab === "terjadwal" ? (
                           <div className="flex gap-2">
                             <button
-                              onClick={() => {
-                                setSelectedPasien(j);
-                                setOpenAsesmen(true);
-                              }}
+                              onClick={() => handleOpenAsesmen(j)}
                               className="flex-1 py-2 bg-[#2B7A75] text-white rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
                             >
                               <Settings className="w-3.5 h-3.5" /> Atur Asesmen
@@ -941,8 +1023,18 @@ export default function JadwalAsesmenPage() {
         </main>
       </div>
 
-      {openAsesmen && selectedPasien && (
-        <FormEditAsesment
+      {/* Loading indicator saat fetch asessor */}
+      {asesmenLoading && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/10 backdrop-blur-sm z-50">
+          <div className="bg-white rounded-2xl p-6 shadow-xl flex items-center gap-3">
+            <div className="w-6 h-6 border-3 border-teal-200 border-t-[#2B7A75] rounded-full animate-spin" />
+            <span className="text-sm font-bold text-[#1E5C58]">Memuat data petugas...</span>
+          </div>
+        </div>
+      )}
+
+      {openAsesmen && selectedPasien && !asesmenLoading && (
+        <FormAturAsesmen
           title={tab === "terjadwal" ? "Edit Asesmen" : "Atur Asesmen"}
           pasienName={selectedPasien.nama}
           initialDate={
@@ -956,11 +1048,32 @@ export default function JadwalAsesmenPage() {
               ? selectedPasien.waktu
               : undefined
           }
+          initialPetugasByBidang={currentAsessorsByBidang}
+          allowedBidang={(() => {
+            const fromTipe =
+              selectedPasien.tipe && selectedPasien.tipe !== "-"
+                ? selectedPasien.tipe
+                    .split(",")
+                    .map((t) => t.trim().toLowerCase())
+                    .filter(Boolean)
+                : [];
+            const fromAsessors = currentAsessorsByBidang
+              ? Object.keys(currentAsessorsByBidang)
+              : [];
+            const combined = Array.from(new Set([...fromTipe, ...fromAsessors]));
+            return combined.length > 0 ? combined : undefined;
+          })()}
+          petugasList={therapists.map((t: any) => ({
+            id: t.therapist_id || t.id,
+            name: t.therapist_name || t.name || "",
+            section: t.therapist_section || t.section || "",
+          }))}
           onClose={() => {
             setOpenAsesmen(false);
             setSelectedPasien(null);
+            setCurrentAsessorsByBidang(undefined);
           }}
-          onSave={async (date, time) => {
+          onSave={async (date, time, petugas, petugasId, petugasByBidang) => {
             if (!date || !time) return;
             try {
               await updateAsessmentSchedule(
@@ -968,6 +1081,16 @@ export default function JadwalAsesmenPage() {
                 date,
                 time,
               );
+              if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
+                saveAssessmentAsessorByBidangLocal(
+                  selectedPasien.assessment_id,
+                  petugasByBidang,
+                  selectedPasien.nama
+                );
+              }
+              setOpenAsesmen(false);
+              setSelectedPasien(null);
+              setCurrentAsessorsByBidang(undefined);
               await fetchJadwal();
               showSuccessToast("Jadwal asesmen sukses disimpan!");
             } catch (err) {
