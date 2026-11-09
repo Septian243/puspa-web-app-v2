@@ -4,8 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Lock, ChevronLeft, Save } from "lucide-react";
-import toast from "react-hot-toast";
-import { updatePassword } from "@/lib/api/profile";
+import { useMutation } from "@tanstack/react-query";
+import { updatePassword, UpdatePasswordPayload } from "@/lib/api/profile";
+import { showSuccessToast, showErrorToast } from "@/lib/toast";
 
 export default function UbahPasswordSekolahPage() {
   const [showCurrent, setShowCurrent] = useState(false);
@@ -16,8 +17,34 @@ export default function UbahPasswordSekolahPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // TanStack Query Mutation untuk Update Password (PUT /api/v1/profile/update-password)
+  const mutation = useMutation({
+    mutationFn: (payload: UpdatePasswordPayload) => updatePassword(payload),
+    onSuccess: (res) => {
+      if (res?.success) {
+        showSuccessToast(res.message || "Password berhasil diperbarui!", "Berhasil");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setErrors({});
+      } else {
+        const errorMsg =
+          typeof res?.message === "string"
+            ? res.message
+            : "Gagal mengubah password. Pastikan password saat ini sudah benar.";
+        showErrorToast(errorMsg, "Gagal Memperbarui");
+      }
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Terjadi kesalahan saat menghubungi server.";
+      showErrorToast(msg, "Gagal");
+    },
+  });
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -41,55 +68,22 @@ export default function UbahPasswordSekolahPage() {
     return errs;
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
 
     const valErrors = validate();
     setErrors(valErrors);
 
     if (Object.keys(valErrors).length > 0) {
-      toast.error("Harap periksa kembali form ubah password.");
+      showErrorToast("Harap periksa kembali isian form ubah password.", "Validasi Gagal");
       return;
     }
 
-    try {
-      setLoading(true);
-
-      const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
-
-      if (token) {
-        const res = await updatePassword({
-          current_password: currentPassword,
-          password: newPassword,
-          password_confirmation: confirmPassword,
-        });
-
-        if (res?.success) {
-          toast.success("Password berhasil diperbarui!", { icon: "🎉" });
-          setCurrentPassword("");
-          setNewPassword("");
-          setConfirmPassword("");
-          setErrors({});
-          return;
-        }
-      }
-
-      // Fallback simulasi sukses bila menggunakan autentikasi lokal/portal dummy
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      toast.success("Password berhasil diubah!", { icon: "🔐" });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setErrors({});
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        "Terjadi kesalahan saat mengubah password.";
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
+    mutation.mutate({
+      current_password: currentPassword,
+      password: newPassword,
+      password_confirmation: confirmPassword,
+    });
   };
 
   return (
@@ -226,10 +220,10 @@ export default function UbahPasswordSekolahPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={mutation.isPending}
               className="flex items-center justify-center gap-2 px-7 py-2.5 rounded-xl bg-[#2B7A75] hover:bg-[#1E5C58] text-white font-bold shadow-md shadow-teal-500/10 transition-all text-xs active:scale-95 cursor-pointer disabled:opacity-50"
             >
-              {loading ? (
+              {mutation.isPending ? (
                 <div className="w-4 h-4 border-2 rounded-full border-white/30 border-t-white animate-spin" />
               ) : (
                 <>

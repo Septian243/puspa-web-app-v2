@@ -63,4 +63,13 @@ export const queryKeys = {
     list: (status: string, filters?: any) => ['observations', status, filters] as const,
     detail: (id: string | number) => ['observations', 'detail', id] as const,
   },
+
+  // --- Modul Sekolah (School Portal) ---
+  school: {
+    all: ['school'] as const,
+    dashboard: ['school', 'dashboard'] as const,
+    students: (filters?: any) => ['school', 'students', filters] as const,
+    studentDetail: (id: string) => ['school', 'student', id] as const,
+    profile: ['school', 'profile'] as const,
+  },
 };

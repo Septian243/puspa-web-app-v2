@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { Search, Menu, GraduationCap } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { menuSekolah } from "./sidebar_sekolah";
 import NotificationPopover from "@/components/layout/NotificationPopover";
-import { getProfileSekolah } from "@/lib/api/ProfileSekolah";
 
 interface HeaderSekolahProps {
   onOpenSidebar: () => void;
@@ -14,13 +12,15 @@ interface HeaderSekolahProps {
 
 export default function HeaderSekolah({ onOpenSidebar }: HeaderSekolahProps) {
   const pathname = usePathname();
-  const [namaSekolah, setNamaSekolah] = useState("SD Bakti");
+  const [namaSekolah, setNamaSekolah] = useState("Sekolah");
 
   useEffect(() => {
     const updateNama = () => {
-      const profile = getProfileSekolah();
-      if (profile?.nama) {
-        setNamaSekolah(profile.nama);
+      if (typeof window !== "undefined") {
+        const username = localStorage.getItem("username");
+        if (username) {
+          setNamaSekolah(username);
+        }
       }
     };
     updateNama();
@@ -80,14 +80,10 @@ export default function HeaderSekolah({ onOpenSidebar }: HeaderSekolahProps) {
         {/* Notifications */}
         <NotificationPopover />
 
-        {/* User Greet & Info Link */}
-        <Link
-          href="/sekolah/profil"
-          className="flex items-center gap-3 pl-2 sm:pl-4 border-l border-gray-100/80 hover:opacity-85 transition-opacity group cursor-pointer"
-          title="Lihat Profil Sekolah"
-        >
+        {/* User Greet & Info (Hanya Informasi Akun, Tidak Bisa Diklik) */}
+        <div className="flex items-center gap-3 pl-2 sm:pl-4 border-l border-gray-100/80 select-none">
           <div className="hidden sm:flex flex-col items-end">
-            <span className="text-sm font-bold text-[#1E5C58] leading-tight group-hover:text-[#2B7A75] transition-colors">
+            <span className="text-sm font-bold text-[#1E5C58] leading-tight">
               {namaSekolah}
             </span>
             <span className="text-xs font-semibold text-gray-400">
@@ -96,10 +92,10 @@ export default function HeaderSekolah({ onOpenSidebar }: HeaderSekolahProps) {
           </div>
 
           {/* Profile Avatar */}
-          <div className="w-10 h-10 rounded-full bg-[#E6F3F0] border-2 border-teal-100/80 flex items-center justify-center text-[#2B7A75] shadow-xs group-hover:scale-105 transition-transform">
+          <div className="w-10 h-10 rounded-full bg-[#E6F3F0] border-2 border-teal-100/80 flex items-center justify-center text-[#2B7A75] shadow-xs">
             <GraduationCap className="w-5 h-5" />
           </div>
-        </Link>
+        </div>
       </div>
     </header>
   );
