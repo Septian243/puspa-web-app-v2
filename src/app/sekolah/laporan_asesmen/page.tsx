@@ -1,97 +1,160 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   FileText,
   Search,
   Eye,
   Download,
-  Sparkles,
-  Phone,
+  Activity,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import toast from "react-hot-toast";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { getSchoolStudents, SchoolStudentItem } from "@/lib/api/laporanAsesmenSekolah";
 import FormDetailProfilAnak from "@/components/form/FormDetailProfilAnak";
-import {
-  LaporanAsesmenSekolah,
-  getDaftarLaporanAsesmenSekolah,
-  unduhLaporanAsesmenSekolah,
-} from "@/lib/api/laporanAsesmenSekolah";
+import { showErrorToast } from "@/lib/toast";
 
-export default function LaporanAsesmenPage() {
-  const [laporanList, setLaporanList] = useState<LaporanAsesmenSekolah[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+function formatUsia(birthDateStr: string | null | undefined, fallbackAge?: number | null): string {
+  if (!birthDateStr) {
+    return fallbackAge != null ? `${fallbackAge} Tahun` : "-";
+  }
 
-  // State untuk modal detail anak
-  const [selectedAnak, setSelectedAnak] = useState<LaporanAsesmenSekolah | null>(
-    null
-  );
+  const birthDate = new Date(birthDateStr);
+  if (isNaN(birthDate.getTime())) {
+    return fallbackAge != null ? `${fallbackAge} Tahun` : "-";
+  }
 
-  useEffect(() => {
-    const list = getDaftarLaporanAsesmenSekolah();
-    setLaporanList(list);
-    setLoading(false);
-  }, []);
+  const today = new Date();
+  let years = today.getFullYear() - birthDate.getFullYear();
+  let months = today.getMonth() - birthDate.getMonth();
 
-  // Filter list berdasarkan pencarian nama anak atau orangtua
-  const filteredList = useMemo(() => {
-    if (!laporanList || laporanList.length === 0) return [];
-    if (!searchTerm.trim()) return laporanList;
+  if (today.getDate() < birthDate.getDate()) {
+    months--;
+  }
 
-    const term = searchTerm.toLowerCase();
-    return laporanList.filter(
-      (item) =>
-        item.namaAnak.toLowerCase().includes(term) ||
-        item.namaOrangTua.toLowerCase().includes(term) ||
-        item.tanggalLahir.toLowerCase().includes(term) ||
-        item.teleponOrangTua.includes(term)
-    );
-  }, [laporanList, searchTerm]);
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
 
-  // Pagination calculation
-  const totalPages = Math.max(1, Math.ceil(filteredList.length / itemsPerPage));
-  const currentList = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredList.slice(start, start + itemsPerPage);
-  }, [filteredList, currentPage]);
+  if (years < 0) return "-";
 
-  // Reset page when search term changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+  if (years === 0) {
+    return `${months} Bulan`;
+  }
 
-  // Handler unduh asesmen
-  const handleDownload = (item: LaporanAsesmenSekolah) => {
-    if (item.statusAsesmen !== "tersedia") {
-      toast.error("Laporan asesmen belum tersedia dari admin Puspa.");
-      return;
-    }
+  if (months === 0) {
+    return `${years} Tahun`;
+  }
 
-    toast.success(`Mengunduh hasil asesmen untuk ${item.namaAnak}...`, {
-      icon: "📄",
-    });
+  return `${years} Tahun ${months} Bulan`;
+}
 
-    if (!item.statusUnduh) {
-      const updated = unduhLaporanAsesmenSekolah(item.id);
-      setLaporanList(updated);
+function formatTanggalLahir(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
 
-      if (selectedAnak && selectedAnak.id === item.id) {
-        setSelectedAnak({ ...selectedAnak, statusUnduh: true });
-      }
-    }
-  };
+  return date.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
 
-  if (loading) {
+function renderStatusBadge(assessmentStatus?: string | null, observationStatus?: string | null) {
+  const asm = assessmentStatus?.toLowerCase();
+  const obs = observationStatus?.toLowerCase();
+
+  if (asm === "completed" || asm === "selesai") {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400 gap-3">
-        <div className="w-9 h-9 border-3 border-teal-100 border-t-[#1E5C58] rounded-full animate-spin" />
-        <p className="text-xs font-medium animate-pulse">Memuat laporan asesmen...</p>
-      </div>
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-50 text-[#1E5C58] border border-teal-200/70 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#1E5C58]" />
+        Selesai Asesmen
+      </span>
     );
   }
+
+  if (asm === "scheduled" || asm === "pending") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200/70 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+        Jadwal Asesmen
+      </span>
+    );
+  }
+
+  if (obs === "completed" || obs === "selesai") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/70 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+        Tahap Observasi
+      </span>
+    );
+  }
+
+  if (obs === "scheduled" || obs === "pending") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50/80 text-amber-800 border border-amber-200/60 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+        Jadwal Observasi
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-500 border border-gray-200/60 shadow-2xs">
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+      Menunggu Observasi
+    </span>
+  );
+}
+
+export default function LaporanAsesmenPage() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.school.students({
+      search: debouncedSearch.trim() || undefined,
+      page: currentPage,
+      per_page: 10,
+    }),
+    queryFn: () =>
+      getSchoolStudents({
+        search: debouncedSearch.trim() || undefined,
+        page: currentPage,
+        per_page: 10,
+      }),
+    placeholderData: (previousData) => previousData,
+  });
+
+  const studentList = Array.isArray(data?.items) ? data.items : [];
+  const meta = data?.meta || { current_page: 1, last_page: 1, total: 0, per_page: 10 };
+  const totalPages = Math.max(1, meta.last_page);
+
+  // Handler unduh asesmen (Pending Backend)
+  const handlePendingDownload = (studentName: string) => {
+    showErrorToast(
+      `Fitur unduh laporan asesmen untuk ${studentName} berstatus Pending (Menunggu dukungan endpoint backend). Nantinya laporan ini dapat diunduh berkali-kali tanpa batas.`,
+      "Pending Backend"
+    );
+  };
 
   return (
     <div className="relative overflow-hidden selection:bg-[#2B7A75] selection:text-white bg-transparent w-full">
@@ -115,8 +178,8 @@ export default function LaporanAsesmenPage() {
                 Laporan Asesmen
               </h1>
             </div>
-            <p className="text-xs text-gray-500 font-medium mt-1">
-              Lihat data anak dan unduh hasil asesmen yang dikirim oleh admin Puspa.
+            <p className="mt-1 text-xs font-medium text-gray-500">
+              Lihat data anak dan pantau status asesmen yang dilakukan oleh tim Puspa.
             </p>
           </div>
 
@@ -141,109 +204,133 @@ export default function LaporanAsesmenPage() {
           className="bg-white rounded-3xl p-4 sm:p-6 md:p-7 border border-teal-50/80 shadow-[0_4px_20px_rgba(30,92,88,0.04)]"
         >
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[700px]">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               {/* Header Kolom */}
               <thead>
                 <tr className="border-b border-gray-100 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">
-                  <th className="pb-4 px-3 font-extrabold w-14 text-center">NO</th>
-                  <th className="pb-4 px-4 font-extrabold">INFORMASI PASIEN</th>
-                  <th className="pb-4 px-4 font-extrabold">USIA / TGL LAHIR</th>
-                  <th className="pb-4 px-4 font-extrabold">ORANGTUA / WALI</th>
-                  <th className="pb-4 px-4 font-extrabold text-center w-28">AKSI</th>
+                  <th className="px-3 pb-4 font-extrabold text-center w-14">NO</th>
+                  <th className="px-4 pb-4 font-extrabold">INFORMASI PASIEN</th>
+                  <th className="px-4 pb-4 font-extrabold">USIA / TGL LAHIR</th>
+                  <th className="px-4 pb-4 font-extrabold">STATUS TAHAPAN</th>
+                  <th className="px-4 pb-4 font-extrabold">ORANGTUA / WALI</th>
+                  <th className="px-4 pb-4 font-extrabold text-center w-28">AKSI</th>
                 </tr>
               </thead>
 
               {/* Data Rows */}
-              <tbody className="divide-y divide-gray-100/80 text-xs">
-                {currentList.length === 0 ? (
+              <tbody className="text-xs divide-y divide-gray-100/80">
+                {isLoading && studentList.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-gray-400 font-medium">
-                      Tidak ada data anak yang sesuai dengan pencarian &quot;{searchTerm}&quot;
+                    <td colSpan={6} className="py-12 font-medium text-center text-gray-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="w-7 h-7 border-2 border-teal-100 border-t-[#1E5C58] rounded-full animate-spin" />
+                        <span>Memuat data siswa...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : studentList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 font-medium text-center text-gray-400">
+                      {debouncedSearch
+                        ? `Tidak ada data siswa yang sesuai dengan pencarian "${debouncedSearch}"`
+                        : "Belum ada data siswa terdaftar pada sekolah Anda."}
                     </td>
                   </tr>
                 ) : (
-                  currentList.map((item, index) => {
-                    const rowNumber = (currentPage - 1) * itemsPerPage + index + 1;
+                  studentList.map((student: SchoolStudentItem, index: number) => {
+                    const rowNumber = (currentPage - 1) * 10 + index + 1;
+                    const isFemale = student.child_gender?.toLowerCase() === "perempuan";
+                    const initial = student.child_name ? student.child_name.charAt(0).toUpperCase() : "S";
+                    const initialBg = isFemale
+                      ? "bg-rose-100 text-rose-600"
+                      : "bg-blue-100 text-blue-600";
+                    const hasAssessment = Boolean(
+                      student.assessment_status &&
+                      (student.assessment_status.toLowerCase() === "completed" ||
+                        student.assessment_status.toLowerCase() === "selesai")
+                    );
+
                     return (
                       <tr
-                        key={item.id}
+                        key={student.id}
                         className="hover:bg-[#F4F9F8]/60 transition-colors group"
                       >
                         {/* NO */}
-                        <td className="py-4 px-3 font-semibold text-gray-500 text-center">
+                        <td className="px-3 py-4 font-semibold text-center text-gray-500">
                           {rowNumber}
                         </td>
 
                         {/* INFORMASI PASIEN */}
-                        <td className="py-4 px-4">
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
                             <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-xs ${item.initialBg}`}
+                              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-xs ${initialBg}`}
                             >
-                              {item.initial}
+                              {initial}
                             </div>
                             <div>
                               <p className="font-bold text-gray-800 text-sm group-hover:text-[#1E5C58] transition-colors">
-                                {item.namaAnak}
+                                {student.child_name}
                               </p>
                               <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                                {item.jenisKelamin}
+                                {student.child_gender || "-"}
                               </p>
                             </div>
                           </div>
                         </td>
 
                         {/* USIA / TGL LAHIR */}
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-1.5 font-bold text-gray-800 text-xs">
-                            <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            <span>{item.usia}</span>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5 font-extrabold text-[#1E5C58] text-xs sm:text-sm">
+                              <Activity className="w-4 h-4 text-amber-500 shrink-0" strokeWidth={2.2} />
+                              <span>{formatUsia(student.child_birth_date, student.age)}</span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                              {formatTanggalLahir(student.child_birth_date)}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                            {item.tanggalLahir}
-                          </p>
                         </td>
 
-                        {/* ORANGTUA / WALI */}
-                        <td className="py-4 px-4">
-                          <p className="font-bold text-gray-800 text-xs">
-                            {item.namaOrangTua}
-                          </p>
-                          <div className="flex items-center gap-1 text-[11px] text-gray-400 font-medium mt-0.5">
-                            <Phone className="w-3 h-3 text-gray-400 shrink-0" />
-                            <span>{item.teleponOrangTua}</span>
-                          </div>
+                        {/* STATUS TAHAPAN */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {renderStatusBadge(student.assessment_status, student.observation_status)}
+                        </td>
+
+                        {/* ORANGTUA / WALI (Belum didukung di list backend -> '-') */}
+                        <td className="px-4 py-4 font-medium text-gray-400">
+                          -
                         </td>
 
                         {/* AKSI */}
-                        <td className="py-4 px-4 text-center">
+                        <td className="px-4 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            {/* Tombol Detail (Eye) */}
+                            {/* Tombol Detail (Eye) - Teal Theme */}
                             <button
                               type="button"
-                              onClick={() => setSelectedAnak(item)}
-                              title="Lihat Detail Anak"
-                              className="cursor-pointer w-9 h-9 rounded-xl bg-[#E6F3F0] hover:bg-[#D3ECE6] text-[#2B7A75] flex items-center justify-center transition-all active:scale-95 shadow-xs"
+                              onClick={() => setSelectedChildId(student.id)}
+                              title="Lihat Detail Profil Anak"
+                              className="cursor-pointer w-9 h-9 rounded-xl border border-teal-200/90 bg-[#E6F8F4] hover:bg-[#D3ECE6] text-[#1E5C58] flex items-center justify-center transition-all active:scale-95 shadow-xs"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-4 h-4 text-[#1E5C58]" />
                             </button>
 
-                            {/* Tombol Unduh Asesmen (Hanya icon Download) */}
-                            {item.statusAsesmen === "tersedia" ? (
+                            {/* Tombol Unduh Asesmen: Hanya bisa diklik jika anak sudah selesai asesmen */}
+                            {hasAssessment ? (
                               <button
                                 type="button"
-                                onClick={() => handleDownload(item)}
-                                title="Unduh Asesmen"
-                                className="cursor-pointer w-9 h-9 rounded-xl bg-[#245D56] hover:bg-[#1B4B45] text-white flex items-center justify-center transition-all active:scale-95 shadow-xs shrink-0"
+                                onClick={() => handlePendingDownload(student.child_name)}
+                                title="Unduh Laporan Asesmen (Dapat diunduh berkali-kali tanpa batas • Status: Menunggu endpoint backend)"
+                                className="flex items-center justify-center transition-all border shadow-xs cursor-pointer w-9 h-9 rounded-xl border-blue-200/90 bg-blue-50/80 hover:bg-blue-100 text-blue-700 active:scale-95 shrink-0"
                               >
-                                <Download className="w-4 h-4" />
+                                <Download className="w-4 h-4 text-blue-600" />
                               </button>
                             ) : (
                               <button
                                 type="button"
                                 disabled
-                                title="Belum tersedia"
-                                className="w-9 h-9 rounded-xl bg-gray-100/90 text-gray-400 border border-gray-200/50 flex items-center justify-center cursor-not-allowed shrink-0"
+                                title="Laporan belum tersedia: Siswa belum melakukan asesmen"
+                                className="flex items-center justify-center transition-all border shadow-xs w-9 h-9 rounded-xl border-gray-200/70 bg-gray-100/60 text-gray-400 cursor-not-allowed shrink-0 opacity-50"
                               >
                                 <Download className="w-4 h-4 text-gray-400" />
                               </button>
@@ -259,39 +346,46 @@ export default function LaporanAsesmenPage() {
           </div>
 
           {/* ================= PAGINATION ================= */}
-          {filteredList.length > 0 && (
-            <div className="flex items-center justify-center gap-3 pt-6 mt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-gray-200/90 bg-white hover:bg-gray-50 text-xs font-bold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xs"
-              >
-                Prev
-              </button>
+          {meta.total > 0 && (
+            <div className="flex flex-col items-center justify-between gap-4 pt-6 mt-2 border-t border-gray-100 sm:flex-row">
+              <span className="text-xs font-medium text-gray-400">
+                Menampilkan {studentList.length} dari {meta.total} siswa
+              </span>
 
-              <div className="px-4 py-1.5 rounded-xl bg-[#245D56] text-white text-xs font-black shadow-xs">
-                {currentPage} / {totalPages}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1 || isLoading}
+                  className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-gray-200/90 bg-white hover:bg-gray-50 text-xs font-bold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xs"
+                >
+                  Prev
+                </button>
+
+                <div className="px-4 py-1.5 rounded-xl bg-[#245D56] text-white text-xs font-black shadow-xs">
+                  {currentPage} / {totalPages}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage >= totalPages || isLoading}
+                  className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-gray-200/90 bg-white hover:bg-gray-50 text-xs font-bold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xs"
+                >
+                  Next
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-gray-200/90 bg-white hover:bg-gray-50 text-xs font-bold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xs"
-              >
-                Next
-              </button>
             </div>
           )}
         </motion.div>
       </main>
 
-      {/* ================= MODAL DETAIL PROFIL ANAK (COMPONENT FORM) ================= */}
+      {/* ================= MODAL DETAIL PROFIL SISWA ================= */}
       <FormDetailProfilAnak
-        open={Boolean(selectedAnak)}
-        onClose={() => setSelectedAnak(null)}
-        anak={selectedAnak}
+        isOpen={Boolean(selectedChildId)}
+        open={Boolean(selectedChildId)}
+        childId={selectedChildId}
+        onClose={() => setSelectedChildId(null)}
       />
     </div>
   );

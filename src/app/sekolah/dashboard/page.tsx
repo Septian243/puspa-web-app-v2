@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   Baby,
@@ -10,41 +10,35 @@ import {
   Calendar,
   FileText,
   ArrowRight,
-  Sparkles,
+  PieChart as PieChartIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import toast from "react-hot-toast";
-import {
-  getDashboardSekolahData,
-  saveDashboardSekolahData,
-  SekolahDashboardData,
-} from "@/lib/api/dashboardSekolah";
-import {
-  LaporanAsesmenSekolah,
-  unduhLaporanAsesmenSekolah,
-} from "@/lib/api/laporanAsesmenSekolah";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { getSchoolDashboard } from "@/lib/api/dashboardSekolah";
+import { getSchoolStudents, SchoolStudentItem } from "@/lib/api/laporanAsesmenSekolah";
+import { showErrorToast } from "@/lib/toast";
 
 export default function SekolahDashboardPage() {
-  const [data, setData] = useState<SekolahDashboardData | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    const loadData = () => {
-      const initialData = getDashboardSekolahData();
-      setData(initialData);
-    };
-    loadData();
+  // 1. Query Data Statistik Dasbor Sekolah (GET /api/v1/school/dashboard)
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: queryKeys.school.dashboard,
+    queryFn: getSchoolDashboard,
+  });
 
-    window.addEventListener("sekolah_profile_updated", loadData);
-    window.addEventListener("sekolah_asesmen_updated", loadData);
-    return () => {
-      window.removeEventListener("sekolah_profile_updated", loadData);
-      window.removeEventListener("sekolah_asesmen_updated", loadData);
-    };
-  }, []);
+  // 2. Query Siswa Terbaru Sekolah (GET /api/v1/school/students?per_page=3)
+  const { data: recentStudentsData, isLoading: loadingRecent } = useQuery({
+    queryKey: queryKeys.school.students({ per_page: 3 }),
+    queryFn: () => getSchoolStudents({ per_page: 3 }),
+  });
 
-  if (!data) {
+  const recentItems = Array.isArray(recentStudentsData?.items) ? recentStudentsData.items : [];
+
+  // Loading State Utama
+  if (loadingStats) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400 gap-3">
         <div className="w-9 h-9 border-3 border-teal-100 border-t-[#1E5C58] rounded-full animate-spin" />
@@ -53,43 +47,48 @@ export default function SekolahDashboardPage() {
     );
   }
 
-  // Handler simulasi unduh laporan asesmen
-  const handleDownload = (item: LaporanAsesmenSekolah) => {
-    toast.success(`Mengunduh laporan asesmen ${item.namaAnak}...`, {
-      icon: "📄",
-    });
-
-    if (!item.statusUnduh) {
-      unduhLaporanAsesmenSekolah(item.id);
-      setData(getDashboardSekolahData());
-    }
+  // Handler Tombol Unduh Laporan Asesmen (Pending Backend)
+  const handlePendingDownload = (studentName: string) => {
+    showErrorToast(
+      `Fitur unduh laporan asesmen untuk ${studentName} berstatus Pending (Menunggu dukungan endpoint backend). Nantinya laporan ini dapat diunduh berkali-kali tanpa batas.`,
+      "Pending Backend"
+    );
   };
 
-  // Persiapan data Donut Chart (konsep seperti PasienChart)
-  const totalAnak = data.totalAnak > 0 ? data.totalAnak : 1;
+  // Kalkulasi data Donut Chart & Card Belum Diunduh (Opsi 1: Status Dokumen & Unduhan)
+  const totalStudents = stats?.total_students ?? 0;
+  const assessmentAvailable = stats?.students_with_assessment ?? 0;
+  // Jika backend kelak menyediakan metrik unduhan, langsung otomatis terbaca secara reaktif
+  const sudahDiunduh = (stats as any)?.students_downloaded ?? (stats as any)?.downloaded_assessments_count ?? 0;
+  const belumDiunduh = Math.max(0, assessmentAvailable - sudahDiunduh);
+  const belumDikirimAdmin = Math.max(0, totalStudents - assessmentAvailable);
+  const denominator = totalStudents > 0 ? totalStudents : 1;
+
   const chartData = [
     {
       name: "Sudah diunduh",
-      value: data.sudahDiunduh,
-      count: data.sudahDiunduh,
-      percentage: (data.sudahDiunduh / totalAnak) * 100,
+      value: sudahDiunduh,
+      count: sudahDiunduh,
+      percentage: (sudahDiunduh / denominator) * 100,
       color: "#38A3A5",
     },
     {
       name: "Belum diunduh",
-      value: data.belumDiunduh,
-      count: data.belumDiunduh,
-      percentage: (data.belumDiunduh / totalAnak) * 100,
+      value: belumDiunduh,
+      count: belumDiunduh,
+      percentage: (belumDiunduh / denominator) * 100,
       color: "#FFB703",
     },
     {
       name: "Belum dikirim admin",
-      value: data.belumDikirimAdmin,
-      count: data.belumDikirimAdmin,
-      percentage: (data.belumDikirimAdmin / totalAnak) * 100,
+      value: belumDikirimAdmin,
+      count: belumDikirimAdmin,
+      percentage: (belumDikirimAdmin / denominator) * 100,
       color: "#F472B6",
     },
   ];
+
+  const hasChartData = totalStudents > 0;
 
   // Custom label di dalam irisan lingkaran
   const renderLabel = (props: any) => {
@@ -117,6 +116,12 @@ export default function SekolahDashboardPage() {
     );
   };
 
+  const currentDateFormatted = new Date().toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="relative overflow-hidden selection:bg-[#2B7A75] selection:text-white bg-transparent w-full">
       {/* Decorative Background Ambient Blur Orbs */}
@@ -137,11 +142,10 @@ export default function SekolahDashboardPage() {
 
           <div className="relative z-10 max-w-2xl">
             <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-              Selamat Datang, {data.namaSekolah}!
+              Selamat Datang, {stats?.school_name || "Sekolah"}!
             </h1>
             <p className="mt-2 text-xs leading-relaxed text-white/85 sm:text-sm">
-              Pantau data anak dari sekolah Anda dan unduh laporan asesmen yang
-              dikirim oleh admin Puspa.
+              Pantau data anak dari sekolah Anda dan unduh laporan asesmen yang dikirim oleh admin Puspa.
             </p>
           </div>
 
@@ -159,7 +163,7 @@ export default function SekolahDashboardPage() {
         {/* ================= 3 STATS CARDS ================= */}
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-            {/* Card 1: Total Anak */}
+            {/* Card 1: Total Anak Terdaftar */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -173,10 +177,10 @@ export default function SekolahDashboardPage() {
                 </p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl sm:text-4xl font-black text-[#1E5C58] tracking-tight">
-                    {data.totalAnak}
+                    {stats?.total_students ?? 0}
                   </span>
-                  <span className="text-xs text-gray-400 font-medium">
-                    Dari {data.namaSekolah}
+                  <span className="text-xs font-medium text-gray-400">
+                    Dari {stats?.school_name || "-"}
                   </span>
                 </div>
               </div>
@@ -200,10 +204,10 @@ export default function SekolahDashboardPage() {
                 </p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl sm:text-4xl font-black text-[#1E5C58] tracking-tight">
-                    {data.asesmenTersedia}
+                    {stats?.students_with_assessment ?? 0}
                   </span>
-                  <span className="text-xs text-gray-400 font-medium">
-                    Dikirim oleh admin
+                  <span className="text-xs font-medium text-gray-400">
+                    Siswa telah diasesmen
                   </span>
                 </div>
               </div>
@@ -213,7 +217,7 @@ export default function SekolahDashboardPage() {
               </div>
             </motion.div>
 
-            {/* Card 3: Belum Diunduh */}
+            {/* Card 3: Belum Diunduh (Siap Diunduh) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -227,9 +231,9 @@ export default function SekolahDashboardPage() {
                 </p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl sm:text-4xl font-black text-[#1E5C58] tracking-tight">
-                    {data.belumDiunduh}
+                    {belumDiunduh}
                   </span>
-                  <span className="text-xs text-gray-400 font-medium">
+                  <span className="text-xs font-medium text-gray-400">
                     Siap diunduh
                   </span>
                 </div>
@@ -249,7 +253,7 @@ export default function SekolahDashboardPage() {
             className="flex items-center justify-end gap-1.5 text-xs text-gray-400 font-medium px-1"
           >
             <Calendar className="w-3.5 h-3.5" />
-            <span>Data per {data.tanggalData}</span>
+            <span>Data per {currentDateFormatted}</span>
           </motion.div>
         </div>
 
@@ -281,45 +285,91 @@ export default function SekolahDashboardPage() {
                 </Link>
               </div>
 
-              {/* List Asesmen with hover animations */}
+              {/* List Siswa Terdaftar */}
               <div className="mt-2 divide-y divide-gray-50">
-                {data.asesmenTerbaru.map((item, index) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.35 + index * 0.08 }}
-                    className="py-3.5 px-3 -mx-3 rounded-2xl flex items-center justify-between gap-4 group hover:bg-[#F4F9F8]/70 transition-colors duration-200"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-xs ${item.initialBg} group-hover:scale-105 transition-transform duration-200`}
-                      >
-                        {item.initial}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-gray-800 truncate group-hover:text-[#1E5C58] transition-colors">
-                          {item.namaAnak}
-                        </p>
-                        <p className="text-xs text-gray-400 font-medium mt-0.5">
-                          Dikirim {item.tanggalKirim}
-                        </p>
-                      </div>
+                {loadingRecent ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-8 text-gray-400">
+                    <div className="w-6 h-6 border-2 border-teal-100 border-t-[#1E5C58] rounded-full animate-spin" />
+                    <span className="text-xs">Memuat daftar siswa terbaru...</span>
+                  </div>
+                ) : recentItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center text-gray-400">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-50 text-[#1E5C58] flex items-center justify-center mb-3">
+                      <Users className="w-6 h-6" />
                     </div>
+                    <p className="text-sm font-bold text-gray-700">Belum Ada Siswa Terdaftar</p>
+                    <p className="max-w-xs mt-1 text-xs text-gray-400">
+                      Siswa dari sekolah Anda yang terdaftar di Puspa akan tampil di sini.
+                    </p>
+                  </div>
+                ) : (
+                  recentItems.map((student: SchoolStudentItem, index: number) => {
+                    const isFemale = student.child_gender?.toLowerCase() === "perempuan";
+                    const initial = student.child_name ? student.child_name.charAt(0).toUpperCase() : "S";
+                    const initialBg = isFemale
+                      ? "bg-rose-100 text-rose-600"
+                      : "bg-blue-100 text-blue-600";
+                    const hasAssessment = Boolean(
+                      student.assessment_status &&
+                      (student.assessment_status.toLowerCase() === "completed" ||
+                        student.assessment_status.toLowerCase() === "selesai")
+                    );
+                    const statusText = student.assessment_status
+                      ? `Asesmen: ${student.assessment_status}`
+                      : student.observation_status
+                        ? `Observasi: ${student.observation_status}`
+                        : "Terdaftar";
 
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(item)}
-                      className={`cursor-pointer px-3.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all duration-200 active:scale-95 shrink-0 ${item.statusUnduh
-                          ? "border-teal-200 bg-teal-50/60 text-[#1E5C58] hover:bg-teal-100/80 shadow-xs"
-                          : "border-teal-200/90 bg-[#F4F9F8] hover:bg-[#1E5C58] text-[#1E5C58] hover:text-white hover:border-[#1E5C58] shadow-xs"
-                        }`}
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>{item.statusUnduh ? "Unduh Ulang" : "Unduh Asesmen"}</span>
-                    </button>
-                  </motion.div>
-                ))}
+                    return (
+                      <motion.div
+                        key={student.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.35 + index * 0.08 }}
+                        className="py-3.5 px-3 -mx-3 rounded-2xl flex items-center justify-between gap-4 group hover:bg-[#F4F9F8]/70 transition-colors duration-200"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-xs ${initialBg} group-hover:scale-105 transition-transform duration-200`}
+                          >
+                            {initial}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-gray-800 truncate group-hover:text-[#1E5C58] transition-colors">
+                              {student.child_name}
+                            </p>
+                            <p className="text-xs text-gray-400 font-medium mt-0.5">
+                              {student.age ? `${student.age} Tahun • ` : ""}{statusText}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Tombol Unduh Laporan Asesmen: Hanya bisa diklik jika anak sudah selesai asesmen */}
+                        {hasAssessment ? (
+                          <button
+                            type="button"
+                            onClick={() => handlePendingDownload(student.child_name)}
+                            className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-blue-200/90 bg-blue-50/80 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 transition-all duration-200 active:scale-95 shrink-0 shadow-xs"
+                            title="Unduh Laporan Asesmen (Dapat diunduh berkali-kali tanpa batas • Status: Menunggu endpoint backend)"
+                          >
+                            <Download className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Unduh Laporan</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="px-3.5 py-1.5 rounded-xl border border-gray-200/80 bg-gray-100/70 text-gray-400 text-xs font-bold flex items-center gap-1.5 cursor-not-allowed shrink-0 opacity-50"
+                            title="Laporan belum tersedia: Siswa belum melakukan asesmen"
+                          >
+                            <Download className="w-3.5 h-3.5 text-gray-400" />
+                            <span>Unduh Laporan</span>
+                          </button>
+                        )}
+                      </motion.div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </motion.div>
@@ -342,64 +392,71 @@ export default function SekolahDashboardPage() {
                 </p>
               </div>
 
-              {/* Chart container matching PasienChart concept */}
+              {/* Chart container */}
               <div className="relative flex flex-col items-center justify-center p-4 mt-4 border rounded-2xl border-gray-100/60 bg-gray-50/50">
                 <div className="h-[220px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={85}
-                        innerRadius={50}
-                        paddingAngle={4}
-                        stroke="none"
-                        label={renderLabel}
-                        labelLine={false}
-                      >
-                        {chartData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={entry.color}
-                            className="outline-none"
-                            style={{
-                              opacity:
-                                activeIndex === null || activeIndex === index
-                                  ? 1
-                                  : 0.6,
-                              transform:
-                                activeIndex === index ? "scale(1.05)" : "scale(1)",
-                              transformOrigin: "center",
-                              transition: "all 150ms ease",
-                            }}
-                          />
-                        ))}
-                      </Pie>
+                  {hasChartData ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={chartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={85}
+                          innerRadius={50}
+                          paddingAngle={4}
+                          stroke="none"
+                          label={renderLabel}
+                          labelLine={false}
+                        >
+                          {chartData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.color}
+                              className="outline-none"
+                              style={{
+                                opacity:
+                                  activeIndex === null || activeIndex === index
+                                    ? 1
+                                    : 0.6,
+                                transform:
+                                  activeIndex === index ? "scale(1.05)" : "scale(1)",
+                                transformOrigin: "center",
+                                transition: "all 150ms ease",
+                              }}
+                            />
+                          ))}
+                        </Pie>
 
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: "12px",
-                          border: "none",
-                          boxShadow: "0 4px 20px -5px rgba(0,0,0,0.1)",
-                          fontWeight: "bold",
-                          fontSize: "12px",
-                        }}
-                        itemStyle={{ color: "#1E5C58" }}
-                        formatter={(value: any, name: any, props: any) => [
-                          `${value} anak (${props?.payload?.percentage?.toFixed(1) ?? 0}%)`,
-                          name,
-                        ]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                        <Tooltip
+                          contentStyle={{
+                            borderRadius: "12px",
+                            border: "none",
+                            boxShadow: "0 4px 20px -5px rgba(0,0,0,0.1)",
+                            fontWeight: "bold",
+                            fontSize: "12px",
+                          }}
+                          itemStyle={{ color: "#1E5C58" }}
+                          formatter={(value: any, name: any, props: any) => [
+                            `${value} anak (${props?.payload?.percentage?.toFixed(1) ?? 0}%)`,
+                            name,
+                          ]}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center text-gray-400">
+                      <PieChartIcon className="w-8 h-8 mb-1 text-gray-300 opacity-60" />
+                      <p className="text-xs font-semibold text-gray-500">Belum ada data status asesmen</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Legend Items (2 columns grid matching screenshot) */}
+            {/* Legend Items (2 columns grid matching previous design) */}
             <div className="grid grid-cols-2 px-1 mt-4 gap-x-2 gap-y-3">
               {chartData.map((entry, index) => (
                 <div
@@ -410,8 +467,8 @@ export default function SekolahDashboardPage() {
                     setActiveIndex(activeIndex === index ? null : index)
                   }
                   className={`group flex cursor-pointer items-center gap-2 rounded-lg p-2 transition-all duration-150 ${activeIndex === index
-                      ? "translate-x-1 bg-teal-50 shadow-xs"
-                      : "hover:bg-teal-50/50"
+                    ? "translate-x-1 bg-teal-50 shadow-xs"
+                    : "hover:bg-teal-50/50"
                     }`}
                 >
                   <div
