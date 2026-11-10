@@ -19,136 +19,47 @@ export interface Jadwal {
 }
 
 // ========================================================
-// LOCAL PERSISTENCE HELPERS (FOR OBSERVATION BIDANG / ASSESSMENT TYPES)
+// LOCAL PERSISTENCE HELPERS (DEPRECATED - MIGRATED TO REST API)
 // ========================================================
 
 /**
- * Simpan bidang assessment yang dipilih saat observasi ke localStorage.
- * Key: "observation_bidang" (map observationId → bidang[])
+ * @deprecated Helper localStorage telah digantikan dengan sinkronisasi langsung ke REST API.
  */
 export function saveObservationBidangLocal(
-  observationId: number | string,
-  bidang: string[]
-) {
-  if (typeof window === "undefined") return;
-  try {
-    const raw = localStorage.getItem("observation_bidang");
-    const map = raw ? JSON.parse(raw) : {};
-    map[String(observationId)] = bidang;
-    localStorage.setItem("observation_bidang", JSON.stringify(map));
-  } catch (e) {
-    console.error("Failed to save observation bidang locally:", e);
-  }
-}
+  _observationId: number | string,
+  _bidang: string[]
+) { }
 
-/**
- * Ambil bidang assessment dari localStorage berdasarkan observationId.
- * Returns null jika tidak ada.
- */
 export function getObservationBidangLocal(
-  observationId: number | string
+  _observationId: number | string
 ): string[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("observation_bidang");
-    if (!raw) return null;
-    const map = JSON.parse(raw);
-    const item = map[String(observationId)];
-    if (!Array.isArray(item) || item.length === 0) return null;
-    return item;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-/**
- * Simpan mapping asessor per bidang assessment ke localStorage.
- * Disimpan berdasarkan observationId, assessmentId, dan nama anak agar dapat ditemukan di mana saja.
- */
 export function saveAssessmentAsessorByBidangLocal(
-  observationOrAssessmentId: number | string,
-  asessorByBidang: Record<string, string>,
-  childName?: string
-) {
-  if (typeof window === "undefined") return;
-  try {
-    const raw = localStorage.getItem("assessment_asessor_by_bidang");
-    const map = raw ? JSON.parse(raw) : {};
-    if (observationOrAssessmentId) {
-      map[String(observationOrAssessmentId)] = asessorByBidang;
-    }
-    if (childName && childName.trim()) {
-      map[`name_${childName.trim().toLowerCase()}`] = asessorByBidang;
-    }
-    localStorage.setItem("assessment_asessor_by_bidang", JSON.stringify(map));
-  } catch (e) {
-    console.error("Failed to save assessment asessor by bidang locally:", e);
-  }
-}
+  _observationOrAssessmentId: number | string,
+  _asessorByBidang: Record<string, string>,
+  _childName?: string
+) { }
 
-/**
- * Ambil mapping asessor per bidang assessment dari localStorage berdasarkan id atau nama anak.
- * Returns null jika tidak ada.
- */
 export function getAssessmentAsessorByBidangLocal(
-  observationOrAssessmentId?: number | string | null,
-  childName?: string | null
+  _observationOrAssessmentId?: number | string | null,
+  _childName?: string | null
 ): Record<string, string> | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("assessment_asessor_by_bidang");
-    if (!raw) return null;
-    const map = JSON.parse(raw);
-    if (observationOrAssessmentId && map[String(observationOrAssessmentId)]) {
-      return map[String(observationOrAssessmentId)];
-    }
-    if (childName && childName.trim()) {
-      const byName = map[`name_${childName.trim().toLowerCase()}`];
-      if (byName) return byName;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-// ========================================================
-// LOCAL PERSISTENCE HELPERS (FOR OBSERVATION THERAPIST)
-// ========================================================
 export function saveObservationTherapistLocal(
-  observationId: number | string,
-  therapistId: string | number,
-  therapistName: string
-) {
-  if (typeof window === "undefined") return;
-  try {
-    const raw = localStorage.getItem("observation_therapists");
-    const map = raw ? JSON.parse(raw) : {};
-    map[String(observationId)] = {
-      therapist_id: String(therapistId || ""),
-      therapist_name: therapistName || "",
-    };
-    localStorage.setItem("observation_therapists", JSON.stringify(map));
-  } catch (e) {
-    console.error("Failed to save observation therapist locally:", e);
-  }
-}
+  _observationId: number | string,
+  _therapistId: string | number,
+  _therapistName: string
+) { }
 
-export function getObservationTherapistLocal(observationId: number | string): {
+export function getObservationTherapistLocal(_observationId: number | string): {
   therapist_id: string;
   therapist_name: string;
 } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("observation_therapists");
-    if (!raw) return null;
-    const map = JSON.parse(raw);
-    const item = map[String(observationId)];
-    if (!item || (!item.therapist_name && !item.therapist_id)) return null;
-    return item;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 // ========================================================
@@ -237,30 +148,8 @@ export async function getObservations(
         (isCompleted ? (item.observer || item.therapist_name) : null) ||
         "-";
 
-      // Check local storage mapping if backend response omitted therapist
-      const localSaved =
-        typeof window !== "undefined"
-          ? getObservationTherapistLocal(item.observation_id)
-          : null;
-
-      let resolvedTherapistName =
-        therapistName && therapistName !== "-"
-          ? therapistName
-          : localSaved?.therapist_name || "-";
-
-      if (isCompleted && resolvedTherapistName === "-") {
-        const asessorSaved = getAssessmentAsessorByBidangLocal(
-          item.observation_id,
-          item.child_name
-        );
-        if (asessorSaved && Object.keys(asessorSaved).length > 0) {
-          resolvedTherapistName = Object.values(asessorSaved).join(", ");
-        }
-      }
-
-      const resolvedTherapistId = rawTherapistId
-        ? String(rawTherapistId)
-        : localSaved?.therapist_id || null;
+      const resolvedTherapistName = therapistName || "-";
+      const resolvedTherapistId = rawTherapistId ? String(rawTherapistId) : null;
 
       return {
         observation_id: item.observation_id,
@@ -354,15 +243,6 @@ export async function updateObservationSchedule(
       payload.petugas_name = petugasName;
     }
 
-    // Persist to local storage as guaranteed backup
-    if (therapistId || petugasName) {
-      saveObservationTherapistLocal(
-        observation_id,
-        therapistId || "",
-        petugasName || (therapistId ? String(therapistId) : "")
-      );
-    }
-
     let res: any;
     try {
       res = await api.put(`/observations/${observation_id}`, payload, {
@@ -397,7 +277,8 @@ export async function createObservationAgreement(
   scheduled_date: string,
   scheduled_time: string,
   petugas?: string | number,
-  petugasName?: string
+  petugasName?: string,
+  petugasByBidang?: Record<string, string>
 ) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -406,31 +287,50 @@ export async function createObservationAgreement(
       scheduled_time,
     };
 
-    const therapistId =
-      petugas !== undefined && petugas !== null && String(petugas).trim() !== "" && String(petugas) !== "-"
-        ? String(petugas).trim()
-        : petugasName !== undefined && petugasName !== null && String(petugasName).trim() !== "" && String(petugasName) !== "-"
-          ? String(petugasName).trim()
-          : undefined;
+    // Ambil opsi terapis langsung dari endpoint REST API untuk mapping assessment_detail_id & therapist_id
+    const options = await getObservationTherapistOptions(observation_id);
+    const therapistsPayload: Array<{ assessment_detail_id: number; therapist_id: string | number }> = [];
 
-    if (therapistId) {
-      payload.therapist_id = therapistId;
-      payload.observer_id = therapistId;
-      payload.terapis_id = therapistId;
+    if (Array.isArray(options) && options.length > 0) {
+      for (const opt of options) {
+        const type = (opt.type || "").toLowerCase();
+        let matchedTherapist: any = null;
+
+        if (petugasByBidang && petugasByBidang[type]) {
+          const target = petugasByBidang[type].toLowerCase().trim();
+          matchedTherapist = (opt.therapists || []).find(
+            (t: any) =>
+              (t.name || "").toLowerCase().trim() === target ||
+              String(t.id) === String(target)
+          );
+        }
+
+        if (!matchedTherapist && opt.current_therapist_id) {
+          matchedTherapist = (opt.therapists || []).find(
+            (t: any) => String(t.id) === String(opt.current_therapist_id)
+          );
+        }
+
+        if (!matchedTherapist && Array.isArray(opt.therapists) && opt.therapists.length > 0) {
+          if (petugas) {
+            matchedTherapist = opt.therapists.find((t: any) => String(t.id) === String(petugas));
+          }
+          if (!matchedTherapist) {
+            matchedTherapist = opt.therapists[0];
+          }
+        }
+
+        if (matchedTherapist) {
+          therapistsPayload.push({
+            assessment_detail_id: opt.assessment_detail_id,
+            therapist_id: matchedTherapist.id,
+          });
+        }
+      }
     }
 
-    if (petugasName) {
-      payload.observer = petugasName;
-      payload.therapist_name = petugasName;
-      payload.nama_terapis = petugasName;
-    }
-
-    if (therapistId || petugasName) {
-      saveObservationTherapistLocal(
-        observation_id,
-        therapistId || "",
-        petugasName || (therapistId ? String(therapistId) : "")
-      );
+    if (therapistsPayload.length > 0) {
+      payload.therapists = therapistsPayload;
     }
 
     const res = await api.put(
@@ -453,18 +353,7 @@ export async function getObservationDetail(observation_id: number, type: "pendin
       params: { type },
       headers: { Authorization: `Bearer ${token}` },
     });
-    const data = res.data?.data || null;
-    if (data && typeof window !== "undefined") {
-      const localSaved = getObservationTherapistLocal(observation_id);
-      if (localSaved) {
-        if (!data.therapist_name && !data.observer) {
-          data.therapist_name = localSaved.therapist_name;
-          data.observer = localSaved.therapist_name;
-          data.therapist_id = localSaved.therapist_id;
-        }
-      }
-    }
-    return data;
+    return res.data?.data || null;
   } catch (err) {
     console.error("ERROR getObservationDetail:", err);
     return null;
@@ -472,51 +361,62 @@ export async function getObservationDetail(observation_id: number, type: "pendin
 }
 
 // ========================================================
+// GET OBSERVATION THERAPIST OPTIONS
+// ========================================================
+export async function getObservationTherapistOptions(
+  observation_id: number | string
+): Promise<any[]> {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await api.get(`/observations/${observation_id}/therapist-options`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data?.data || [];
+  } catch (err) {
+    console.warn("getObservationTherapistOptions:", err);
+    return [];
+  }
+}
+
+// ========================================================
 // GET ASSESSMENT BIDANG BY OBSERVATION ID
-// Fetch daftar bidang dari endpoint assessments/pending/admin
-// yang mengembalikan tipe per assessment yang terhubung ke observation
 // ========================================================
 export async function getAssessmentBidangByObservation(
   observation_id: number | string
 ): Promise<string[]> {
   if (typeof window === "undefined") return [];
   try {
-    const token = localStorage.getItem("token");
-    if (!token) return [];
+    // 1. Prioritas Utama: Ambil dari endpoint resmi therapist-options
+    const options = await getObservationTherapistOptions(observation_id);
+    if (Array.isArray(options) && options.length > 0) {
+      const validTypes = ["paedagog", "okupasi", "wicara", "fisio"];
+      const bidang = options
+        .map((opt: any) => String(opt.type || "").toLowerCase().trim())
+        .filter((t) => validTypes.includes(t));
 
-    // Fetch semua assessment pending (belum dijadwalkan) untuk admin
-    const res = await api.get("/assessments/pending/admin", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const list: any[] = res.data?.data || [];
-
-    // Kumpulkan semua tipe bidang yang observation_id-nya cocok
-    const bidang: string[] = [];
-    const validTypes = ["paedagog", "okupasi", "wicara", "fisio"];
-
-    for (const item of list) {
-      const itemObsId =
-        item.observation_id ?? item.observasi_id ?? item.obs_id ?? null;
-
-      if (String(itemObsId) === String(observation_id)) {
-        const tipe = (item.type || item.tipe || "").toLowerCase();
-        if (validTypes.includes(tipe) && !bidang.includes(tipe)) {
-          bidang.push(tipe);
-        }
-        // Jika tipe adalah array
-        if (Array.isArray(item.type)) {
-          for (const t of item.type) {
-            const tl = String(t).toLowerCase();
-            if (validTypes.includes(tl) && !bidang.includes(tl)) {
-              bidang.push(tl);
-            }
-          }
-        }
+      const uniqueBidang = Array.from(new Set(bidang));
+      if (uniqueBidang.length > 0) {
+        return uniqueBidang;
       }
     }
 
-    return bidang;
+    // 2. Fallback: ambil dari detail observasi
+    const detail = await getObservationDetail(Number(observation_id), "completed");
+    if (!detail) return [];
+
+    const bidangKeys = ["paedagog", "okupasi", "wicara", "fisio"] as const;
+    const fromFlags = bidangKeys.filter(
+      (k) => detail[k] === true || detail[k] === 1 || detail[k] === "1"
+    );
+    if (fromFlags.length > 0) return fromFlags;
+
+    if (detail.recommendation) {
+      const rec = String(detail.recommendation).toLowerCase();
+      const matched = bidangKeys.filter((b) => rec.includes(b));
+      if (matched.length > 0) return matched;
+    }
+
+    return [];
   } catch (err) {
     console.error("ERROR getAssessmentBidangByObservation:", err);
     return [];

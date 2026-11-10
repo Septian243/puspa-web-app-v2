@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   UserCircle2,
   Home,
+  Hash,
   BriefcaseMedical,
   Mail,
   Phone,
@@ -57,7 +58,7 @@ export default function FormDetailSekolah({
                 <div className="flex items-center gap-2 mt-2 opacity-95 text-[10px] uppercase tracking-wider font-bold flex-nowrap overflow-x-auto no-scrollbar">
                   <span className="px-3 py-1 rounded-full bg-white/20 border border-white/20 shadow-xs flex items-center gap-1.5 whitespace-nowrap shrink-0">
                     <Home className="w-3.5 h-3.5 shrink-0" />
-                    <span>{sekolah.jenjang}</span>
+                    <span>{(sekolah.jenjang || "").split(" (")[0].trim() || "-"}</span>
                   </span>
                   <span
                     className={`px-3 py-1 rounded-full border shadow-xs whitespace-nowrap shrink-0 ${
@@ -85,6 +86,19 @@ export default function FormDetailSekolah({
                   </p>
                   <p className="text-sm font-bold text-[#1E5C58]">
                     @{sekolah.username} ({sekolah.role?.toLowerCase() || "sekolah"})
+                  </p>
+                </div>
+              </div>
+
+              {/* NPSN */}
+              <div className="flex items-start gap-3 bg-[#F4F9F8] p-3.5 rounded-xl border border-teal-50">
+                <Hash className="w-5 h-5 text-[#2B7A75] mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-0.5">
+                    NPSN (Nomor Pokok Sekolah Nasional)
+                  </p>
+                  <p className="text-sm font-bold text-[#1E5C58]">
+                    {sekolah.npsn || "-"}
                   </p>
                 </div>
               </div>

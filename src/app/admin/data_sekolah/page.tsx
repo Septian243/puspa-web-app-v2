@@ -32,6 +32,11 @@ export default function DataSekolahPage() {
   const [selectedSekolah, setSelectedSekolah] = useState<Sekolah | null>(null);
   const itemsPerPage = 10;
 
+  const formatJenjang = (jenjang?: string) => {
+    if (!jenjang) return "-";
+    return jenjang.split(" (")[0].trim();
+  };
+
   // Inisialisasi dan sinkronisasi dengan localStorage agar CRUD dummy bersifat fungsional & persisten
   useEffect(() => {
     try {
@@ -39,11 +44,15 @@ export default function DataSekolahPage() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized = parsed.map((item: Sekolah) =>
-            item.status?.toLowerCase() === "belum terverifikasi"
-              ? { ...item, status: "Tidak Terverifikasi" }
-              : item,
-          );
+          const normalized = parsed.map((item: Sekolah) => ({
+            ...item,
+            npsn: item.npsn || null,
+            jenjang: formatJenjang(item.jenjang),
+            status:
+              item.status?.toLowerCase() === "belum terverifikasi"
+                ? "Tidak Terverifikasi"
+                : item.status,
+          }));
           setDataSekolah(normalized);
           return;
         }
@@ -113,7 +122,7 @@ export default function DataSekolahPage() {
               ...s,
               nama: formData.nama,
               username: formData.username,
-              jenjang: formData.jenjang,
+              jenjang: formatJenjang(formData.jenjang),
               email: formData.email,
               phone: formData.telepon,
               alamat: formData.alamat,
@@ -148,8 +157,9 @@ export default function DataSekolahPage() {
     const newSekolah: Sekolah = {
       id: String(Date.now()),
       nama: formData.nama,
+      npsn: null, // Nanti pihak sekolah sendiri yang memasukkan saat edit profil
       username: formData.username,
-      jenjang: formData.jenjang,
+      jenjang: formatJenjang(formData.jenjang),
       role: "Sekolah",
       email: formData.email,
       phone: formData.telepon,
@@ -299,7 +309,7 @@ export default function DataSekolahPage() {
                       <td className="px-6 py-5">
                         <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#E6F3F0] text-[#1E5C58] text-xs font-semibold border border-teal-100/50">
                           <GraduationCap className="w-4 h-4 text-[#2B7A75]" />
-                          {item.jenjang}
+                          {formatJenjang(item.jenjang)}
                         </span>
                       </td>
 
@@ -389,7 +399,7 @@ export default function DataSekolahPage() {
                         <div className="mt-1.5 flex items-center gap-1.5">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#E6F3F0] text-[10px] font-semibold text-[#1E5C58]">
                             <GraduationCap className="w-3 h-3 text-[#2B7A75]" />
-                            {item.jenjang}
+                            {formatJenjang(item.jenjang)}
                           </span>
                         </div>
                       </div>

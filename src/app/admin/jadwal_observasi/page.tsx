@@ -35,13 +35,8 @@ import {
   Jadwal,
   updateObservationSchedule,
   createObservationAgreement,
-  getObservationTherapistLocal,
-  saveObservationTherapistLocal,
-  getObservationBidangLocal,
-  saveObservationBidangLocal,
   getAssessmentBidangByObservation,
-  saveAssessmentAsessorByBidangLocal,
-  getAssessmentAsessorByBidangLocal,
+  getObservationTherapistOptions,
 } from "@/lib/api/jadwal_observasi";
 import { getTherapists } from "@/lib/api/jadwal_terapi";
 
@@ -123,14 +118,6 @@ export default function JadwalPage() {
       if (found) {
         return found.therapist_name || found.name || "-";
       }
-    }
-    const asessorsSaved = getAssessmentAsessorByBidangLocal(item.observation_id, item.nama);
-    if (asessorsSaved && Object.keys(asessorsSaved).length > 0) {
-      return Object.values(asessorsSaved).join(", ");
-    }
-    const localTherapist = getObservationTherapistLocal(item.observation_id);
-    if (localTherapist?.therapist_name && localTherapist.therapist_name !== "-") {
-      return localTherapist.therapist_name;
     }
     return item.observer && item.observer !== "-" ? item.observer : "-";
   };
@@ -314,8 +301,6 @@ export default function JadwalPage() {
             detail.petugas?.name ||
             null;
 
-          const localSaved = getObservationTherapistLocal(pasien.observation_id);
-
           if (!detailTherapistName && detailTherapistId && therapists.length > 0) {
             const found = therapists.find(
               (t: any) => String(t.therapist_id || t.id) === String(detailTherapistId)
@@ -325,13 +310,9 @@ export default function JadwalPage() {
             }
           }
 
-          if (!detailTherapistName && localSaved) {
-            detailTherapistName = localSaved.therapist_name;
-          }
-
           const finalTherapistId = detailTherapistId
             ? String(detailTherapistId)
-            : localSaved?.therapist_id || null;
+            : null;
 
           setSelectedPasien((prev) => {
             if (!prev) return prev;
@@ -340,7 +321,7 @@ export default function JadwalPage() {
                 ? detailTherapistName
                 : prev.observer && prev.observer !== "-"
                   ? prev.observer
-                  : localSaved?.therapist_name || "-";
+                  : "-";
             return {
               ...prev,
               tanggalObservasi: detailDate || prev.tanggalObservasi,
@@ -355,55 +336,53 @@ export default function JadwalPage() {
       }
     }
 
-    // For completed tab: fetch bidang assessment dari berbagai sumber
+    // For completed tab: fetch bidang assessment langsung dari database REST API
     if (tab === "selesai") {
       try {
-        // 0. Ambil asessor per bidang yang sudah pernah disimpan (oleh admin saat Buat Jadwal Asesmen)
-        const savedAsessors = getAssessmentAsessorByBidangLocal(
-          pasien.observation_id,
-          pasien.nama
-        );
-        if (savedAsessors && Object.keys(savedAsessors).length > 0) {
-          setAsesmenPetugasByBidang(savedAsessors);
-        }
-
-        // 1. Prioritas utama: localStorage (disimpan saat terapis submit observasi)
-        const localBidang = getObservationBidangLocal(pasien.observation_id);
-        if (localBidang && localBidang.length > 0) {
-          setAllowedBidang(localBidang);
-        } else if (savedAsessors && Object.keys(savedAsessors).length > 0) {
-          setAllowedBidang(Object.keys(savedAsessors));
+        // 1. Ambil opsi bidang dari backend therapist-options (rekomendasi terapis yang tersimpan di DB)
+        const apiBidang = await getAssessmentBidangByObservation(pasien.observation_id);
+        if (apiBidang && apiBidang.length > 0) {
+          setAllowedBidang(apiBidang);
         } else {
-          // 2. Fetch dari endpoint assessments/pending/admin (paling akurat untuk data lama)
-          const apiBidang = await getAssessmentBidangByObservation(pasien.observation_id);
-          if (apiBidang.length > 0) {
-            setAllowedBidang(apiBidang);
-            // Simpan ke localStorage agar tidak perlu fetch ulang
-            saveObservationBidangLocal(pasien.observation_id, apiBidang);
-          } else {
-            // 3. Fallback: cek boolean flags atau parse teks dari detail observasi
-            const detail = await getObservationDetail(pasien.observation_id, "completed");
-            if (detail) {
-              const bidangKeys = ["paedagog", "okupasi", "wicara", "fisio"] as const;
-              const fromFlags = bidangKeys.filter(
-                (k) => detail[k] === true || detail[k] === 1 || detail[k] === "1"
-              );
-              if (fromFlags.length > 0) {
-                setAllowedBidang(fromFlags);
-                saveObservationBidangLocal(pasien.observation_id, fromFlags);
-              } else if (detail.recommendation) {
-                const parsed = parseRecommendation(String(detail.recommendation));
-                if (parsed.length > 0) {
-                  setAllowedBidang(parsed);
-                  saveObservationBidangLocal(pasien.observation_id, parsed);
-                }
+          // Fallback: cek boolean flags atau rekomendasi dari detail observasi
+          const detail = await getObservationDetail(pasien.observation_id, "completed");
+          if (detail) {
+            const bidangKeys = ["paedagog", "okupasi", "wicara", "fisio"] as const;
+            const fromFlags = bidangKeys.filter(
+              (k) => detail[k] === true || detail[k] === 1 || detail[k] === "1"
+            );
+            if (fromFlags.length > 0) {
+              setAllowedBidang(fromFlags);
+            } else if (detail.recommendation) {
+              const parsed = parseRecommendation(String(detail.recommendation));
+              if (parsed.length > 0) {
+                setAllowedBidang(parsed);
               }
             }
-            // Jika semua gagal → allowedBidang tetap undefined → tampil semua bidang
           }
         }
-      } catch {
-        // ignore - form tetap terbuka dengan semua bidang
+
+        // Ambil existing assigned assessor jika sudah pernah dipilih
+        const options = await getObservationTherapistOptions(pasien.observation_id);
+        if (Array.isArray(options) && options.length > 0) {
+          const prefilled: Record<string, string> = {};
+          for (const opt of options) {
+            const type = (opt.type || "").toLowerCase();
+            if (opt.current_therapist_id && Array.isArray(opt.therapists)) {
+              const matched = opt.therapists.find(
+                (t: any) => String(t.id) === String(opt.current_therapist_id)
+              );
+              if (matched?.name) {
+                prefilled[type] = matched.name;
+              }
+            }
+          }
+          if (Object.keys(prefilled).length > 0) {
+            setAsesmenPetugasByBidang(prefilled);
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal memuat opsi bidang asesmen:", err);
       }
     }
     setOpenAsesmen(true);
@@ -1161,15 +1140,10 @@ export default function JadwalPage() {
                   date,
                   time,
                   petugasId || petugas,
-                  petugas
+                  petugas,
+                  petugasByBidang
                 );
-                // Simpan asessor per bidang ke localStorage agar muncul di Edit Asesmen
                 if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
-                  saveAssessmentAsessorByBidangLocal(
-                    selectedPasien.observation_id,
-                    petugasByBidang,
-                    selectedPasien.nama
-                  );
                   setAsesmenPetugasByBidang(petugasByBidang);
                 }
                 showSuccessToast("Asesmen berhasil dijadwalkan!");
@@ -1182,13 +1156,6 @@ export default function JadwalPage() {
                   petugas
                 );
                 showSuccessToast("Jadwal observasi sukses disimpan!");
-              }
-              if (petugas || petugasId) {
-                saveObservationTherapistLocal(
-                  selectedPasien.observation_id,
-                  petugasId || "",
-                  petugas || ""
-                );
               }
               setOpenAsesmen(false);
               setSelectedPasien(null);

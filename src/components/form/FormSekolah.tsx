@@ -42,13 +42,13 @@ interface FormSekolahProps {
 type FormErrors = Partial<Record<keyof FormSekolahState, string>>;
 
 const jenjangPilihan = [
-  "PAUD (Pendidikan Anak Usia Dini)",
-  "TK (Taman Kanak-Kanak)",
-  "SD (Sekolah Dasar)",
-  "SMP (Sekolah Menengah Pertama)",
-  "SMA (Sekolah Menengah Atas)",
-  "SMK (Sekolah Menengah Kejuruan)",
-  "SLB (Sekolah Luar Biasa)",
+  "PAUD",
+  "TK",
+  "SD",
+  "SMP",
+  "SMA",
+  "SMK",
+  "SLB",
 ];
 
 export default function FormSekolah({
@@ -77,16 +77,14 @@ export default function FormSekolah({
   useEffect(() => {
     if (open) {
       if (isEdit && initialData) {
-        // Cocokkan jenjang dengan daftar pilihan singkatan
-        let matchedJenjang = initialData.jenjang || "";
+        // Cocokkan jenjang dengan daftar pilihan singkatan tanpa tanda kurung ()
+        const cleanJenjang = (initialData.jenjang || "").split(" (")[0].trim();
         const found = jenjangPilihan.find(
           (j) =>
-            j.toLowerCase() === matchedJenjang.toLowerCase() ||
-            j.toLowerCase().includes(matchedJenjang.toLowerCase()),
+            j.toLowerCase() === cleanJenjang.toLowerCase() ||
+            j.toLowerCase().includes(cleanJenjang.toLowerCase()),
         );
-        if (found) {
-          matchedJenjang = found;
-        }
+        const matchedJenjang = found || cleanJenjang;
 
         setForm({
           nama: initialData.nama || "",
@@ -207,7 +205,7 @@ export default function FormSekolah({
           <div
             className={`bg-gradient-to-br ${headerGradient} p-6 text-white relative overflow-hidden shrink-0 transition-colors duration-300`}
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2 pointer-events-none z-0" />
+            <div className="absolute top-0 right-0 z-0 w-32 h-32 transform translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none bg-white/10 blur-2xl" />
 
             <button
               onClick={onClose}
@@ -217,8 +215,8 @@ export default function FormSekolah({
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/30 text-white shrink-0">
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="flex items-center justify-center w-12 h-12 text-white border bg-white/20 rounded-2xl backdrop-blur-md border-white/30 shrink-0">
                 {isEdit ? (
                   <Edit3 className="w-6 h-6" />
                 ) : (
@@ -246,19 +244,18 @@ export default function FormSekolah({
           {/* Form Content */}
           <form
             onSubmit={handleSubmit}
-            className="p-6 space-y-4 overflow-y-auto flex-1"
+            className="flex-1 p-6 space-y-4 overflow-y-auto"
           >
             {/* 1. Nama Sekolah */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Nama Sekolah
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <Home
-                    className={`h-5 w-5 transition-colors ${
-                      errors.nama ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
-                    }`}
+                    className={`h-5 w-5 transition-colors ${errors.nama ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
+                      }`}
                   />
                 </div>
                 <input
@@ -268,15 +265,14 @@ export default function FormSekolah({
                   onChange={(e) =>
                     setForm({ ...form, nama: e.target.value })
                   }
-                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${
-                    errors.nama
+                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.nama
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
-                  }`}
+                    }`}
                 />
               </div>
               {errors.nama && (
-                <p className="text-xs text-red-500 mt-1 font-medium">
+                <p className="mt-1 text-xs font-medium text-red-500">
                   {errors.nama}
                 </p>
               )}
@@ -284,15 +280,14 @@ export default function FormSekolah({
 
             {/* 2. Jenjang */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Jenjang
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <GraduationCap
-                    className={`h-5 w-5 transition-colors ${
-                      errors.jenjang ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
-                    }`}
+                    className={`h-5 w-5 transition-colors ${errors.jenjang ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
+                      }`}
                   />
                 </div>
                 <select
@@ -301,13 +296,11 @@ export default function FormSekolah({
                   onChange={(e) =>
                     setForm({ ...form, jenjang: e.target.value })
                   }
-                  className={`appearance-none cursor-pointer w-full pl-11 pr-10 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm font-medium ${
-                    form.jenjang ? "text-gray-700" : "text-gray-400"
-                  } ${
-                    errors.jenjang
+                  className={`appearance-none cursor-pointer w-full pl-11 pr-10 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm font-medium ${form.jenjang ? "text-gray-700" : "text-gray-400"
+                    } ${errors.jenjang
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
-                  }`}
+                    }`}
                 >
                   <option value="" disabled className="text-gray-400">
                     Pilih Jenjang
@@ -319,11 +312,11 @@ export default function FormSekolah({
                   ))}
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-gray-400">
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="w-4 h-4" />
                 </div>
               </div>
               {errors.jenjang && (
-                <p className="text-xs text-red-500 mt-1 font-medium">
+                <p className="mt-1 text-xs font-medium text-red-500">
                   {errors.jenjang}
                 </p>
               )}
@@ -331,15 +324,14 @@ export default function FormSekolah({
 
             {/* 3. Alamat */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Alamat
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <MapPin
-                    className={`h-5 w-5 transition-colors ${
-                      errors.alamat ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
-                    }`}
+                    className={`h-5 w-5 transition-colors ${errors.alamat ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
+                      }`}
                   />
                 </div>
                 <input
@@ -349,15 +341,14 @@ export default function FormSekolah({
                   onChange={(e) =>
                     setForm({ ...form, alamat: e.target.value })
                   }
-                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${
-                    errors.alamat
+                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.alamat
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
-                  }`}
+                    }`}
                 />
               </div>
               {errors.alamat && (
-                <p className="text-xs text-red-500 mt-1 font-medium">
+                <p className="mt-1 text-xs font-medium text-red-500">
                   {errors.alamat}
                 </p>
               )}
@@ -365,15 +356,14 @@ export default function FormSekolah({
 
             {/* 4. Nama Pengguna */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Nama Pengguna
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <User
-                    className={`h-5 w-5 transition-colors ${
-                      errors.username ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
-                    }`}
+                    className={`h-5 w-5 transition-colors ${errors.username ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
+                      }`}
                   />
                 </div>
                 <input
@@ -383,15 +373,14 @@ export default function FormSekolah({
                   onChange={(e) =>
                     setForm({ ...form, username: e.target.value })
                   }
-                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${
-                    errors.username
+                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.username
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
-                  }`}
+                    }`}
                 />
               </div>
               {errors.username && (
-                <p className="text-xs text-red-500 mt-1 font-medium">
+                <p className="mt-1 text-xs font-medium text-red-500">
                   {errors.username}
                 </p>
               )}
@@ -399,15 +388,14 @@ export default function FormSekolah({
 
             {/* 5. Email */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Email
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <Mail
-                    className={`h-5 w-5 transition-colors ${
-                      errors.email ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
-                    }`}
+                    className={`h-5 w-5 transition-colors ${errors.email ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
+                      }`}
                   />
                 </div>
                 <input
@@ -417,15 +405,14 @@ export default function FormSekolah({
                   onChange={(e) =>
                     setForm({ ...form, email: e.target.value })
                   }
-                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${
-                    errors.email
+                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.email
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
-                  }`}
+                    }`}
                 />
               </div>
               {errors.email && (
-                <p className="text-xs text-red-500 mt-1 font-medium">
+                <p className="mt-1 text-xs font-medium text-red-500">
                   {errors.email}
                 </p>
               )}
@@ -433,15 +420,14 @@ export default function FormSekolah({
 
             {/* 6. Telepon */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Telepon
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <Phone
-                    className={`h-5 w-5 transition-colors ${
-                      errors.telepon ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
-                    }`}
+                    className={`h-5 w-5 transition-colors ${errors.telepon ? "text-red-400" : `text-gray-400 ${iconFocusColor}`
+                      }`}
                   />
                 </div>
                 <input
@@ -451,15 +437,14 @@ export default function FormSekolah({
                   onChange={(e) =>
                     setForm({ ...form, telepon: e.target.value })
                   }
-                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${
-                    errors.telepon
+                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.telepon
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
-                  }`}
+                    }`}
                 />
               </div>
               {errors.telepon && (
-                <p className="text-xs text-red-500 mt-1 font-medium">
+                <p className="mt-1 text-xs font-medium text-red-500">
                   {errors.telepon}
                 </p>
               )}
@@ -468,17 +453,16 @@ export default function FormSekolah({
             {/* 7. Password (Hanya muncul saat mode Tambah) */}
             {!isEdit && (
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-gray-700 ml-1">
+                <label className="ml-1 text-sm font-semibold text-gray-700">
                   Password
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                     <LockKeyhole
-                      className={`h-5 w-5 transition-colors ${
-                        errors.password
+                      className={`h-5 w-5 transition-colors ${errors.password
                           ? "text-red-400"
                           : "text-gray-400 group-focus-within:text-[#2B7A75]"
-                      }`}
+                        }`}
                     />
                   </div>
                   <input
@@ -488,11 +472,10 @@ export default function FormSekolah({
                     onChange={(e) =>
                       setForm({ ...form, password: e.target.value })
                     }
-                    className={`w-full pl-11 pr-11 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${
-                      errors.password
+                    className={`w-full pl-11 pr-11 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.password
                         ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                         : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"
-                    }`}
+                      }`}
                   />
                   <button
                     type="button"
@@ -500,14 +483,14 @@ export default function FormSekolah({
                     className="cursor-pointer absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
+                      <EyeOff className="w-5 h-5" />
                     ) : (
-                      <Eye className="h-5 w-5" />
+                      <Eye className="w-5 h-5" />
                     )}
                   </button>
                 </div>
                 {errors.password && (
-                  <p className="text-xs text-red-500 mt-1 font-medium">
+                  <p className="mt-1 text-xs font-medium text-red-500">
                     {errors.password}
                   </p>
                 )}

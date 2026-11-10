@@ -18,6 +18,7 @@ import {
   CalendarDays,
   CheckCircle2,
   FileCheck2,
+  Home,
 } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
@@ -31,10 +32,6 @@ import {
   getAssessmentDetail,
   getAssessmentAsessorsByBidang,
 } from "@/lib/api/jadwal_asessment";
-import {
-  getAssessmentAsessorByBidangLocal,
-  saveAssessmentAsessorByBidangLocal,
-} from "@/lib/api/jadwal_observasi";
 import { getTherapists } from "@/lib/api/jadwal_terapi";
 import FormDetailAsesment from "@/components/form/FormDetailAsesment";
 import { motion, AnimatePresence } from "framer-motion";
@@ -128,7 +125,7 @@ export default function JadwalAsesmenPage() {
   const [openDetail, setOpenDetail] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<{
     assessment_id: number;
-    role: "ortu" | "asessor" | "aksi";
+    role: "sekolah" | "ortu" | "asessor" | "aksi";
   } | null>(null);
   const [detailPasien, setDetailPasien] = useState<Record<string, unknown> | null>(null);
   const [openAsesmen, setOpenAsesmen] = useState(false);
@@ -197,6 +194,12 @@ export default function JadwalAsesmenPage() {
     setSelectedDate(formatted);
   };
 
+  const handleSekolahRoute = (action: string, assessment_id: number) => {
+    if (action === "upload") {
+      router.push(`/admin/ortu/upload_file?assessment_id=${assessment_id}`);
+    }
+  };
+
   const handleOrtuRoute = (action: string, assessment_id: number) => {
     const base = "/admin/ortu";
     const routes: Record<string, string> = {
@@ -222,30 +225,15 @@ export default function JadwalAsesmenPage() {
     router.push(`${routes[action]}?assessment_id=${assessment_id}`);
   };
 
-  /** Buka modal Edit Asesmen dengan fetch asessor per bidang terlebih dahulu */
+  /** Buka modal Edit Asesmen dengan fetch asessor per bidang dari API */
   const handleOpenAsesmen = async (j: Jadwal) => {
     setSelectedPasien(j);
     setOpenAsesmen(false);
     setAsesmenLoading(true);
     try {
-      // 1. Cek dari localStorage (disimpan dari Buat Jadwal Asesmen di Observasi atau Edit sebelumnya)
-      const localDirect = getAssessmentAsessorByBidangLocal(j.assessment_id, j.nama);
-      let collected: Record<string, string> = localDirect ? { ...localDirect } : {};
+      let collected: Record<string, string> = {};
 
-      // 2. Fetch detail assessment dari API untuk mendapatkan observation_id jika ada
-      try {
-        const detail = await getAssessmentDetail(j.assessment_id);
-        if (detail && detail.observation_id) {
-          const fromObs = getAssessmentAsessorByBidangLocal(detail.observation_id, j.nama);
-          if (fromObs) {
-            collected = { ...fromObs, ...collected };
-          }
-        }
-      } catch (err) {
-        console.warn("Gagal fetch detail assessment:", err);
-      }
-
-      // 3. Fetch asessor per bidang dari endpoint API detail / assessor
+      // 1. Fetch asessor per bidang dari endpoint API detail / assessor
       try {
         const fetched = await getAssessmentAsessorsByBidang(j.assessment_id);
         if (fetched && Object.keys(fetched).length > 0) {
@@ -255,7 +243,7 @@ export default function JadwalAsesmenPage() {
         console.warn("Gagal fetch assessor dari API:", err);
       }
 
-      // 4. Fallback ke j.assessorsByBidang jika ada
+      // 2. Fallback ke j.assessorsByBidang jika ada
       if (j.assessorsByBidang && Object.keys(j.assessorsByBidang).length > 0) {
         collected = { ...j.assessorsByBidang, ...collected };
       }
@@ -266,8 +254,7 @@ export default function JadwalAsesmenPage() {
         setCurrentAsessorsByBidang(undefined);
       }
     } catch {
-      const fallback = getAssessmentAsessorByBidangLocal(j.assessment_id, j.nama);
-      setCurrentAsessorsByBidang(fallback || j.assessorsByBidang || undefined);
+      setCurrentAsessorsByBidang(j.assessorsByBidang || undefined);
     } finally {
       setAsesmenLoading(false);
       setOpenAsesmen(true);
@@ -654,6 +641,80 @@ export default function JadwalAsesmenPage() {
                               </div>
                             ) : (
                               <div className="flex justify-center gap-2">
+                                {/* DROPDOWN SEKOLAH */}
+                                <div className="relative inline-block">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenDropdown(
+                                        openDropdown?.assessment_id ===
+                                          j.assessment_id &&
+                                          openDropdown?.role === "sekolah"
+                                          ? null
+                                          : {
+                                              assessment_id: j.assessment_id,
+                                              role: "sekolah",
+                                            },
+                                      );
+                                    }}
+                                    className="cursor-pointer inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold bg-[#80AAB1] text-white border-2 border-transparent rounded-xl hover:bg-[#6e99a0] transition-all shadow-sm"
+                                  >
+                                    <Home className="w-3.5 h-3.5" /> Sekolah{" "}
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </button>
+                                  <AnimatePresence>
+                                    {openDropdown?.assessment_id ===
+                                      j.assessment_id &&
+                                      openDropdown?.role === "sekolah" && (
+                                        <motion.div
+                                          initial={{
+                                            opacity: 0,
+                                            y: -10,
+                                            scale: 0.95,
+                                          }}
+                                          animate={{
+                                            opacity: 1,
+                                            y: 0,
+                                            scale: 1,
+                                          }}
+                                          exit={{
+                                            opacity: 0,
+                                            y: -10,
+                                            scale: 0.95,
+                                          }}
+                                          className="absolute left-0 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden z-50 text-left"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <div className="bg-[#F0FDFA] px-3.5 py-2.5 border-b border-teal-100 flex items-center justify-between">
+                                            <span className="text-[10px] font-extrabold text-[#156292] uppercase tracking-wider">
+                                              Kirim Hasil Asesmen
+                                            </span>
+                                          </div>
+                                          <div className="p-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setOpenDropdown(null);
+                                                handleSekolahRoute(
+                                                  "upload",
+                                                  j.assessment_id,
+                                                );
+                                              }}
+                                              className="w-full flex justify-between items-center px-3 py-2.5 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#156292] transition-colors"
+                                            >
+                                              <div className="flex items-center gap-2.5">
+                                                <Upload className="w-4 h-4 text-[#156292]" />{" "}
+                                                Upload File
+                                              </div>
+                                              <ChevronRight className="w-3.5 h-3.5 opacity-40" />
+                                            </button>
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                  </AnimatePresence>
+                                </div>
+
                                 {/* DROPDOWN ORTU */}
                                 <div className="relative inline-block">
                                   <button
@@ -913,25 +974,93 @@ export default function JadwalAsesmenPage() {
                             </button>
                           </div>
                         ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenDropdown(
-                                  openDropdown?.assessment_id ===
-                                    j.assessment_id &&
-                                    openDropdown?.role === "ortu"
-                                    ? null
-                                    : {
-                                        assessment_id: j.assessment_id,
-                                        role: "ortu",
-                                      },
-                                );
-                              }}
-                              className="py-2.5 bg-[#81B7A9] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 relative"
-                            >
-                              <User className="w-3.5 h-3.5" /> Data Ortu
-                              <ChevronDown className="w-3 h-3" />
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {/* DROPDOWN SEKOLAH MOBILE */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdown(
+                                    openDropdown?.assessment_id ===
+                                      j.assessment_id &&
+                                      openDropdown?.role === "sekolah"
+                                      ? null
+                                      : {
+                                          assessment_id: j.assessment_id,
+                                          role: "sekolah",
+                                        },
+                                  );
+                                }}
+                                className="w-full py-2.5 bg-[#80AAB1] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1"
+                              >
+                                <Home className="w-3.5 h-3.5 shrink-0" />{" "}
+                                <span className="truncate">Sekolah</span>
+                                <ChevronDown className="w-3 h-3 shrink-0" />
+                              </button>
+                              <AnimatePresence>
+                                {openDropdown?.assessment_id ===
+                                  j.assessment_id &&
+                                  openDropdown?.role === "sekolah" && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: 10 }}
+                                      className="absolute bottom-full left-0 mb-2 w-48 bg-white border border-gray-100 rounded-xl shadow-2xl overflow-hidden z-50 text-left"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="bg-[#F0FDFA] px-3 py-2 border-b border-teal-100 flex items-center justify-between">
+                                        <span className="text-[10px] font-extrabold text-[#156292] uppercase tracking-wider">
+                                          Kirim Hasil Asesmen
+                                        </span>
+                                      </div>
+                                      <div className="p-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenDropdown(null);
+                                            handleSekolahRoute(
+                                              "upload",
+                                              j.assessment_id,
+                                            );
+                                          }}
+                                          className="w-full px-3 py-2.5 text-[10px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#156292] flex items-center justify-between rounded-lg"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <Upload className="w-3.5 h-3.5 text-[#156292]" />
+                                            <span>Upload File</span>
+                                          </div>
+                                          <ChevronRight className="w-3 h-3 opacity-30" />
+                                        </button>
+                                      </div>
+                                    </motion.div>
+                                  )}
+                              </AnimatePresence>
+                            </div>
+
+                            {/* DROPDOWN ORTU MOBILE */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdown(
+                                    openDropdown?.assessment_id ===
+                                      j.assessment_id &&
+                                      openDropdown?.role === "ortu"
+                                      ? null
+                                      : {
+                                          assessment_id: j.assessment_id,
+                                          role: "ortu",
+                                        },
+                                  );
+                                }}
+                                className="w-full py-2.5 bg-[#81B7A9] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1"
+                              >
+                                <User className="w-3.5 h-3.5 shrink-0" />{" "}
+                                <span className="truncate">Ortu</span>
+                                <ChevronDown className="w-3 h-3 shrink-0" />
+                              </button>
                               <AnimatePresence>
                                 {openDropdown?.assessment_id ===
                                   j.assessment_id &&
@@ -945,13 +1074,15 @@ export default function JadwalAsesmenPage() {
                                     >
                                       {ORTU_ACTIONS.map((item) => (
                                         <button
+                                          type="button"
                                           key={item.key}
-                                          onClick={() =>
+                                          onClick={() => {
+                                            setOpenDropdown(null);
                                             handleOrtuRoute(
                                               item.key,
                                               j.assessment_id,
-                                            )
-                                          }
+                                            );
+                                          }}
                                           className="w-full px-3 py-2.5 text-[10px] font-bold text-gray-700 hover:bg-gray-50 flex items-center justify-between border-b border-gray-50 last:border-0"
                                         >
                                           {item.label}
@@ -961,26 +1092,31 @@ export default function JadwalAsesmenPage() {
                                     </motion.div>
                                   )}
                               </AnimatePresence>
-                            </button>
+                            </div>
 
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenDropdown(
-                                  openDropdown?.assessment_id ===
-                                    j.assessment_id &&
-                                    openDropdown?.role === "asessor"
-                                    ? null
-                                    : {
-                                        assessment_id: j.assessment_id,
-                                        role: "asessor",
-                                      },
-                                );
-                              }}
-                              className="py-2.5 bg-white border-2 border-indigo-100 text-[#5F52BF] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 relative"
-                            >
-                              <Stethoscope className="w-3.5 h-3.5" /> Asesor
-                              <ChevronDown className="w-3 h-3" />
+                            {/* DROPDOWN ASESOR MOBILE */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdown(
+                                    openDropdown?.assessment_id ===
+                                      j.assessment_id &&
+                                      openDropdown?.role === "asessor"
+                                      ? null
+                                      : {
+                                          assessment_id: j.assessment_id,
+                                          role: "asessor",
+                                        },
+                                  );
+                                }}
+                                className="w-full py-2.5 bg-white border-2 border-indigo-100 text-[#5F52BF] rounded-xl text-xs font-bold flex items-center justify-center gap-1"
+                              >
+                                <Stethoscope className="w-3.5 h-3.5 shrink-0" />{" "}
+                                <span className="truncate">Asesor</span>
+                                <ChevronDown className="w-3 h-3 shrink-0" />
+                              </button>
                               <AnimatePresence>
                                 {openDropdown?.assessment_id ===
                                   j.assessment_id &&
@@ -994,13 +1130,15 @@ export default function JadwalAsesmenPage() {
                                     >
                                       {ASESSOR_ACTIONS.map((item) => (
                                         <button
+                                          type="button"
                                           key={item.key}
-                                          onClick={() =>
+                                          onClick={() => {
+                                            setOpenDropdown(null);
                                             handleAsessorRoute(
                                               item.key,
                                               j.assessment_id,
-                                            )
-                                          }
+                                            );
+                                          }}
                                           className="w-full px-3 py-2.5 text-[10px] font-bold text-gray-700 hover:bg-indigo-50 flex items-center justify-between border-b border-gray-50 last:border-0"
                                         >
                                           {item.label}
@@ -1010,7 +1148,7 @@ export default function JadwalAsesmenPage() {
                                     </motion.div>
                                   )}
                               </AnimatePresence>
-                            </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1081,13 +1219,6 @@ export default function JadwalAsesmenPage() {
                 date,
                 time,
               );
-              if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
-                saveAssessmentAsessorByBidangLocal(
-                  selectedPasien.assessment_id,
-                  petugasByBidang,
-                  selectedPasien.nama
-                );
-              }
               setOpenAsesmen(false);
               setSelectedPasien(null);
               setCurrentAsessorsByBidang(undefined);

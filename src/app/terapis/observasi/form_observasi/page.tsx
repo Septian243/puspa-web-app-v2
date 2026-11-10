@@ -3,12 +3,12 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { 
-  X, 
-  ChevronLeft, 
-  ChevronRight, 
-  Check, 
-  ClipboardList, 
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  ClipboardList,
   HelpCircle,
   FileText,
   AlertCircle
@@ -18,7 +18,6 @@ import {
   getObservationQuestions,
 } from "@/lib/api/observasiSubmit";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
-import { saveObservationBidangLocal } from "@/lib/api/jadwal_observasi";
 
 type Question = {
   question_id: number;
@@ -185,15 +184,6 @@ export default function FormObservasiPage() {
     try {
       const res = await submitObservation(pasien.observation_id, payload);
       if (res?.success) {
-        // Simpan bidang assessment yang dipilih ke localStorage sebagai fallback untuk admin
-        const selectedBidang: string[] = [];
-        if (payload.paedagog) selectedBidang.push("paedagog");
-        if (payload.okupasi) selectedBidang.push("okupasi");
-        if (payload.wicara) selectedBidang.push("wicara");
-        if (payload.fisio) selectedBidang.push("fisio");
-        if (selectedBidang.length > 0 && pasien.observation_id) {
-          saveObservationBidangLocal(pasien.observation_id, selectedBidang);
-        }
         showSuccessToast("Observasi berhasil disimpan! ✅");
         window.location.href = "/terapis/observasi/riwayat";
       } else {
@@ -210,7 +200,7 @@ export default function FormObservasiPage() {
   return (
     <div className="p-4 md:p-6 space-y-4 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">
       {/* ================= HEADER ================= */}
-      <div className="flex justify-between items-center border-b border-teal-100/50 pb-3">
+      <div className="flex items-center justify-between pb-3 border-b border-teal-100/50">
         <div>
           <h1 className="text-lg md:text-xl font-extrabold tracking-tight text-[#1E5C58]">
             Form Observasi Klinis
@@ -236,9 +226,9 @@ export default function FormObservasiPage() {
         <>
           {/* ================= STEPPER & SCORE PANEL ================= */}
           {step === "observasi" && kategoriList.length > 0 && (
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 rounded-xl border border-teal-50/60 shadow-sm">
+            <div className="flex flex-col items-start justify-between gap-4 p-4 bg-white border shadow-sm lg:flex-row lg:items-center rounded-xl border-teal-50/60">
               {/* Stepper Buttons */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
+              <div className="flex items-center w-full gap-2 pb-1 overflow-x-auto lg:pb-0 lg:w-auto">
                 {kategoriList.map((k, i) => {
                   const pertanyaanKategori = groupedQuestions[k];
                   const totalQs = pertanyaanKategori.length;
@@ -252,21 +242,19 @@ export default function FormObservasiPage() {
                     <button
                       key={k}
                       onClick={() => setActiveTab(k)}
-                      className={`cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-300 shrink-0 ${
-                        isActive
-                          ? "bg-[#1E5C58] border-[#1E5C58] text-white shadow-sm"
-                          : isCompleted
+                      className={`cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-300 shrink-0 ${isActive
+                        ? "bg-[#1E5C58] border-[#1E5C58] text-white shadow-sm"
+                        : isCompleted
                           ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                           : "bg-[#EAF4F2]/30 border-teal-50/50 text-[#1E5C58]/80 hover:bg-white/80"
-                      }`}
+                        }`}
                     >
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                        isActive 
-                          ? "bg-white text-[#1E5C58]" 
-                          : isCompleted 
-                          ? "bg-emerald-500 text-white" 
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${isActive
+                        ? "bg-white text-[#1E5C58]"
+                        : isCompleted
+                          ? "bg-emerald-500 text-white"
                           : "bg-teal-50 text-[#1E5C58]"
-                      }`}>
+                        }`}>
                         {isCompleted ? <Check className="w-3 h-3 stroke-[3]" /> : i + 1}
                       </span>
                       <span>{k}</span>
@@ -288,20 +276,19 @@ export default function FormObservasiPage() {
           {/* ================= STEP: OBSERVASI ================= */}
           {step === "observasi" && kategoriList.length > 0 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {groupedQuestions[activeTab]?.map((q: Question) => {
                   const isAnswered = answers[q.question_id]?.jawaban !== undefined;
                   return (
-                    <div 
-                      key={q.question_id} 
-                      className={`p-3.5 rounded-xl border transition-all duration-300 flex flex-col justify-between gap-3 ${
-                        isAnswered 
-                          ? "border-[#81B7A9]/40 bg-[#EAF4F2]/10 shadow-[0_2px_8px_rgba(30,92,88,0.02)]" 
-                          : "border-gray-200 bg-white shadow-sm"
-                      }`}
+                    <div
+                      key={q.question_id}
+                      className={`p-3.5 rounded-xl border transition-all duration-300 flex flex-col justify-between gap-3 ${isAnswered
+                        ? "border-[#81B7A9]/40 bg-[#EAF4F2]/10 shadow-[0_2px_8px_rgba(30,92,88,0.02)]"
+                        : "border-gray-200 bg-white shadow-sm"
+                        }`}
                     >
                       <div className="space-y-2.5">
-                        <div className="flex justify-between items-start gap-4">
+                        <div className="flex items-start justify-between gap-4">
                           <p className="font-extrabold text-[#1E5C58] leading-relaxed text-xs md:text-sm">
                             {q.question_number}. {q.question_text}
                           </p>
@@ -323,17 +310,16 @@ export default function FormObservasiPage() {
                               }
                             />
                           </div>
-                          
+
                           {/* Tactile Toggle Buttons for Ya/Tidak */}
-                          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                          <div className="flex items-center justify-end w-full gap-2 shrink-0 sm:w-auto">
                             <button
                               type="button"
                               onClick={() => handleChange(q.question_id, "jawaban", true)}
-                              className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all duration-200 flex items-center gap-1 cursor-pointer w-1/2 sm:w-auto justify-center ${
-                                answers[q.question_id]?.jawaban === true
-                                  ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
-                                  : "bg-white border-teal-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"
-                              }`}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all duration-200 flex items-center gap-1 cursor-pointer w-1/2 sm:w-auto justify-center ${answers[q.question_id]?.jawaban === true
+                                ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                                : "bg-white border-teal-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"
+                                }`}
                             >
                               <Check className="w-3.5 h-3.5" />
                               <span>Ya</span>
@@ -341,11 +327,10 @@ export default function FormObservasiPage() {
                             <button
                               type="button"
                               onClick={() => handleChange(q.question_id, "jawaban", false)}
-                              className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all duration-200 flex items-center gap-1 cursor-pointer w-1/2 sm:w-auto justify-center ${
-                                answers[q.question_id]?.jawaban === false
-                                  ? "bg-rose-600 border-rose-600 text-white shadow-sm"
-                                  : "bg-white border-teal-100 text-gray-600 hover:bg-rose-50 hover:text-rose-700"
-                              }`}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all duration-200 flex items-center gap-1 cursor-pointer w-1/2 sm:w-auto justify-center ${answers[q.question_id]?.jawaban === false
+                                ? "bg-rose-600 border-rose-600 text-white shadow-sm"
+                                : "bg-white border-teal-100 text-gray-600 hover:bg-rose-50 hover:text-rose-700"
+                                }`}
                             >
                               <X className="w-3.5 h-3.5" />
                               <span>Tidak</span>
@@ -359,7 +344,7 @@ export default function FormObservasiPage() {
               </div>
 
               {/* Navigation Actions */}
-              <div className="flex justify-between items-center pt-3">
+              <div className="flex items-center justify-between pt-3">
                 <div>
                   {activeTab !== kategoriList[0] && (
                     <button
@@ -407,14 +392,14 @@ export default function FormObservasiPage() {
           {/* ================= STEP: KESIMPULAN & REKOMENDASI ================= */}
           {step === "kesimpulan" && (
             <div className="bg-white border border-teal-50/50 shadow-sm rounded-xl p-4 md:p-6 space-y-4 text-[#1E5C58]">
-              <div className="border-b border-gray-100 pb-3">
-                <h2 className="text-base md:text-lg font-extrabold tracking-tight">Evaluasi & Rekomendasi Akhir</h2>
+              <div className="pb-3 border-b border-gray-100">
+                <h2 className="text-base font-extrabold tracking-tight md:text-lg">Evaluasi & Rekomendasi Akhir</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Lengkapi kesimpulan klinis hasil observasi untuk pasien.</p>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
                 {/* Left side: Patient info & Checklists */}
-                <div className="lg:col-span-5 space-y-4">
+                <div className="space-y-4 lg:col-span-5">
                   <div className="bg-teal-50/20 border border-teal-100/30 rounded-xl p-3.5 space-y-2.5">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#81B7A9]">Informasi Pasien</h3>
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -435,18 +420,17 @@ export default function FormObservasiPage() {
 
                   {/* Checklist Rekomendasi Assessment */}
                   <div className="space-y-2">
-                    <label className="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">Rekomendasi Assessment Lanjutan</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className="block text-xs font-extrabold tracking-wider text-gray-700 uppercase">Rekomendasi Assessment Lanjutan</label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {["(PLB) Paedagog", "Terapi Okupasi", "Terapi Wicara", "Fisioterapi"].map((item) => {
                         const isChecked = rekomendasiAssessment.includes(item);
                         return (
-                          <label 
-                            key={item} 
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-xs font-bold ${
-                              isChecked
-                                ? "bg-[#1E5C58] border-[#1E5C58] text-white shadow-sm"
-                                : "bg-white border-teal-100/60 text-gray-700 hover:bg-teal-50/20"
-                            }`}
+                          <label
+                            key={item}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-xs font-bold ${isChecked
+                              ? "bg-[#1E5C58] border-[#1E5C58] text-white shadow-sm"
+                              : "bg-white border-teal-100/60 text-gray-700 hover:bg-teal-50/20"
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -464,9 +448,9 @@ export default function FormObservasiPage() {
                 </div>
 
                 {/* Right side: Textareas */}
-                <div className="lg:col-span-7 space-y-4">
+                <div className="space-y-4 lg:col-span-7">
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">Kesimpulan Observasi</label>
+                    <label className="block text-xs font-extrabold tracking-wider text-gray-700 uppercase">Kesimpulan Observasi</label>
                     <textarea
                       placeholder="Tuliskan kesimpulan evaluasi secara lengkap dan komprehensif..."
                       className="w-full border border-teal-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] hover:border-teal-200 transition-colors text-xs font-semibold text-gray-700 leading-relaxed"
@@ -477,7 +461,7 @@ export default function FormObservasiPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-extrabold text-gray-700 uppercase tracking-wider">Rekomendasi / Saran Lanjutan</label>
+                    <label className="block text-xs font-extrabold tracking-wider text-gray-700 uppercase">Rekomendasi / Saran Lanjutan</label>
                     <textarea
                       placeholder="Tuliskan saran tindakan atau anjuran lanjutan untuk orang tua..."
                       className="w-full border border-teal-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#81B7A9] hover:border-teal-200 transition-colors text-xs font-semibold text-gray-700 leading-relaxed"
@@ -517,33 +501,33 @@ export default function FormObservasiPage() {
           {/* ================= STEP: REVIEW DATA ================= */}
           {step === "review" && (
             <div className="bg-white border border-teal-50/50 shadow-sm rounded-xl p-4 md:p-6 space-y-4 text-[#1E5C58]">
-              <div className="border-b border-gray-100 pb-3">
-                <h2 className="text-base md:text-lg font-extrabold tracking-tight">Review Hasil Observasi</h2>
+              <div className="pb-3 border-b border-gray-100">
+                <h2 className="text-base font-extrabold tracking-tight md:text-lg">Review Hasil Observasi</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Periksa kembali data sebelum menyimpan ke database.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#EAF4F2]/30 border border-teal-50 rounded-xl p-3.5 text-xs font-bold">
                 <div>
                   <span className="block text-[9px] text-gray-400 uppercase">Nama Pasien</span>
-                  <span className="text-gray-700 text-sm font-bold">{pasien.nama}</span>
+                  <span className="text-sm font-bold text-gray-700">{pasien.nama}</span>
                 </div>
                 <div>
                   <span className="block text-[9px] text-gray-400 uppercase">Tanggal Observasi</span>
-                  <span className="text-gray-700 text-sm font-bold">{pasien.tglObservasi}</span>
+                  <span className="text-sm font-bold text-gray-700">{pasien.tglObservasi}</span>
                 </div>
                 <div>
                   <span className="block text-[9px] text-gray-400 uppercase">Akumulasi Skor</span>
-                  <span className="text-teal-700 text-sm font-extrabold">{totalScore}</span>
+                  <span className="text-sm font-extrabold text-teal-700">{totalScore}</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div className="bg-[#EAF4F2]/10 border border-teal-50 rounded-xl p-4 space-y-1">
                   <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
                     <FileText className="w-3.5 h-3.5 text-[#81B7A9]" />
                     <span>Kesimpulan Evaluasi</span>
                   </div>
-                  <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line font-medium">
+                  <p className="text-xs font-medium leading-relaxed text-gray-700 whitespace-pre-line">
                     {kesimpulan}
                   </p>
                 </div>
@@ -554,7 +538,7 @@ export default function FormObservasiPage() {
                       <AlertCircle className="w-3.5 h-3.5 text-[#81B7A9]" />
                       <span>Rekomendasi Lanjutan</span>
                     </div>
-                    <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line font-medium">
+                    <p className="text-xs font-medium leading-relaxed text-gray-700 whitespace-pre-line">
                       {rekomendasiLanjutan || "Tidak ada rekomendasi tertulis"}
                     </p>
                   </div>
