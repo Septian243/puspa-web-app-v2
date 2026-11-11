@@ -38,7 +38,7 @@ function PaedagogFormContent() {
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("assessment_id");
 
-  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId);
+  const { steps, loading: stepsLoading, getNextPath, getPrevPath, isLastStep } = useAssessmentSteps(assessmentId);
   const activeStep = steps.findIndex((s) => pathname.includes(s.path));
 
   const [groups, setGroups] = useState<Group[]>([]);
@@ -140,7 +140,7 @@ function PaedagogFormContent() {
       await submitParentAssessment(assessmentId, "paedagog_parent", { answers: formattedAnswers });
       addToast("success", "Semua data assessment berhasil disimpan!", "Assessment selesai. Mengarahkan...");
       setTimeout(() => {
-        router.push(`/orangtua/assessment/kategori?assessment_id=${assessmentId}`);
+        router.push(getNextPath("paedagog"));
       }, 800);
     } catch (error: any) {
       console.error(error);
@@ -261,7 +261,7 @@ function PaedagogFormContent() {
         {/* Navigation Buttons - Responsive */}
         <div className="flex flex-col sm:flex-row justify-between mt-10 gap-4 pt-6 border-t border-gray-100">
           <button
-            onClick={currentStep > 0 ? handlePreviousGroup : () => router.push(`/orangtua/assessment/kategori/wicara?assessment_id=${assessmentId}`)}
+            onClick={currentStep > 0 ? handlePreviousGroup : () => router.push(getPrevPath("paedagog"))}
             className="px-6 py-3.5 rounded-2xl border border-gray-200 text-[#1E5C58] font-bold bg-white hover:bg-gray-50 transition-all text-xs order-2 sm:order-1 active:scale-95 cursor-pointer text-center"
           >
             Sebelumnya
@@ -281,7 +281,7 @@ function PaedagogFormContent() {
                 disabled={submitting}
                 className="px-10 py-3.5 bg-[#2B7A75] hover:bg-[#1E5C58] disabled:opacity-60 text-white rounded-2xl font-bold transition-all shadow-md shadow-teal-500/10 active:scale-95 text-xs w-full sm:w-auto cursor-pointer text-center flex items-center justify-center gap-1.5"
               >
-                {submitting ? "Menyimpan..." : "Simpan & Selesai"}
+                {submitting ? "Menyimpan..." : isLastStep("paedagog") ? "Simpan & Selesai" : "Simpan & Lanjutkan"}
               </button>
             )}
           </div>

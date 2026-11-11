@@ -25,13 +25,17 @@ import "react-calendar/dist/Calendar.css";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { useRouter, useSearchParams } from "next/navigation";
-import FormAturAsesmen from "@/components/form/FormAturAsesmen";
+import FormAturAsesmen, { normalizeBidangKey, BidangKey } from "@/components/form/FormAturAsesmen";
 import {
   getAssessmentsAdmin,
   updateAsessmentSchedule,
   getAssessmentDetail,
   getAssessmentAsessorsByBidang,
 } from "@/lib/api/jadwal_asessment";
+import {
+  getAssessmentAsessorByBidangLocal,
+  saveAssessmentAsessorByBidangLocal,
+} from "@/lib/api/jadwal_observasi";
 import { getTherapists } from "@/lib/api/jadwal_terapi";
 import FormDetailAsesment from "@/components/form/FormDetailAsesment";
 import { motion, AnimatePresence } from "framer-motion";
@@ -231,21 +235,36 @@ export default function JadwalAsesmenPage() {
     setOpenAsesmen(false);
     setAsesmenLoading(true);
     try {
-      let collected: Record<string, string> = {};
+      const collected: Record<string, string> = {};
 
-      // 1. Fetch asessor per bidang dari endpoint API detail / assessor
+      // 1. Fetch asessor per bidang dari endpoint API resmi therapist-options
       try {
         const fetched = await getAssessmentAsessorsByBidang(j.assessment_id);
         if (fetched && Object.keys(fetched).length > 0) {
-          collected = { ...fetched, ...collected };
+          for (const [k, v] of Object.entries(fetched)) {
+            const norm = normalizeBidangKey(k) || k;
+            if (norm && v) collected[norm] = v;
+          }
         }
       } catch (err) {
         console.warn("Gagal fetch assessor dari API:", err);
       }
 
-      // 2. Fallback ke j.assessorsByBidang jika ada
+      // 2. Fallback ke local storage jika belum ada di response API
+      const localDirect = getAssessmentAsessorByBidangLocal(j.assessment_id, j.nama);
+      if (localDirect && Object.keys(localDirect).length > 0) {
+        for (const [k, v] of Object.entries(localDirect)) {
+          const norm = normalizeBidangKey(k) || k;
+          if (norm && v && !collected[norm]) collected[norm] = v;
+        }
+      }
+
+      // 3. Fallback ke j.assessorsByBidang jika ada
       if (j.assessorsByBidang && Object.keys(j.assessorsByBidang).length > 0) {
-        collected = { ...j.assessorsByBidang, ...collected };
+        for (const [k, v] of Object.entries(j.assessorsByBidang)) {
+          const norm = normalizeBidangKey(k) || k;
+          if (norm && v && !collected[norm]) collected[norm] = v;
+        }
       }
 
       if (Object.keys(collected).length > 0) {
@@ -254,7 +273,8 @@ export default function JadwalAsesmenPage() {
         setCurrentAsessorsByBidang(undefined);
       }
     } catch {
-      setCurrentAsessorsByBidang(j.assessorsByBidang || undefined);
+      const fallback = getAssessmentAsessorByBidangLocal(j.assessment_id, j.nama);
+      setCurrentAsessorsByBidang(fallback || j.assessorsByBidang || undefined);
     } finally {
       setAsesmenLoading(false);
       setOpenAsesmen(true);
@@ -1192,14 +1212,16 @@ export default function JadwalAsesmenPage() {
               selectedPasien.tipe && selectedPasien.tipe !== "-"
                 ? selectedPasien.tipe
                     .split(",")
-                    .map((t) => t.trim().toLowerCase())
-                    .filter(Boolean)
+                    .map((t) => normalizeBidangKey(t.trim()))
+                    .filter((k): k is BidangKey => k !== null)
                 : [];
             const fromAsessors = currentAsessorsByBidang
               ? Object.keys(currentAsessorsByBidang)
+                  .map((k) => normalizeBidangKey(k))
+                  .filter((k): k is BidangKey => k !== null)
               : [];
             const combined = Array.from(new Set([...fromTipe, ...fromAsessors]));
-            return combined.length > 0 ? combined : undefined;
+            return combined.length > 0 ? (combined as string[]) : undefined;
           })()}
           petugasList={therapists.map((t: any) => ({
             id: t.therapist_id || t.id,
@@ -1218,7 +1240,15 @@ export default function JadwalAsesmenPage() {
                 selectedPasien.assessment_id,
                 date,
                 time,
+                petugasByBidang
               );
+              if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
+                saveAssessmentAsessorByBidangLocal(
+                  selectedPasien.assessment_id,
+                  petugasByBidang,
+                  selectedPasien.nama
+                );
+              }
               setOpenAsesmen(false);
               setSelectedPasien(null);
               setCurrentAsessorsByBidang(undefined);

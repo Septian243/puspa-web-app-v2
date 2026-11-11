@@ -21,14 +21,34 @@ export interface PetugasOption {
 }
 
 // Bidang definitions for asesmen mode
-const BIDANG_LIST = [
+export const BIDANG_LIST = [
   { key: "wicara", label: "Wicara", color: "#22C55E", section: "wicara" },
   { key: "paedagog", label: "Paedagog", color: "#EAB308", section: "paedagog" },
   { key: "fisio", label: "Fisio", color: "#14B8A6", section: "fisio" },
   { key: "okupasi", label: "Okupasi", color: "#EC4899", section: "okupasi" },
 ] as const;
 
-type BidangKey = (typeof BIDANG_LIST)[number]["key"];
+export type BidangKey = (typeof BIDANG_LIST)[number]["key"];
+
+/**
+ * Normalisasi string bidang ke bentuk standar (wicara | paedagog | fisio | okupasi).
+ * Mendukung variasi seperti: "fisioterapi", "okupasi", "terapi okupasi", "paedagogik", "plb", dll.
+ */
+export function normalizeBidangKey(raw?: string | null): BidangKey | null {
+  if (!raw) return null;
+  const s = raw.toLowerCase().trim();
+  if (s === "fisio" || s.includes("fisio") || s.includes("physio")) return "fisio";
+  if (s === "okupasi" || s.includes("okupasi") || s.includes("occupat") || s === "ot") return "okupasi";
+  if (s === "wicara" || s.includes("wicara") || s.includes("speech") || s === "tw") return "wicara";
+  if (
+    s === "paedagog" ||
+    s.includes("paedagog") ||
+    s.includes("pedagog") ||
+    s.includes("plb")
+  )
+    return "paedagog";
+  return null;
+}
 
 // Remove "umum" from the BidangKey union since it's not in BIDANG_LIST anymore
 
@@ -348,9 +368,32 @@ export default function FormAturAsesmen({
   const isAsesmenMode = !title || title.toLowerCase().includes("asesmen");
 
   // Filter BIDANG_LIST to only allowed bidang when prop is provided
-  const activeBidangList = isAsesmenMode && allowedBidang && allowedBidang.length > 0
-    ? BIDANG_LIST.filter((b) => allowedBidang.map((s) => s.toLowerCase()).includes(b.key))
-    : BIDANG_LIST;
+  const activeBidangList = useMemo(() => {
+    if (!isAsesmenMode) return BIDANG_LIST;
+    if (allowedBidang && allowedBidang.length > 0) {
+      const normalizedAllowed = new Set(
+        allowedBidang
+          .map((b) => normalizeBidangKey(b))
+          .filter((k): k is BidangKey => k !== null)
+      );
+      if (normalizedAllowed.size > 0) {
+        const filtered = BIDANG_LIST.filter((b) => normalizedAllowed.has(b.key));
+        if (filtered.length > 0) return filtered;
+      }
+    }
+    // Also check if initialPetugasByBidang has any recognized keys
+    if (initialPetugasByBidang) {
+      const keys = Object.keys(initialPetugasByBidang)
+        .map((k) => normalizeBidangKey(k))
+        .filter((k): k is BidangKey => k !== null);
+      if (keys.length > 0) {
+        const keySet = new Set(keys);
+        const filtered = BIDANG_LIST.filter((b) => keySet.has(b.key));
+        if (filtered.length > 0) return filtered;
+      }
+    }
+    return BIDANG_LIST;
+  }, [isAsesmenMode, allowedBidang, initialPetugasByBidang]);
 
   // ── Single-petugas state (observasi mode) ──
   const [selectedPetugas, setSelectedPetugas] = useState<PetugasOption | null>(null);
@@ -376,11 +419,22 @@ export default function FormAturAsesmen({
   const [allTherapists, setAllTherapists] = useState<PetugasOption[]>([]);
   const [selectedByBidang, setSelectedByBidang] = useState<
     Record<BidangKey, PetugasOption | null>
-  >({
-    wicara: null,
-    paedagog: null,
-    fisio: null,
-    okupasi: null,
+  >(() => {
+    const initial: Record<BidangKey, PetugasOption | null> = {
+      wicara: null,
+      paedagog: null,
+      fisio: null,
+      okupasi: null,
+    };
+    if (initialPetugasByBidang) {
+      for (const [rawKey, nameVal] of Object.entries(initialPetugasByBidang)) {
+        const normKey = normalizeBidangKey(rawKey);
+        if (normKey && nameVal && nameVal !== "-") {
+          initial[normKey] = { id: "", name: nameVal };
+        }
+      }
+    }
+    return initial;
   });
 
   // Close single dropdown on outside click
@@ -483,17 +537,17 @@ export default function FormAturAsesmen({
   useEffect(() => {
     if (!initialPetugasByBidang) return;
 
-    const VALID_KEYS: BidangKey[] = ["wicara", "paedagog", "fisio", "okupasi"];
     const updates: Partial<Record<BidangKey, PetugasOption | null>> = {};
 
-    for (const key of VALID_KEYS) {
-      const initName = initialPetugasByBidang[key];
-      if (!initName || initName === "-") continue;
+    for (const [rawKey, nameVal] of Object.entries(initialPetugasByBidang)) {
+      const normKey = normalizeBidangKey(rawKey);
+      if (!normKey || !nameVal || nameVal === "-") continue;
+
       // Try to find in loaded therapists first (to get the id)
       const matched = allTherapists.find(
-        (t) => t.name.toLowerCase() === initName.toLowerCase()
+        (t) => t.name.toLowerCase() === nameVal.toLowerCase()
       );
-      updates[key] = matched ?? { id: "", name: initName };
+      updates[normKey] = matched ?? { id: "", name: nameVal };
     }
 
     if (Object.keys(updates).length > 0) {
@@ -526,12 +580,16 @@ export default function FormAturAsesmen({
       okupasi: [],
     };
     for (const t of allTherapists) {
-      const sec = (t.section || "").toLowerCase();
-      if (sec === "wicara") result.wicara.push(t);
-      else if (sec === "paedagog") result.paedagog.push(t);
-      else if (sec === "fisio") result.fisio.push(t);
-      else if (sec === "okupasi") result.okupasi.push(t);
-      // therapists with no matching section are skipped (no Umum anymore)
+      const normSec = normalizeBidangKey(t.section);
+      if (normSec) {
+        result[normSec].push(t);
+      }
+    }
+    // Fallback: If any bidang has 0 therapists matched by section, provide allTherapists
+    for (const key of ["wicara", "paedagog", "fisio", "okupasi"] as BidangKey[]) {
+      if (result[key].length === 0 && allTherapists.length > 0) {
+        result[key] = allTherapists;
+      }
     }
     return result;
   }, [allTherapists]);
@@ -588,7 +646,7 @@ export default function FormAturAsesmen({
       }
       onClose();
     } catch (err) {
-      console.error("onSave error:", err);
+      console.warn("onSave error:", err);
     } finally {
       setIsSubmitting(false);
     }

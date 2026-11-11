@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import api from "@/lib/axios";
+import { normalizeBidangKey, BidangKey } from "@/components/form/FormAturAsesmen";
 
 export interface Jadwal {
   observation_id: number;
@@ -19,47 +20,127 @@ export interface Jadwal {
 }
 
 // ========================================================
-// LOCAL PERSISTENCE HELPERS (DEPRECATED - MIGRATED TO REST API)
+// LOCAL PERSISTENCE HELPERS
 // ========================================================
 
-/**
- * @deprecated Helper localStorage telah digantikan dengan sinkronisasi langsung ke REST API.
- */
 export function saveObservationBidangLocal(
-  _observationId: number | string,
-  _bidang: string[]
-) { }
+  observationId: number | string,
+  bidang: string[]
+) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("observation_bidang");
+    const map = raw ? JSON.parse(raw) : {};
+    map[String(observationId)] = bidang;
+    localStorage.setItem("observation_bidang", JSON.stringify(map));
+  } catch (e) {
+    console.error("Failed to save observation bidang locally:", e);
+  }
+}
 
 export function getObservationBidangLocal(
-  _observationId: number | string
+  observationId: number | string
 ): string[] | null {
-  return null;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("observation_bidang");
+    if (!raw) return null;
+    const map = JSON.parse(raw);
+    const item = map[String(observationId)];
+    if (!Array.isArray(item) || item.length === 0) return null;
+    return item;
+  } catch {
+    return null;
+  }
 }
 
 export function saveAssessmentAsessorByBidangLocal(
-  _observationOrAssessmentId: number | string,
-  _asessorByBidang: Record<string, string>,
-  _childName?: string
-) { }
+  observationOrAssessmentId: number | string,
+  asessorByBidang: Record<string, string>,
+  childName?: string
+) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("assessment_asessor_by_bidang");
+    const map = raw ? JSON.parse(raw) : {};
+    const normalized: Record<string, string> = {};
+    for (const [k, v] of Object.entries(asessorByBidang)) {
+      const norm = normalizeBidangKey(k) || k.toLowerCase().trim();
+      if (norm && v) normalized[norm] = v;
+    }
+    if (observationOrAssessmentId) {
+      map[String(observationOrAssessmentId)] = normalized;
+    }
+    if (childName && childName.trim()) {
+      map[`name_${childName.trim().toLowerCase()}`] = normalized;
+    }
+    localStorage.setItem("assessment_asessor_by_bidang", JSON.stringify(map));
+  } catch (e) {
+    console.error("Failed to save assessment asessor by bidang locally:", e);
+  }
+}
 
 export function getAssessmentAsessorByBidangLocal(
-  _observationOrAssessmentId?: number | string | null,
-  _childName?: string | null
+  observationOrAssessmentId?: number | string | null,
+  childName?: string | null
 ): Record<string, string> | null {
-  return null;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("assessment_asessor_by_bidang");
+    if (!raw) return null;
+    const map = JSON.parse(raw);
+    let found: Record<string, string> | null = null;
+    if (observationOrAssessmentId && map[String(observationOrAssessmentId)]) {
+      found = map[String(observationOrAssessmentId)];
+    } else if (childName && childName.trim()) {
+      found = map[`name_${childName.trim().toLowerCase()}`];
+    }
+    if (!found) return null;
+    const normalized: Record<string, string> = {};
+    for (const [k, v] of Object.entries(found)) {
+      const norm = normalizeBidangKey(k) || k.toLowerCase().trim();
+      if (norm && v) normalized[norm] = v;
+    }
+    return Object.keys(normalized).length > 0 ? normalized : null;
+  } catch {
+    return null;
+  }
 }
 
 export function saveObservationTherapistLocal(
-  _observationId: number | string,
-  _therapistId: string | number,
-  _therapistName: string
-) { }
+  observationId: number | string,
+  therapistId: string | number,
+  therapistName: string
+) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("observation_therapists");
+    const map = raw ? JSON.parse(raw) : {};
+    map[String(observationId)] = {
+      therapist_id: String(therapistId || ""),
+      therapist_name: therapistName || "",
+    };
+    localStorage.setItem("observation_therapists", JSON.stringify(map));
+  } catch (e) {
+    console.error("Failed to save observation therapist locally:", e);
+  }
+}
 
-export function getObservationTherapistLocal(_observationId: number | string): {
+export function getObservationTherapistLocal(observationId: number | string): {
   therapist_id: string;
   therapist_name: string;
 } | null {
-  return null;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("observation_therapists");
+    if (!raw) return null;
+    const map = JSON.parse(raw);
+    const item = map[String(observationId)];
+    if (!item || (!item.therapist_name && !item.therapist_id)) return null;
+    return item;
+  } catch {
+    return null;
+  }
 }
 
 // ========================================================
@@ -282,48 +363,83 @@ export async function createObservationAgreement(
 ) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+    // 1. Format scheduled_time to HH:mm (H:i with colon for Carbon)
+    let formattedTime = (scheduled_time || "").trim().replace(".", ":");
+    if (/^\d{1,2}:\d{2}/.test(formattedTime)) {
+      const [h, m] = formattedTime.split(":");
+      formattedTime = `${h.padStart(2, "0")}:${m}`;
+    }
+
+    // 2. Format scheduled_date to YYYY-MM-DD
+    let formattedDate = (scheduled_date || "").trim();
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(formattedDate)) {
+      const [d, m, y] = formattedDate.split(/[\/\-]/);
+      formattedDate = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+
     const payload: any = {
-      scheduled_date,
-      scheduled_time,
+      scheduled_date: formattedDate,
+      scheduled_time: formattedTime,
     };
 
     // Ambil opsi terapis langsung dari endpoint REST API untuk mapping assessment_detail_id & therapist_id
     const options = await getObservationTherapistOptions(observation_id);
-    const therapistsPayload: Array<{ assessment_detail_id: number; therapist_id: string | number }> = [];
+    const therapistsPayload: Array<{ assessment_detail_id: number; therapist_id: number | string }> = [];
 
     if (Array.isArray(options) && options.length > 0) {
       for (const opt of options) {
-        const type = (opt.type || "").toLowerCase();
+        const normOptType = normalizeBidangKey(opt.type) || (opt.type || "").toLowerCase().trim();
         let matchedTherapist: any = null;
 
-        if (petugasByBidang && petugasByBidang[type]) {
-          const target = petugasByBidang[type].toLowerCase().trim();
-          matchedTherapist = (opt.therapists || []).find(
-            (t: any) =>
-              (t.name || "").toLowerCase().trim() === target ||
-              String(t.id) === String(target)
-          );
+        if (petugasByBidang) {
+          let targetName = "";
+          for (const [k, v] of Object.entries(petugasByBidang)) {
+            const normK = normalizeBidangKey(k) || k.toLowerCase().trim();
+            if (normK === normOptType || k.toLowerCase().trim() === (opt.type || "").toLowerCase().trim()) {
+              targetName = (v || "").toLowerCase().trim();
+              break;
+            }
+          }
+          if (targetName) {
+            matchedTherapist = (opt.therapists || []).find(
+              (t: any) =>
+                (t.name || t.therapist_name || t.nama || "").toLowerCase().trim() === targetName ||
+                String(t.id || t.therapist_id) === String(targetName)
+            );
+          }
         }
 
         if (!matchedTherapist && opt.current_therapist_id) {
           matchedTherapist = (opt.therapists || []).find(
-            (t: any) => String(t.id) === String(opt.current_therapist_id)
+            (t: any) => String(t.id || t.therapist_id) === String(opt.current_therapist_id)
           );
         }
 
         if (!matchedTherapist && Array.isArray(opt.therapists) && opt.therapists.length > 0) {
           if (petugas) {
-            matchedTherapist = opt.therapists.find((t: any) => String(t.id) === String(petugas));
+            matchedTherapist = opt.therapists.find((t: any) => String(t.id || t.therapist_id) === String(petugas));
           }
           if (!matchedTherapist) {
             matchedTherapist = opt.therapists[0];
           }
         }
 
-        if (matchedTherapist) {
+        const detailId = opt.assessment_detail_id || opt.id;
+        const therapistId =
+          matchedTherapist?.id ??
+          matchedTherapist?.therapist_id ??
+          opt.current_therapist_id ??
+          opt.therapists?.[0]?.id ??
+          opt.therapists?.[0]?.therapist_id ??
+          (typeof petugas === "number" || (typeof petugas === "string" && !isNaN(Number(petugas)))
+            ? Number(petugas)
+            : null);
+
+        if (detailId && therapistId) {
           therapistsPayload.push({
-            assessment_detail_id: opt.assessment_detail_id,
-            therapist_id: matchedTherapist.id,
+            assessment_detail_id: Number(detailId),
+            therapist_id: !isNaN(Number(therapistId)) ? Number(therapistId) : therapistId,
           });
         }
       }
@@ -333,15 +449,55 @@ export async function createObservationAgreement(
       payload.therapists = therapistsPayload;
     }
 
-    const res = await api.put(
-      `/observations/${observation_id}/agreement`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const resolvedTherapistId =
+      petugas !== undefined && petugas !== null && String(petugas).trim() !== "" && String(petugas) !== "-"
+        ? (!isNaN(Number(petugas)) ? Number(petugas) : String(petugas).trim())
+        : therapistsPayload[0]?.therapist_id ?? undefined;
+
+    if (resolvedTherapistId !== undefined) {
+      payload.therapist_id = resolvedTherapistId;
+      payload.observer_id = resolvedTherapistId;
+      payload.terapis_id = resolvedTherapistId;
+    }
+
+    if (petugasName && String(petugasName).trim() !== "" && String(petugasName) !== "-") {
+      payload.observer = String(petugasName).trim();
+      payload.therapist_name = String(petugasName).trim();
+      payload.nama_terapis = String(petugasName).trim();
+    }
+
+    if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
+      saveAssessmentAsessorByBidangLocal(observation_id, petugasByBidang);
+    }
+
+    let res: any;
+    try {
+      res = await api.put(
+        `/observations/${observation_id}/agreement`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (putErr: any) {
+      if (putErr.response?.status === 405 || putErr.response?.status === 404) {
+        console.warn("PUT failed, retrying with POST and _method=PUT:", putErr);
+        payload._method = "PUT";
+        res = await api.post(
+          `/observations/${observation_id}/agreement`,
+          payload,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } else {
+        throw putErr;
+      }
+    }
+
     console.log("AGREEMENT RESPONSE:", res.data);
+    if (res.data?.data?.assessment_id && petugasByBidang) {
+      saveAssessmentAsessorByBidangLocal(res.data.data.assessment_id, petugasByBidang);
+    }
     return res.data;
-  } catch (error) {
-    console.error("ERROR createObservationAgreement:", error);
+  } catch (error: any) {
+    console.warn("createObservationAgreement failed:", error?.response?.data || error?.message || error);
     throw error;
   }
 }
@@ -389,12 +545,11 @@ export async function getAssessmentBidangByObservation(
     // 1. Prioritas Utama: Ambil dari endpoint resmi therapist-options
     const options = await getObservationTherapistOptions(observation_id);
     if (Array.isArray(options) && options.length > 0) {
-      const validTypes = ["paedagog", "okupasi", "wicara", "fisio"];
       const bidang = options
-        .map((opt: any) => String(opt.type || "").toLowerCase().trim())
-        .filter((t) => validTypes.includes(t));
+        .map((opt: any) => normalizeBidangKey(opt.type))
+        .filter((t): t is BidangKey => t !== null);
 
-      const uniqueBidang = Array.from(new Set(bidang));
+      const uniqueBidang = Array.from(new Set(bidang)) as string[];
       if (uniqueBidang.length > 0) {
         return uniqueBidang;
       }

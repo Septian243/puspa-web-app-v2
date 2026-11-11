@@ -30,7 +30,7 @@ function TerapiWicaraContent() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const { toasts, addToast, dismissToast } = useToast();
-  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId || null);
+  const { steps, loading: stepsLoading, getNextPath, getPrevPath, isLastStep } = useAssessmentSteps(assessmentId || null);
   const activeStep = steps.findIndex((s) => pathname.includes(s.path));
 
   // Persist jawaban ke localStorage
@@ -172,7 +172,7 @@ function TerapiWicaraContent() {
 
       addToast("success", "Data terapi wicara berhasil disimpan!", "Mengarahkan ke halaman berikutnya...");
       setTimeout(() => {
-        router.push(`/orangtua/assessment/kategori/paedagog?assessment_id=${assessmentId}`);
+        router.push(getNextPath("wicara"));
       }, 800);
     } catch (err: any) {
       console.error("Submit error:", err);
@@ -327,7 +327,7 @@ function TerapiWicaraContent() {
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row justify-end mt-10 gap-3 border-t border-gray-50 pt-6">
           <button
-            onClick={() => router.push(`/orangtua/assessment/kategori/okupasi?assessment_id=${assessmentId}`)}
+            onClick={() => router.push(getPrevPath("wicara"))}
             className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-[#1E5C58] rounded-2xl font-bold active:scale-95 transition-all w-full sm:w-auto text-xs cursor-pointer text-center"
           >
             Sebelumnya
@@ -337,7 +337,7 @@ function TerapiWicaraContent() {
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? "Menyimpan..." : "Simpan & Lanjutkan"}
+            {submitting ? "Menyimpan..." : isLastStep("wicara") ? "Simpan & Selesai" : "Simpan & Lanjutkan"}
           </button>
         </div>
       </div>

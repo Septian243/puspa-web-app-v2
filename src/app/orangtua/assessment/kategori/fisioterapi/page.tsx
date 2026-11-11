@@ -28,7 +28,7 @@ function FisioterapiContent() {
   const [loading, setLoading] = useState(false);
   const [answersReady, setAnswersReady] = useState(false);
   const { toasts, addToast, dismissToast } = useToast();
-  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId);
+  const { steps, loading: stepsLoading, getNextPath, getPrevPath } = useAssessmentSteps(assessmentId);
 
   // Bangun objek jawaban untuk persist (key: question_id)
   const answersObj: Record<string, any> = {
@@ -86,7 +86,7 @@ function FisioterapiContent() {
       await submitParentAssessment(assessmentId, "fisio_parent", payload);
       addToast("success", "Data fisioterapi berhasil disimpan!", "Mengarahkan ke halaman berikutnya...");
       setTimeout(() => {
-        router.push(`/orangtua/assessment/kategori/okupasi?assessment_id=${assessmentId}`);
+        router.push(getNextPath("fisio"));
       }, 800);
     } catch (err) {
       console.error(err);
@@ -98,11 +98,9 @@ function FisioterapiContent() {
 
   const activeStep = steps.findIndex((step) => pathname.includes(step.path));
 
-  // Navigasi kembali ke data-umum, ke kategori terakhir
-  const backToDataUmum = () => {
-    router.push(
-      `/orangtua/assessment/kategori/data-umum?assessment_id=${assessmentId}&last_category=last`
-    );
+  // Navigasi kembali ke step sebelumnya
+  const handlePrev = () => {
+    router.push(getPrevPath("fisio"));
   };
 
   return (
@@ -174,7 +172,7 @@ function FisioterapiContent() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
-              onClick={backToDataUmum}
+              onClick={handlePrev}
               className="px-8 py-3.5 bg-gray-100 hover:bg-gray-200 text-[#1E5C58] rounded-2xl font-bold active:scale-95 transition-all w-full sm:w-auto text-xs cursor-pointer text-center"
             >
               Sebelumnya

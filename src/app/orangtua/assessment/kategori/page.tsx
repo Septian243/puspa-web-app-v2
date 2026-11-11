@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ResponsiveOrangtuaLayout from "@/components/layout/ResponsiveOrangtuaLayout";
 import { downloadAssessmentReport } from "@/lib/api/childrenAsesment";
 import { getMyAssessmentDetail } from "@/lib/api/checkStatusAsesment";
+import { normalizeBidangKey } from "@/components/form/FormAturAsesmen";
 
 interface AssessmentDetail {
   assessment_detail_id: number;
@@ -57,14 +58,22 @@ export default function AssessmentPage() {
       try {
         const res = await getMyAssessmentDetail(assessmentId);
 
-        setTypes(res.details.map((d: AssessmentDetail) => d.type));
+        setTypes(res.details.map((d: AssessmentDetail) => {
+          const raw = (d.type || "").toLowerCase().trim();
+          if (raw === "umum") return "umum";
+          return normalizeBidangKey(raw) || raw;
+        }));
 
         const mapCompleted: Record<string, string> = {};
         const mapFilled: Record<string, boolean> = {};
 
         res.details.forEach((d: AssessmentDetail) => {
+          const raw = (d.type || "").toLowerCase().trim();
+          const norm = raw === "umum" ? "umum" : (normalizeBidangKey(raw) || raw);
           mapCompleted[d.type] = d.parent_completed_status;
+          mapCompleted[norm] = d.parent_completed_status;
           mapFilled[d.type] = d.is_filled; 
+          mapFilled[norm] = d.is_filled; 
         });
 
         setCompletionStatus(mapCompleted);

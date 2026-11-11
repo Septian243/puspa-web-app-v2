@@ -44,7 +44,7 @@ export default function FormAssessmentOrangtua() {
 
   // ---- Hooks ----
   const { toasts, addToast, dismissToast } = useToast();
-  const { steps: dynamicSteps, loading: stepsLoading } = useAssessmentSteps(assessmentIdFromQuery);
+  const { steps: dynamicSteps, loading: stepsLoading, getNextPath } = useAssessmentSteps(assessmentIdFromQuery);
   const { groups, loading, answers, setAnswers } = useAssessmentData();
   const { setAnswer, toggleCheckboxValue, handleTableCell } = useAnswers(answers, setAnswers);
 
@@ -246,7 +246,7 @@ export default function FormAssessmentOrangtua() {
       await submitParentAssessment(assessmentIdFromQuery, "umum_parent", payload);
       addToast("success", "Data umum berhasil disimpan!", "Mengarahkan ke halaman berikutnya...");
       setTimeout(() => {
-        router.push(`/orangtua/assessment/kategori/fisioterapi?assessment_id=${assessmentIdFromQuery}`);
+        router.push(getNextPath("umum"));
       }, 800);
     } catch (err: any) {
       console.error("Gagal submit assessment:", err);

@@ -26,7 +26,7 @@ import { id } from "date-fns/locale";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-import FormAturAsesmen from "@/components/form/FormAturAsesmen";
+import FormAturAsesmen, { normalizeBidangKey } from "@/components/form/FormAturAsesmen";
 import FormDetailObservasi from "@/components/form/FormDetailObservasi";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
 import {
@@ -37,6 +37,8 @@ import {
   createObservationAgreement,
   getAssessmentBidangByObservation,
   getObservationTherapistOptions,
+  saveAssessmentAsessorByBidangLocal,
+  getAssessmentAsessorByBidangLocal,
 } from "@/lib/api/jadwal_observasi";
 import { getTherapists } from "@/lib/api/jadwal_terapi";
 
@@ -367,19 +369,33 @@ export default function JadwalPage() {
         if (Array.isArray(options) && options.length > 0) {
           const prefilled: Record<string, string> = {};
           for (const opt of options) {
-            const type = (opt.type || "").toLowerCase();
-            if (opt.current_therapist_id && Array.isArray(opt.therapists)) {
+            const normType = normalizeBidangKey(opt.type) || (opt.type || "").toLowerCase().trim();
+            let matchedName = "";
+            if (opt.current_therapist_name) {
+              matchedName = opt.current_therapist_name;
+            } else if (opt.current_therapist?.name || opt.current_therapist?.therapist_name) {
+              matchedName = opt.current_therapist.name || opt.current_therapist.therapist_name;
+            } else if (opt.current_therapist_id && Array.isArray(opt.therapists)) {
               const matched = opt.therapists.find(
-                (t: any) => String(t.id) === String(opt.current_therapist_id)
+                (t: any) => String(t.id || t.therapist_id) === String(opt.current_therapist_id)
               );
-              if (matched?.name) {
-                prefilled[type] = matched.name;
+              if (matched) {
+                matchedName = matched.name || matched.therapist_name || matched.nama || "";
               }
+            }
+            if (normType && matchedName) {
+              prefilled[normType] = matchedName;
             }
           }
           if (Object.keys(prefilled).length > 0) {
             setAsesmenPetugasByBidang(prefilled);
           }
+        }
+
+        // Fallback dari local storage jika belum ada dari backend
+        const localSaved = getAssessmentAsessorByBidangLocal(pasien.observation_id, pasien.nama);
+        if (localSaved && Object.keys(localSaved).length > 0) {
+          setAsesmenPetugasByBidang((prev) => ({ ...localSaved, ...prev }));
         }
       } catch (err) {
         console.warn("Gagal memuat opsi bidang asesmen:", err);
@@ -1144,6 +1160,11 @@ export default function JadwalPage() {
                   petugasByBidang
                 );
                 if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
+                  saveAssessmentAsessorByBidangLocal(
+                    selectedPasien.observation_id,
+                    petugasByBidang,
+                    selectedPasien.nama
+                  );
                   setAsesmenPetugasByBidang(petugasByBidang);
                 }
                 showSuccessToast("Asesmen berhasil dijadwalkan!");
@@ -1160,8 +1181,8 @@ export default function JadwalPage() {
               setOpenAsesmen(false);
               setSelectedPasien(null);
               fetchJadwal();
-            } catch (err) {
-              console.error(err);
+            } catch (err: any) {
+              console.warn("Gagal simpan jadwal observasi / agreement:", err?.response?.data || err?.message || err);
               handleApiError(err, "Gagal menyimpan jadwal.");
             }
           }}

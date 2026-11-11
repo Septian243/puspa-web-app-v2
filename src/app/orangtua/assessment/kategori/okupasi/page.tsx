@@ -55,7 +55,7 @@ function OkupasiAssessmentContent() {
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const [activeIdx, setActiveIdx] = useState(0);
   const { toasts, addToast, dismissToast } = useToast();
-  const { steps, loading: stepsLoading } = useAssessmentSteps(assessmentId);
+  const { steps, loading: stepsLoading, getNextPath, getPrevPath, isLastStep } = useAssessmentSteps(assessmentId);
   const activeStep = steps.findIndex((s) => s.code === "okupasi");
 
   // Persist jawaban ke localStorage
@@ -155,7 +155,7 @@ function OkupasiAssessmentContent() {
       await submitParentAssessment(assessmentId, "okupasi_parent", payload);
       addToast("success", "Data terapi okupasi berhasil disimpan!", "Mengarahkan ke halaman berikutnya...");
       setTimeout(() => {
-        router.push(`/orangtua/assessment/kategori/wicara?assessment_id=${assessmentId}`);
+        router.push(getNextPath("okupasi"));
       }, 800);
     } catch (e) {
       console.error("Error submit okupasi:", e);
@@ -338,7 +338,7 @@ function OkupasiAssessmentContent() {
         <div className="flex flex-col sm:flex-row justify-between mt-10 gap-4 pt-6 border-t border-gray-100">
           <button
             type="button"
-            onClick={activeIdx > 0 ? goPrev : () => router.push(`/orangtua/assessment/kategori/fisioterapi?assessment_id=${assessmentId}`)}
+            onClick={activeIdx > 0 ? goPrev : () => router.push(getPrevPath("okupasi"))}
             className="px-6 py-3.5 rounded-2xl border border-gray-200 text-[#1E5C58] font-bold bg-white hover:bg-gray-50 transition-all text-xs order-2 sm:order-1 active:scale-95 cursor-pointer text-center"
           >
             Sebelumnya
@@ -360,7 +360,7 @@ function OkupasiAssessmentContent() {
                 disabled={submitting}
                 className="px-10 py-3.5 bg-[#2B7A75] hover:bg-[#1E5C58] disabled:opacity-60 text-white rounded-2xl font-bold transition-all shadow-md shadow-teal-500/10 active:scale-95 text-xs w-full sm:w-auto cursor-pointer text-center flex items-center justify-center gap-1.5"
               >
-                {submitting ? "Menyimpan..." : "Simpan & Lanjutkan"}
+                {submitting ? "Menyimpan..." : isLastStep("okupasi") ? "Simpan & Selesai" : "Simpan & Lanjutkan"}
               </button>
             )}
           </div>

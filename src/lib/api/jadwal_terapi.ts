@@ -61,8 +61,12 @@ export async function getSchedules(filters: ScheduleFilters = {}) {
       meta: res.data?.data?.meta || { current_page: 1, last_page: 1, total: 0 },
       links: res.data?.data?.links || {},
     };
-  } catch (error) {
-    console.error("ERROR getSchedules:", error);
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      console.warn("getSchedules: Endpoint /schedules belum tersedia atau tidak ditemukan (404).");
+    } else {
+      console.error("ERROR getSchedules:", error);
+    }
     return {
       items: [],
       meta: { current_page: 1, last_page: 1, total: 0 },
@@ -82,8 +86,12 @@ export async function getScheduleDetail(id: string): Promise<ScheduleDetailItem 
     });
 
     return res.data?.data || null;
-  } catch (error) {
-    console.error("ERROR getScheduleDetail:", error);
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      console.warn(`getScheduleDetail: Endpoint /schedules/${id} tidak ditemukan (404).`);
+    } else {
+      console.error("ERROR getScheduleDetail:", error);
+    }
     return null;
   }
 }
