@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, X, Users, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  getAdminRoles,
+  createAdminRole,
+  updateAdminRole,
+  deleteAdminRole,
+  getAdminRoleUsers,
+  AdminUserInRole,
+} from "@/lib/api/ownerHakAkses";
 
 /* ─────────────────────────── TYPES ─────────────────────────── */
 
@@ -206,13 +214,20 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 
 export default function HakAksesPage() {
   const [roles, setRoles] = useState<AdminRole[]>(INITIAL_ROLES);
-  const [selectedRoleId, setSelectedRoleId] = useState<string>(INITIAL_ROLES[2].id);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>(INITIAL_ROLES[0]?.id || "keuangan");
+  const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  /* Users in role modal */
+  const [showUsersModal, setShowUsersModal] = useState(false);
+  const [roleUsers, setRoleUsers] = useState<AdminUserInRole[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   /* Editing state — synced from selected role */
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? roles[0];
-  const [editName, setEditName] = useState(selectedRole.name);
-  const [editDesc, setEditDesc] = useState(selectedRole.desc);
-  const [editCheckedIds, setEditCheckedIds] = useState<string[]>(selectedRole.checkedIds);
+  const [editName, setEditName] = useState(selectedRole?.name || "");
+  const [editDesc, setEditDesc] = useState(selectedRole?.desc || "");
+  const [editCheckedIds, setEditCheckedIds] = useState<string[]>(selectedRole?.checkedIds || []);
   const [isDirty, setIsDirty] = useState(false);
 
   /* Modal state */
@@ -224,6 +239,29 @@ export default function HakAksesPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  const fetchRoles = async () => {
+    setLoading(true);
+    try {
+      const res = await getAdminRoles();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setRoles(res.data);
+        const current = res.data.find((r) => r.id === selectedRoleId) || res.data[0];
+        setSelectedRoleId(current.id);
+        setEditName(current.name);
+        setEditDesc(current.desc || "");
+        setEditCheckedIds(current.checkedIds || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
+
   /* ── select a role (save-guard: reset edit state) */
   function selectRole(roleId: string) {
     const role = roles.find((r) => r.id === roleId);
@@ -233,6 +271,20 @@ export default function HakAksesPage() {
     setEditDesc(role.desc);
     setEditCheckedIds(role.checkedIds);
     setIsDirty(false);
+  }
+
+  /* ── view users in role */
+  async function handleOpenUsersModal() {
+    setShowUsersModal(true);
+    setLoadingUsers(true);
+    try {
+      const res = await getAdminRoleUsers(selectedRoleId);
+      setRoleUsers(res.data || []);
+    } catch {
+      setRoleUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
   }
 
   /* ── toggle leaf */
@@ -272,16 +324,31 @@ export default function HakAksesPage() {
   }
 
   /* ── simpan */
-  function handleSave() {
-    setRoles((prev) =>
-      prev.map((r) =>
-        r.id === selectedRoleId
-          ? { ...r, name: editName, desc: editDesc, checkedIds: editCheckedIds }
-          : r
-      )
-    );
-    setIsDirty(false);
-    showToast("Hak akses berhasil disimpan.");
+  async function handleSave() {
+    setIsSaving(true);
+    try {
+      if (!selectedRoleId.startsWith("role_") && !isNaN(Number(selectedRoleId))) {
+        await updateAdminRole(selectedRoleId, {
+          name: editName,
+          desc: editDesc,
+          checkedIds: editCheckedIds,
+        });
+      }
+      setRoles((prev) =>
+        prev.map((r) =>
+          r.id === selectedRoleId
+            ? { ...r, name: editName, desc: editDesc, checkedIds: editCheckedIds }
+            : r
+        )
+      );
+      setIsDirty(false);
+      showToast("Hak akses berhasil disimpan.");
+    } catch (err) {
+      console.error(err);
+      showToast("Gagal menyimpan hak akses.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   /* ── batalkan edit */
@@ -290,43 +357,59 @@ export default function HakAksesPage() {
   }
 
   /* ── add new role */
-  function handleAddRole() {
+  async function handleAddRole() {
     if (!newName.trim()) {
       setNameError(true);
       return;
     }
-    const newId = `role_${Date.now()}`;
-    const newRole: AdminRole = {
-      id: newId,
-      name: newName.trim(),
-      desc: newDesc.trim(),
-      checkedIds: [...WAJIB_IDS],
-    };
-    setRoles((prev) => [...prev, newRole]);
-    setShowAddModal(false);
-    setNewName("");
-    setNewDesc("");
-    setNameError(false);
-    selectRole(newId);
-    // need to set state after selectRole re-renders
-    setTimeout(() => {
-      setSelectedRoleId(newId);
-      setEditName(newRole.name);
-      setEditDesc(newRole.desc);
-      setEditCheckedIds(newRole.checkedIds);
-    }, 0);
-    showToast(`Jenis admin "${newRole.name}" berhasil dibuat.`);
+    setIsSaving(true);
+    try {
+      const res = await createAdminRole({
+        name: newName.trim(),
+        desc: newDesc.trim(),
+        checkedIds: [...WAJIB_IDS],
+      });
+
+      const newRole: AdminRole = res.data ?? {
+        id: `role_${Date.now()}`,
+        name: newName.trim(),
+        desc: newDesc.trim(),
+        checkedIds: [...WAJIB_IDS],
+      };
+
+      setRoles((prev) => [...prev, newRole]);
+      setShowAddModal(false);
+      setNewName("");
+      setNewDesc("");
+      setNameError(false);
+      selectRole(newRole.id);
+      showToast(`Jenis admin "${newRole.name}" berhasil dibuat.`);
+    } catch {
+      showToast("Gagal membuat jenis admin baru.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   /* ── delete role */
-  function handleDeleteRole() {
-    const remaining = roles.filter((r) => r.id !== selectedRoleId);
-    setRoles(remaining);
-    setShowDeleteModal(false);
-    if (remaining.length > 0) {
-      selectRole(remaining[0].id);
+  async function handleDeleteRole() {
+    setIsSaving(true);
+    try {
+      if (!selectedRoleId.startsWith("role_") && !isNaN(Number(selectedRoleId))) {
+        await deleteAdminRole(selectedRoleId);
+      }
+      const remaining = roles.filter((r) => r.id !== selectedRoleId);
+      setRoles(remaining);
+      setShowDeleteModal(false);
+      if (remaining.length > 0) {
+        selectRole(remaining[0].id);
+      }
+      showToast("Jenis admin berhasil dihapus.");
+    } catch {
+      showToast("Gagal menghapus jenis admin.");
+    } finally {
+      setIsSaving(false);
     }
-    showToast("Jenis admin berhasil dihapus.");
   }
 
   function showToast(msg: string) {
@@ -521,12 +604,21 @@ export default function HakAksesPage() {
 
             {/* Footer / Actions */}
             <div className="shrink-0 flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="text-sm font-bold text-rose-500 hover:bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-xl transition-all active:scale-95"
-              >
-                Hapus jenis admin
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="text-sm font-bold text-rose-500 hover:bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-xl transition-all active:scale-95"
+                >
+                  Hapus jenis admin
+                </button>
+                <button
+                  onClick={handleOpenUsersModal}
+                  className="text-sm font-bold text-[#1E5C58] hover:bg-teal-50 border border-teal-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 active:scale-95"
+                >
+                  <Users size={15} />
+                  Staf Terlibat
+                </button>
+              </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleCancel}
@@ -537,9 +629,10 @@ export default function HakAksesPage() {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={!isDirty}
-                  className="text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#174d49] disabled:opacity-40 px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95"
+                  disabled={!isDirty || isSaving}
+                  className="text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#174d49] disabled:opacity-40 px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2"
                 >
+                  {isSaving && <Loader2 size={15} className="animate-spin" />}
                   Simpan hak akses
                 </button>
               </div>
@@ -629,6 +722,72 @@ export default function HakAksesPage() {
                   className="px-5 py-2.5 text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#174d49] rounded-xl transition-all shadow-sm active:scale-95"
                 >
                   Buat jenis admin
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════ USERS IN ROLE MODAL ══════════════ */}
+      <AnimatePresence>
+        {showUsersModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="bg-[#1E5C58] px-6 py-5 flex items-start justify-between shrink-0">
+                <div>
+                  <h3 className="text-lg font-extrabold text-white tracking-tight">
+                    Staf Terlibat: {selectedRole.name}
+                  </h3>
+                  <p className="text-sm text-white/70 mt-0.5">
+                    Daftar akun admin yang memegang peran ini
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowUsersModal(false)}
+                  className="text-white/60 hover:text-white p-1 rounded-lg transition-colors mt-0.5"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1">
+                {loadingUsers ? (
+                  <div className="flex items-center justify-center py-12 text-[#1E5C58]">
+                    <Loader2 size={24} className="animate-spin" />
+                  </div>
+                ) : roleUsers.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">
+                    <p className="text-sm font-semibold">Belum ada akun admin yang ditetapkan pada jenis ini.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {roleUsers.map((u) => (
+                      <div key={u.user_id} className="py-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-gray-800">{u.name}</p>
+                          <p className="text-xs text-gray-400">{u.email} {u.phone ? `· ${u.phone}` : ""}</p>
+                        </div>
+                        <span className="text-[11px] font-semibold text-gray-400">
+                          {u.created_at}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end px-6 pb-6 pt-2 shrink-0 border-t border-gray-100">
+                <button
+                  onClick={() => setShowUsersModal(false)}
+                  className="px-5 py-2.5 text-sm font-bold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                >
+                  Tutup
                 </button>
               </div>
             </motion.div>

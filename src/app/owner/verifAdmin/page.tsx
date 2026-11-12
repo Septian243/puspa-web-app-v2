@@ -152,7 +152,7 @@ const VerifikasiAdminPage: React.FC = () => {
 
     try {
       if (!targetAdmin.user_id.startsWith("sample-")) {
-        await activateAdmin(targetAdmin.user_id);
+        await activateAdmin(targetAdmin.user_id, selectedRole);
       }
       setAdmins((prev) => prev.filter((a) => a.user_id !== targetAdmin.user_id));
       setApproveModalAdmin(null);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -15,13 +15,15 @@ import {
   BadgeCheck,
   Calendar,
   Activity,
+  Loader2,
 } from "lucide-react";
+import { getAllSchools, OwnerSchoolItem } from "@/lib/api/ownerSekolah";
 
 // =========================================
 // Types
 // =========================================
 interface SekolahData {
-  id: number;
+  id: string | number;
   namaSekolah: string;
   jenjangKode: string;         // "SD" | "SMP" | "SMA" | "PAUD" | "SMK"
   jenjangLabel: string;        // "Sekolah Dasar" | "Sekolah Menengah Pertama" dst
@@ -31,7 +33,7 @@ interface SekolahData {
   email: string;
   noTelepon: string;
   tanggalPendaftaran: string;  // display format: "04 November 2026 15:03:38"
-  status: "Terverifikasi" | "Tidak Terverifikasi";
+  status: "Terverifikasi" | "Tidak Terverifikasi" | "Ditolak";
 }
 
 // =========================================
@@ -247,12 +249,48 @@ function DetailModal({
 // Main Page
 // =========================================
 export default function AllSekolahPage() {
+  const [sekolahList, setSekolahList] = useState<SekolahData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedSekolah, setSelectedSekolah] = useState<SekolahData | null>(null);
 
+  const fetchSchools = async () => {
+    setLoading(true);
+    try {
+      const res = await getAllSchools();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setSekolahList(
+          res.data.map((item) => ({
+            id: item.id,
+            namaSekolah: item.namaSekolah || item.school_name || "-",
+            jenjangKode: item.jenjangKode || "SD",
+            jenjangLabel: item.jenjangLabel || JENJANG_LABEL[item.jenjangKode] || "Sekolah Dasar",
+            alamat: item.alamat || item.school_address || "-",
+            peran: item.peran || "Sekolah",
+            username: item.username || "-",
+            email: item.email || "-",
+            noTelepon: item.noTelepon || item.school_phone || "-",
+            tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
+            status: item.status as SekolahData["status"],
+          }))
+        );
+      } else {
+        setSekolahList(MOCK_SEKOLAH);
+      }
+    } catch {
+      setSekolahList(MOCK_SEKOLAH);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSchools();
+  }, []);
+
   const filteredSekolah = useMemo(() => {
     const q = search.toLowerCase();
-    return MOCK_SEKOLAH.filter(
+    return sekolahList.filter(
       (s) =>
         s.namaSekolah.toLowerCase().includes(q) ||
         s.jenjangKode.toLowerCase().includes(q) ||
@@ -260,7 +298,7 @@ export default function AllSekolahPage() {
         s.username.toLowerCase().includes(q) ||
         s.email.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, sekolahList]);
 
   return (
     <div className="flex min-h-[calc(100vh-80px)] bg-transparent w-full">

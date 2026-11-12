@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck,
@@ -10,9 +10,15 @@ import {
   AlertCircle,
   RotateCcw,
 } from "lucide-react";
+import {
+  getUnverifiedSchools,
+  verifySchool,
+  rejectSchool,
+  OwnerSchoolItem,
+} from "@/lib/api/ownerSekolah";
 
 interface SekolahData {
-  id: number;
+  id: string | number;
   namaSekolah: string;
   email: string;
   tanggalPendaftaran: string;
@@ -46,13 +52,42 @@ const INITIAL_SEKOLAH_DATA: SekolahData[] = [
 ];
 
 export default function VerifikasiSekolahPage() {
-  const [sekolahList, setSekolahList] = useState<SekolahData[]>(INITIAL_SEKOLAH_DATA);
+  const [sekolahList, setSekolahList] = useState<SekolahData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [search, setSearch] = useState("");
   const [actionModal, setActionModal] = useState<{
     type: "approve" | "reject";
     item: SekolahData;
   } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const fetchSchools = async () => {
+    setLoading(true);
+    try {
+      const res = await getUnverifiedSchools();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setSekolahList(
+          res.data.map((item) => ({
+            id: item.id,
+            namaSekolah: item.namaSekolah || item.school_name || "-",
+            email: item.email || "-",
+            tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
+          }))
+        );
+      } else {
+        setSekolahList(INITIAL_SEKOLAH_DATA);
+      }
+    } catch {
+      setSekolahList(INITIAL_SEKOLAH_DATA);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSchools();
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -61,22 +96,38 @@ export default function VerifikasiSekolahPage() {
     }, 3000);
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
     if (!actionModal) return;
     const { type, item } = actionModal;
-    setSekolahList((prev) => prev.filter((s) => s.id !== item.id));
-    setActionModal(null);
-    showToast(
-      type === "approve"
-        ? `Sekolah ${item.namaSekolah} berhasil disetujui!`
-        : `Pendaftaran ${item.namaSekolah} telah ditolak.`
-    );
+    setIsSubmitting(true);
+
+    try {
+      if (typeof item.id === "string" && !item.id.startsWith("sample-")) {
+        if (type === "approve") {
+          await verifySchool(item.id);
+        } else {
+          await rejectSchool(item.id);
+        }
+      }
+      setSekolahList((prev) => prev.filter((s) => s.id !== item.id));
+      setActionModal(null);
+      showToast(
+        type === "approve"
+          ? `Sekolah ${item.namaSekolah} berhasil disetujui!`
+          : `Pendaftaran ${item.namaSekolah} telah ditolak.`
+      );
+    } catch (err) {
+      console.error(err);
+      showToast("Terjadi kesalahan saat memproses data sekolah.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleResetData = () => {
-    setSekolahList(INITIAL_SEKOLAH_DATA);
+    fetchSchools();
     setSearch("");
-    showToast("Data pendaftaran sekolah berhasil direset ke tampilan awal.");
+    showToast("Data pendaftaran sekolah berhasil diperbarui.");
   };
 
   const filteredSekolah = sekolahList.filter(

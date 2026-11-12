@@ -30,14 +30,14 @@ export async function getUnverifiedAdmins() {
 }
 
 // ===============================
-// AKTIVASI ADMIN (GET REQUEST)
+// AKTIVASI ADMIN (POST / GET REQUEST DENGAN PERAN)
 // ===============================
-export async function activateAdmin(user_id: string) {
+export async function activateAdmin(user_id: string, role?: string) {
   try {
-    const response = await axiosInstance.get(`/users/${user_id}/activate`);
+    const response = await axiosInstance.post(`/users/${user_id}/activate`, { role });
 
     return {
-      success: response.data.success,
+      success: response.data.success ?? true,
       message: response.data.message,
       data: response.data.data || null,
     };
