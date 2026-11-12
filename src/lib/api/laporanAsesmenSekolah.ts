@@ -7,6 +7,9 @@ export interface SchoolStudentItem {
   child_gender: string;
   child_birth_date: string | null;
   age: number | null;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
+  guardian_type?: string | null;
   observation_status: string | null;
   assessment_status: string | null;
   created_at: string | null;
@@ -109,6 +112,39 @@ export async function getSchoolStudentDetail(
     return res.data?.data || null;
   } catch (error) {
     console.error("ERROR getSchoolStudentDetail:", error);
+    throw error;
+  }
+}
+
+/**
+ * Mengunduh berkas laporan asesmen siswa milik sekolah (PDF stream)
+ * Dapat diunduh ulang berkali-kali tanpa batas.
+ */
+export async function downloadSchoolAssessmentReport(
+  childId: string,
+  studentName: string
+): Promise<void> {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await api.get(`/school/students/${childId}/assessment-report`, {
+      responseType: "blob",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const blob = new Blob([res.data], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const sanitizedName = studentName.trim().replace(/\s+/g, "_");
+    link.setAttribute("download", `Laporan_Asesmen_${sanitizedName}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("ERROR downloadSchoolAssessmentReport:", error);
     throw error;
   }
 }

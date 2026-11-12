@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import api from "@/lib/axios";
 
 export interface SchoolProfileData {
   id?: string;
@@ -16,19 +17,39 @@ export interface SchoolProfileData {
 }
 
 /**
- * Mengambil profil sekolah
- * Note: Menunggu endpoint backend GET /api/v1/school/profile
+ * Mengambil profil sekolah dari backend
  */
 export async function getSchoolProfile(): Promise<SchoolProfileData | null> {
-  // Belum disupport oleh backend (Pending)
-  return null;
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await api.get("/school/profile", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return res.data?.data || null;
+  } catch (error) {
+    console.error("ERROR getSchoolProfile:", error);
+    return null;
+  }
 }
 
 /**
  * Memperbarui profil sekolah
- * Note: Menunggu endpoint backend PUT /api/v1/school/profile
  */
-export async function updateSchoolProfile(_payload: Partial<SchoolProfileData>): Promise<any> {
-  // Belum disupport oleh backend (Pending)
-  throw new Error("Fitur update profil sekolah berstatus Pending (Menunggu dukungan backend)");
+export async function updateSchoolProfile(payload: Partial<SchoolProfileData>): Promise<any> {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await api.put("/school/profile", payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return res.data;
+  } catch (error) {
+    console.error("ERROR updateSchoolProfile:", error);
+    throw error;
+  }
 }
