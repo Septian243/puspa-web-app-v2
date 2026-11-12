@@ -65,7 +65,7 @@ export async function getSchedules(filters: ScheduleFilters = {}) {
     if (error?.response?.status === 404) {
       console.warn("getSchedules: Endpoint /schedules belum tersedia atau tidak ditemukan (404).");
     } else {
-      console.error("ERROR getSchedules:", error);
+      console.warn("ERROR getSchedules:", error);
     }
     return {
       items: [],

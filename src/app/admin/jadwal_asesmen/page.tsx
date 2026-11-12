@@ -25,16 +25,22 @@ import "react-calendar/dist/Calendar.css";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { useRouter, useSearchParams } from "next/navigation";
-import FormAturAsesmen, { normalizeBidangKey, BidangKey } from "@/components/form/FormAturAsesmen";
+import FormAturAsesmen, {
+  normalizeBidangKey,
+  BidangKey,
+  PetugasOption,
+} from "@/components/form/FormAturAsesmen";
 import {
   getAssessmentsAdmin,
   updateAsessmentSchedule,
   getAssessmentDetail,
   getAssessmentAsessorsByBidang,
+  getAssessmentTherapistOptions,
 } from "@/lib/api/jadwal_asessment";
 import {
   getAssessmentAsessorByBidangLocal,
   saveAssessmentAsessorByBidangLocal,
+  parseTherapistOptionsByBidang,
 } from "@/lib/api/jadwal_observasi";
 import { getTherapists } from "@/lib/api/jadwal_terapi";
 import FormDetailAsesment from "@/components/form/FormDetailAsesment";
@@ -135,6 +141,9 @@ export default function JadwalAsesmenPage() {
   const [openAsesmen, setOpenAsesmen] = useState(false);
   const [asesmenLoading, setAsesmenLoading] = useState(false);
   const [currentAsessorsByBidang, setCurrentAsessorsByBidang] = useState<Record<string, string> | undefined>(undefined);
+  const [bidangTherapistOptions, setBidangTherapistOptions] = useState<
+    Partial<Record<BidangKey, PetugasOption[]>> | undefined
+  >(undefined);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [therapists, setTherapists] = useState<any[]>([]);
 
@@ -248,6 +257,17 @@ export default function JadwalAsesmenPage() {
         }
       } catch (err) {
         console.warn("Gagal fetch assessor dari API:", err);
+      }
+
+      // 1b. Fetch daftar opsi asesor per bidang dari endpoint /assessments/{id}/therapist-options
+      try {
+        const rawOptions = await getAssessmentTherapistOptions(j.assessment_id);
+        if (rawOptions && rawOptions.length > 0) {
+          const parsed = parseTherapistOptionsByBidang(rawOptions);
+          setBidangTherapistOptions(parsed);
+        }
+      } catch (err) {
+        console.warn("Gagal fetch therapist options:", err);
       }
 
       // 2. Fallback ke local storage jika belum ada di response API
@@ -1227,11 +1247,15 @@ export default function JadwalAsesmenPage() {
             id: t.therapist_id || t.id,
             name: t.therapist_name || t.name || "",
             section: t.therapist_section || t.section || "",
+            role: t.role || "",
           }))}
+          bidangTherapistOptions={bidangTherapistOptions}
+          assessmentId={selectedPasien.assessment_id}
           onClose={() => {
             setOpenAsesmen(false);
             setSelectedPasien(null);
             setCurrentAsessorsByBidang(undefined);
+            setBidangTherapistOptions(undefined);
           }}
           onSave={async (date, time, petugas, petugasId, petugasByBidang) => {
             if (!date || !time) return;
@@ -1252,6 +1276,7 @@ export default function JadwalAsesmenPage() {
               setOpenAsesmen(false);
               setSelectedPasien(null);
               setCurrentAsessorsByBidang(undefined);
+              setBidangTherapistOptions(undefined);
               await fetchJadwal();
               showSuccessToast("Jadwal asesmen sukses disimpan!");
             } catch (err) {

@@ -108,7 +108,7 @@ export async function updateAsessmentSchedule(
 
     // Ambil opsi terapis assessment untuk mapping assessment_detail_id & therapist_id
     const options = await getAssessmentTherapistOptions(assessment_id);
-    const therapistsPayload: Array<{ assessment_detail_id: number; therapist_id: string | number }> = [];
+    const therapistsPayload: Array<{ assessment_detail_id: number; therapist_id: string }> = [];
 
     if (Array.isArray(options) && options.length > 0) {
       for (const opt of options) {
@@ -117,14 +117,27 @@ export async function updateAsessmentSchedule(
 
         if (petugasByBidang) {
           let targetName = "";
+          let targetId = "";
           for (const [k, v] of Object.entries(petugasByBidang)) {
             const normK = normalizeBidangKey(k) || k.toLowerCase().trim();
             if (normK === normOptType || k.toLowerCase().trim() === (opt.type || "").toLowerCase().trim()) {
-              targetName = (v || "").toLowerCase().trim();
+              const val = v || "";
+              const colonIdx = val.indexOf(":");
+              if (colonIdx > 0) {
+                targetId = val.slice(0, colonIdx).trim();
+                targetName = val.slice(colonIdx + 1).trim().toLowerCase();
+              } else {
+                targetName = val.toLowerCase().trim();
+              }
               break;
             }
           }
-          if (targetName) {
+          if (targetId) {
+            matchedTherapist = (opt.therapists || []).find(
+              (t: any) => String(t.id || t.therapist_id) === targetId
+            );
+          }
+          if (!matchedTherapist && targetName) {
             matchedTherapist = (opt.therapists || []).find((t: any) => {
               const tName = (t.name || t.therapist_name || t.nama || "").toLowerCase().trim();
               const tId = String(t.id || t.therapist_id || "");
@@ -133,20 +146,26 @@ export async function updateAsessmentSchedule(
           }
         }
 
-        if (!matchedTherapist && opt.current_therapist_id) {
+        if (!matchedTherapist && (opt.current_therapist?.id || opt.current_therapist_id)) {
+          const ctId = String(opt.current_therapist?.id ?? opt.current_therapist_id ?? "");
           matchedTherapist = (opt.therapists || []).find(
-            (t: any) => String(t.id || t.therapist_id) === String(opt.current_therapist_id)
+            (t: any) => String(t.id || t.therapist_id) === ctId
           );
+          if (!matchedTherapist && opt.current_therapist?.id) {
+            matchedTherapist = opt.current_therapist;
+          }
         }
 
         if (!matchedTherapist && Array.isArray(opt.therapists) && opt.therapists.length > 0) {
           matchedTherapist = opt.therapists[0];
         }
 
-        if (matchedTherapist) {
+        const detailId = opt.assessment_detail_id || opt.id;
+        const thId = matchedTherapist?.id || matchedTherapist?.therapist_id;
+        if (detailId && thId) {
           therapistsPayload.push({
-            assessment_detail_id: opt.assessment_detail_id || opt.id,
-            therapist_id: matchedTherapist.id || matchedTherapist.therapist_id,
+            assessment_detail_id: Number(detailId),
+            therapist_id: String(thId),
           });
         }
       }
@@ -184,7 +203,12 @@ export async function getAssessmentTherapistOptions(
     const res = await api.get(`/assessments/${assessment_id}/therapist-options`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    return res.data?.data || [];
+    const raw = res.data;
+    let result: any[] = [];
+    if (Array.isArray(raw)) result = raw;
+    else if (raw && Array.isArray(raw.data)) result = raw.data;
+    else if (raw && raw.data && Array.isArray(raw.data.data)) result = raw.data.data;
+    return result;
   } catch (err) {
     console.warn("getAssessmentTherapistOptions:", err);
     return [];

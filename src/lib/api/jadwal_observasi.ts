@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import api from "@/lib/axios";
-import { normalizeBidangKey, BidangKey } from "@/components/form/FormAturAsesmen";
+import { normalizeBidangKey, BidangKey, PetugasOption } from "@/components/form/FormAturAsesmen";
 
 export interface Jadwal {
   observation_id: number;
@@ -159,8 +159,6 @@ export async function getObservations(
     if (status === "pending") endpoint = "/observations/pending";
     if (status === "scheduled") endpoint = "/observations/scheduled";
     if (status === "completed") endpoint = "/observations/completed";
-
-    console.log("Fetching observations from:", endpoint);
 
     const params: any = { search };
 
@@ -341,7 +339,6 @@ export async function updateObservationSchedule(
       });
     }
 
-    console.log("UPDATE RESPONSE:", res.data);
     return res.data;
   } catch (error) {
     console.error("ERROR updateObservationSchedule:", error);
@@ -394,14 +391,29 @@ export async function createObservationAgreement(
 
         if (petugasByBidang) {
           let targetName = "";
+          let targetId = "";
           for (const [k, v] of Object.entries(petugasByBidang)) {
             const normK = normalizeBidangKey(k) || k.toLowerCase().trim();
             if (normK === normOptType || k.toLowerCase().trim() === (opt.type || "").toLowerCase().trim()) {
-              targetName = (v || "").toLowerCase().trim();
+              // Support format "id:name" (dari FormAturAsesmen) atau hanya "name"
+              const val = v || "";
+              const colonIdx = val.indexOf(":");
+              if (colonIdx > 0) {
+                targetId = val.slice(0, colonIdx).trim();
+                targetName = val.slice(colonIdx + 1).trim().toLowerCase();
+              } else {
+                targetName = val.toLowerCase().trim();
+              }
               break;
             }
           }
-          if (targetName) {
+          if (targetId) {
+            // Prioritaskan match by ID (paling akurat)
+            matchedTherapist = (opt.therapists || []).find(
+              (t: any) => String(t.id || t.therapist_id) === targetId
+            );
+          }
+          if (!matchedTherapist && targetName) {
             matchedTherapist = (opt.therapists || []).find(
               (t: any) =>
                 (t.name || t.therapist_name || t.nama || "").toLowerCase().trim() === targetName ||
@@ -410,12 +422,22 @@ export async function createObservationAgreement(
           }
         }
 
-        if (!matchedTherapist && opt.current_therapist_id) {
-          matchedTherapist = (opt.therapists || []).find(
-            (t: any) => String(t.id || t.therapist_id) === String(opt.current_therapist_id)
-          );
+        // Fallback 1: cari dari current_therapist (object { id, name } atau id string)
+        if (!matchedTherapist) {
+          const ctId = opt.current_therapist?.id ?? opt.current_therapist_id;
+          if (ctId) {
+            matchedTherapist = (opt.therapists || []).find(
+              (t: any) => String(t.id || t.therapist_id) === String(ctId)
+            );
+            // Jika current_therapist tidak ada di daftar therapists (mungkin bukan assessor),
+            // gunakan langsung object current_therapist sebagai fallback terakhir
+            if (!matchedTherapist && opt.current_therapist?.id) {
+              matchedTherapist = opt.current_therapist;
+            }
+          }
         }
 
+        // Fallback 2: ambil therapist pertama dari daftar assessor tervalidasi
         if (!matchedTherapist && Array.isArray(opt.therapists) && opt.therapists.length > 0) {
           if (petugas) {
             matchedTherapist = opt.therapists.find((t: any) => String(t.id || t.therapist_id) === String(petugas));
@@ -426,20 +448,18 @@ export async function createObservationAgreement(
         }
 
         const detailId = opt.assessment_detail_id || opt.id;
-        const therapistId =
-          matchedTherapist?.id ??
-          matchedTherapist?.therapist_id ??
-          opt.current_therapist_id ??
-          opt.therapists?.[0]?.id ??
-          opt.therapists?.[0]?.therapist_id ??
-          (typeof petugas === "number" || (typeof petugas === "string" && !isNaN(Number(petugas)))
-            ? Number(petugas)
-            : null);
+        // therapist_id HARUS berupa string (ULID) sesuai validasi backend
+        const therapistId: string | null =
+          String(matchedTherapist?.id ?? matchedTherapist?.therapist_id ?? "").trim() ||
+          String(opt.current_therapist?.id ?? opt.current_therapist_id ?? "").trim() ||
+          String(opt.therapists?.[0]?.id ?? "").trim() ||
+          String(opt.therapists?.[0]?.therapist_id ?? "").trim() ||
+          (typeof petugas === "string" && petugas.trim() !== "" ? petugas.trim() : null);
 
         if (detailId && therapistId) {
           therapistsPayload.push({
             assessment_detail_id: Number(detailId),
-            therapist_id: !isNaN(Number(therapistId)) ? Number(therapistId) : therapistId,
+            therapist_id: String(therapistId), // selalu string (ULID)
           });
         }
       }
@@ -491,7 +511,7 @@ export async function createObservationAgreement(
       }
     }
 
-    console.log("AGREEMENT RESPONSE:", res.data);
+    
     if (res.data?.data?.assessment_id && petugasByBidang) {
       saveAssessmentAsessorByBidangLocal(res.data.data.assessment_id, petugasByBidang);
     }
@@ -527,11 +547,134 @@ export async function getObservationTherapistOptions(
     const res = await api.get(`/observations/${observation_id}/therapist-options`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    return res.data?.data || [];
+
+    // Tangani berbagai kemungkinan format response Laravel:
+    // 1. { data: [...] }   → res.data.data
+    // 2. { data: { data: [...] } }  → res.data.data.data (pagination)
+    // 3. [...] langsung    → res.data
+    const raw = res.data;
+    let result: any[] = [];
+    if (Array.isArray(raw)) result = raw;
+    else if (raw && Array.isArray(raw.data)) result = raw.data;
+    else if (raw && raw.data && Array.isArray(raw.data.data)) result = raw.data.data;
+
+    return result;
   } catch (err) {
     console.warn("getObservationTherapistOptions:", err);
     return [];
   }
+}
+
+/**
+ * Parsing opsi terapis per bidang dari response /observations/{observation}/therapist-options.
+ * Hanya mengambil terapis yang tervalidasi sebagai assessor oleh backend.
+ *
+ * Format response backend (TherapistOptionsAction.php):
+ * [
+ *   {
+ *     "assessment_detail_id": 12,
+ *     "type": "wicara",
+ *     "current_therapist": { "id": 5, "name": "Nindya Zahri" },
+ *     "therapists": [{ "id": 5, "name": "Nindya Zahri" }]
+ *   },
+ *   ...  // bisa ada lebih dari 1 entry dengan type yang sama
+ * ]
+ */
+export function parseTherapistOptionsByBidang(
+  rawOptions: any
+): Partial<Record<BidangKey, PetugasOption[]>> {
+  // Gunakan Map sementara untuk merge (deduplicate) per bidang
+  const tempMap: Partial<Record<BidangKey, Map<string, PetugasOption>>> = {};
+
+  if (!rawOptions) return {};
+
+  const processTherapistList = (list: any[], normType: BidangKey) => {
+    if (!tempMap[normType]) {
+      tempMap[normType] = new Map<string, PetugasOption>();
+    }
+    const bidangMap = tempMap[normType]!;
+
+    for (const t of list) {
+      const id = String(t.therapist_id ?? t.id ?? "");
+      const name: string = t.therapist_name ?? t.name ?? t.nama ?? "";
+      if (!name) continue;
+      // Gunakan id sebagai dedup key; jika tidak ada id, gunakan name
+      const key = id || name.toLowerCase();
+      if (!bidangMap.has(key)) {
+        bidangMap.set(key, {
+          id: id || undefined,
+          name,
+          section: t.therapist_section ?? t.section ?? normType,
+        });
+      }
+    }
+  };
+
+  if (Array.isArray(rawOptions)) {
+    for (const opt of rawOptions) {
+      const rawType = opt.type || opt.section || opt.bidang;
+      const normType = normalizeBidangKey(rawType);
+
+      // Jika type adalah "umum", distribusikan terapis di dalamnya ke bidang masing-masing berdasarkan section-nya
+      if (!normType) {
+        if ((rawType || "").toLowerCase().trim() === "umum") {
+          const list: any[] = Array.isArray(opt.therapists)
+            ? opt.therapists
+            : Array.isArray(opt.assessors)
+              ? opt.assessors
+              : [];
+          for (const t of list) {
+            const tSection = normalizeBidangKey(t.section || t.therapist_section);
+            if (tSection) {
+              processTherapistList([t], tSection);
+            }
+          }
+        } else {
+          console.warn("[parseTherapistOptionsByBidang] type tidak dikenali:", rawType, "→ entry dilewati:", opt);
+        }
+        continue;
+      }
+
+      // Ambil array therapists (assessor tervalidasi)
+      const list: any[] = Array.isArray(opt.therapists)
+        ? opt.therapists
+        : Array.isArray(opt.assessors)
+          ? opt.assessors
+          : [];
+
+      if (list.length === 0) {
+        // Tetap tambahkan entry kosong agar bidang ini terdaftar (meski tidak ada assessor)
+        if (!tempMap[normType]) tempMap[normType] = new Map();
+        console.warn(`[parseTherapistOptionsByBidang] therapists kosong untuk bidang "${normType}" (type="${rawType}")`);
+      }
+
+      processTherapistList(list, normType);
+    }
+  } else if (typeof rawOptions === "object") {
+    for (const [k, v] of Object.entries(rawOptions)) {
+      const normType = normalizeBidangKey(k);
+      if (!normType) continue;
+
+      let list: any[] = [];
+      if (Array.isArray(v)) {
+        list = v;
+      } else if (v && typeof v === "object" && Array.isArray((v as any).therapists)) {
+        list = (v as any).therapists;
+      } else if (v && typeof v === "object" && Array.isArray((v as any).assessors)) {
+        list = (v as any).assessors;
+      }
+
+      processTherapistList(list, normType);
+    }
+  }
+
+  // Konversi Map ke array
+  const result: Partial<Record<BidangKey, PetugasOption[]>> = {};
+  for (const [bidang, bidangMap] of Object.entries(tempMap) as [BidangKey, Map<string, PetugasOption>][]) {
+    result[bidang] = Array.from(bidangMap.values());
+  }
+
+  return result;
 }
 
 // ========================================================

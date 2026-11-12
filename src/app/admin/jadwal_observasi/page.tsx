@@ -26,7 +26,7 @@ import { id } from "date-fns/locale";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-import FormAturAsesmen, { normalizeBidangKey } from "@/components/form/FormAturAsesmen";
+import FormAturAsesmen, { normalizeBidangKey, BidangKey, PetugasOption } from "@/components/form/FormAturAsesmen";
 import FormDetailObservasi from "@/components/form/FormDetailObservasi";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
 import {
@@ -37,6 +37,7 @@ import {
   createObservationAgreement,
   getAssessmentBidangByObservation,
   getObservationTherapistOptions,
+  parseTherapistOptionsByBidang,
   saveAssessmentAsessorByBidangLocal,
   getAssessmentAsessorByBidangLocal,
 } from "@/lib/api/jadwal_observasi";
@@ -80,6 +81,9 @@ export default function JadwalPage() {
   const [openDetail, setOpenDetail] = useState(false);
   const [allowedBidang, setAllowedBidang] = useState<string[] | undefined>(undefined);
   const [asesmenPetugasByBidang, setAsesmenPetugasByBidang] = useState<Record<string, string> | undefined>(undefined);
+  const [bidangTherapistOptions, setBidangTherapistOptions] = useState<
+    Partial<Record<BidangKey, PetugasOption[]>> | undefined
+  >(undefined);
   const [selectedObservation, setSelectedObservation] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -248,6 +252,7 @@ export default function JadwalPage() {
     setSelectedPasien(pasien);
     setAllowedBidang(undefined);
     setAsesmenPetugasByBidang(undefined);
+    setBidangTherapistOptions(undefined);
     setOpenDropdown(null);
 
     // For scheduled tab: fetch detail to ensure latest therapist & schedule are prefilled
@@ -364,31 +369,40 @@ export default function JadwalPage() {
           }
         }
 
-        // Ambil existing assigned assessor jika sudah pernah dipilih
+        // 2. Ambil therapist-options (hanya terapis tervalidasi sebagai assessor) dari endpoint resmi
         const options = await getObservationTherapistOptions(pasien.observation_id);
-        if (Array.isArray(options) && options.length > 0) {
-          const prefilled: Record<string, string> = {};
-          for (const opt of options) {
-            const normType = normalizeBidangKey(opt.type) || (opt.type || "").toLowerCase().trim();
-            let matchedName = "";
-            if (opt.current_therapist_name) {
-              matchedName = opt.current_therapist_name;
-            } else if (opt.current_therapist?.name || opt.current_therapist?.therapist_name) {
-              matchedName = opt.current_therapist.name || opt.current_therapist.therapist_name;
-            } else if (opt.current_therapist_id && Array.isArray(opt.therapists)) {
-              const matched = opt.therapists.find(
-                (t: any) => String(t.id || t.therapist_id) === String(opt.current_therapist_id)
-              );
-              if (matched) {
-                matchedName = matched.name || matched.therapist_name || matched.nama || "";
+        if (options) {
+          const parsedOptions = parseTherapistOptionsByBidang(options);
+          // Selalu set parsedOptions agar FormAturAsesmen tahu data sudah dimuat
+          // (tidak fallback ke allTherapists saat parsedOptions kosong)
+          setBidangTherapistOptions(parsedOptions);
+
+          if (Array.isArray(options) && options.length > 0) {
+            const prefilled: Record<string, string> = {};
+            for (const opt of options) {
+              const normType = normalizeBidangKey(opt.type);
+              if (!normType) continue;
+
+              let matchedName = "";
+              if (opt.current_therapist_name) {
+                matchedName = opt.current_therapist_name;
+              } else if (opt.current_therapist?.name || opt.current_therapist?.therapist_name) {
+                matchedName = opt.current_therapist.name || opt.current_therapist.therapist_name;
+              } else if (opt.current_therapist_id && Array.isArray(opt.therapists)) {
+                const matched = opt.therapists.find(
+                  (t: any) => String(t.id || t.therapist_id) === String(opt.current_therapist_id)
+                );
+                if (matched) {
+                  matchedName = matched.name || matched.therapist_name || matched.nama || "";
+                }
+              }
+              if (matchedName) {
+                prefilled[normType] = matchedName;
               }
             }
-            if (normType && matchedName) {
-              prefilled[normType] = matchedName;
+            if (Object.keys(prefilled).length > 0) {
+              setAsesmenPetugasByBidang(prefilled);
             }
-          }
-          if (Object.keys(prefilled).length > 0) {
-            setAsesmenPetugasByBidang(prefilled);
           }
         }
 
@@ -1139,13 +1153,17 @@ export default function JadwalPage() {
             id: t.therapist_id || t.id,
             name: t.therapist_name || t.name || "",
             section: t.therapist_section || t.section || "",
+            role: t.role || "",
           }))}
           initialPetugasByBidang={tab === "selesai" ? asesmenPetugasByBidang : undefined}
           allowedBidang={tab === "selesai" ? allowedBidang : undefined}
+          bidangTherapistOptions={tab === "selesai" ? bidangTherapistOptions : undefined}
+          observationId={tab === "selesai" ? selectedPasien.observation_id : undefined}
           onClose={() => {
             setOpenAsesmen(false);
             setSelectedPasien(null);
             setAsesmenPetugasByBidang(undefined);
+            setBidangTherapistOptions(undefined);
           }}
           onSave={async (date, time, petugas, petugasId, petugasByBidang) => {
             if (!selectedPasien) return;

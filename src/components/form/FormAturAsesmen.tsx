@@ -13,11 +13,17 @@ import {
 
 import { handleApiError } from "@/lib/api-error";
 import { getTherapists } from "@/lib/api/jadwal_terapi";
+import {
+  getObservationTherapistOptions,
+  parseTherapistOptionsByBidang,
+} from "@/lib/api/jadwal_observasi";
+import { getAssessmentTherapistOptions } from "@/lib/api/jadwal_asessment";
 
 export interface PetugasOption {
   id?: string | number;
   name: string;
   section?: string;
+  role?: string;
 }
 
 // Bidang definitions for asesmen mode
@@ -70,6 +76,12 @@ interface FormAturAsesmenProps {
   /** If provided, only show these bidang keys in asesmen mode (e.g. ["wicara","fisio"]) */
   allowedBidang?: string[];
   petugasList?: PetugasOption[];
+  /** Opsi terapis yang tervalidasi sebagai assessor per bidang dari backend therapist-options */
+  bidangTherapistOptions?: Partial<Record<BidangKey, PetugasOption[]>>;
+  /** ID Observasi untuk mengambil therapist-options dari backend jika belum disediakan */
+  observationId?: number | string;
+  /** ID Assessment untuk mengambil therapist-options dari backend jika belum disediakan */
+  assessmentId?: number | string;
   pasienName?: string;
   title?: string;
 }
@@ -274,7 +286,7 @@ function BidangCombobox({
               ) : (
                 <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
                   {options.length === 0
-                    ? "Tidak ada data"
+                    ? "Belum ada terapis asesor terverifikasi untuk bidang ini"
                     : `"${searchTerm}" tidak ditemukan`}
                 </div>
               )}
@@ -357,6 +369,9 @@ export default function FormAturAsesmen({
   initialPetugasByBidang,
   allowedBidang,
   petugasList,
+  bidangTherapistOptions,
+  observationId,
+  assessmentId,
   pasienName,
   title,
 }: FormAturAsesmenProps) {
@@ -366,6 +381,66 @@ export default function FormAturAsesmen({
 
   // Determine mode: "asesmen" shows per-bidang, "observasi" shows single
   const isAsesmenMode = !title || title.toLowerCase().includes("asesmen");
+
+  // ── Assessor-filtered mode ─────────────────────────────────────────────────
+  // Mode terfilter asesor aktif jika:
+  // - Ada observationId (tab "selesai" di Jadwal Observasi)
+  // - Ada assessmentId (menu Jadwal Asesmen)
+  // - Sedang dalam mode asesmen (isAsesmenMode = true)
+  // ──────────────────────────────────────────────────────────────────────────
+  const isAssessorFilteredMode =
+    Boolean(observationId) || Boolean(assessmentId) || isAsesmenMode;
+
+  // Simpan daftar assessor tervalidasi per bidang dari API
+  const [assessorOptions, setAssessorOptions] = useState<
+    Partial<Record<BidangKey, PetugasOption[]>>
+  >(() => bidangTherapistOptions || {});
+  const [isLoadingAssessorOptions, setIsLoadingAssessorOptions] = useState(
+    () =>
+      (Boolean(observationId) || Boolean(assessmentId)) &&
+      (!bidangTherapistOptions || Object.keys(bidangTherapistOptions).length === 0)
+  );
+
+  // Sync jika bidangTherapistOptions dari parent berubah
+  useEffect(() => {
+    if (bidangTherapistOptions && Object.keys(bidangTherapistOptions).length > 0) {
+      setAssessorOptions((prev) => ({ ...prev, ...bidangTherapistOptions }));
+      setIsLoadingAssessorOptions(false);
+    }
+  }, [bidangTherapistOptions]);
+
+  // Fetch assessor options langsung dari API saat mount
+  useEffect(() => {
+    if (!observationId && !assessmentId) {
+      return;
+    }
+
+    let cancelled = false;
+    if (!bidangTherapistOptions || Object.keys(bidangTherapistOptions).length === 0) {
+      setIsLoadingAssessorOptions(true);
+    }
+
+    const fetcher = observationId
+      ? getObservationTherapistOptions(observationId)
+      : getAssessmentTherapistOptions(assessmentId!);
+
+    fetcher
+      .then((raw) => {
+        if (cancelled) return;
+        const parsed = parseTherapistOptionsByBidang(raw);
+        if (parsed && Object.keys(parsed).length > 0) {
+          setAssessorOptions(parsed);
+        }
+      })
+      .catch((err) => {
+        console.warn("[FormAturAsesmen] Gagal fetch therapist-options:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAssessorOptions(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [observationId, assessmentId, bidangTherapistOptions]);
 
   // Filter BIDANG_LIST to only allowed bidang when prop is provided
   const activeBidangList = useMemo(() => {
@@ -533,6 +608,50 @@ export default function FormAturAsesmen({
     setIsSearching(false);
   }, [initialDate, initialTime, initialPetugas, initialPetugasId, options]);
 
+  // Build per-bidang option lists
+  const optionsByBidang = useMemo(() => {
+    const result: Record<BidangKey, PetugasOption[]> = {
+      wicara: [],
+      paedagog: [],
+      fisio: [],
+      okupasi: [],
+    };
+
+    for (const key of ["wicara", "paedagog", "fisio", "okupasi"] as BidangKey[]) {
+      if (isAssessorFilteredMode) {
+        // MODE TERFILTER (tab "selesai"):
+        // HANYA tampilkan assessor tervalidasi.
+        // 1. Prioritas utama: hasil dari endpoint resmi /therapist-options
+        if (key in assessorOptions && Array.isArray(assessorOptions[key]) && assessorOptions[key]!.length > 0) {
+          result[key] = assessorOptions[key]!;
+        } else {
+          // 2. Fallback cerdas: HANYA ambil terapis yang tervalidasi sebagai ASESOR (role === 'asesor')
+          // Bukan semua terapis! Hanya terapis yang role-nya asesor di bidang tersebut.
+          const matchingAssessors = allTherapists.filter((t) => {
+            const normSec = normalizeBidangKey(t.section);
+            const isAsesorRole =
+              (t.role || "").toLowerCase().includes("asesor") ||
+              (t.role || "").toLowerCase().includes("assessor");
+            return normSec === key && isAsesorRole;
+          });
+          if (matchingAssessors.length > 0) {
+            result[key] = matchingAssessors;
+          }
+        }
+      } else {
+        // MODE NORMAL (tab bukan "selesai"): tampilkan semua terapis berdasarkan section
+        for (const t of allTherapists) {
+          if (normalizeBidangKey(t.section) === key) result[key].push(t);
+        }
+        if (result[key].length === 0 && allTherapists.length > 0) {
+          result[key] = allTherapists;
+        }
+      }
+    }
+
+    return result;
+  }, [allTherapists, assessorOptions, isAssessorFilteredMode]);
+
   // Pre-fill per-bidang selections when therapists are loaded or initialPetugasByBidang changes
   useEffect(() => {
     if (!initialPetugasByBidang) return;
@@ -543,17 +662,22 @@ export default function FormAturAsesmen({
       const normKey = normalizeBidangKey(rawKey);
       if (!normKey || !nameVal || nameVal === "-") continue;
 
-      // Try to find in loaded therapists first (to get the id)
-      const matched = allTherapists.find(
-        (t) => t.name.toLowerCase() === nameVal.toLowerCase()
-      );
+      // Cari di optionsByBidang bidang terkait terlebih dahulu (daftar asesor resmi), lalu allTherapists
+      const specificOpts = optionsByBidang[normKey] || [];
+      const matched =
+        specificOpts.find(
+          (t) => t.name.toLowerCase() === nameVal.toLowerCase()
+        ) ||
+        allTherapists.find(
+          (t) => t.name.toLowerCase() === nameVal.toLowerCase()
+        );
       updates[normKey] = matched ?? { id: "", name: nameVal };
     }
 
     if (Object.keys(updates).length > 0) {
       setSelectedByBidang((prev) => ({ ...prev, ...updates }));
     }
-  }, [initialPetugasByBidang, allTherapists]);
+  }, [initialPetugasByBidang, allTherapists, optionsByBidang]);
 
   // Filter options (single mode)
   const filteredOptions = useMemo(() => {
@@ -570,29 +694,6 @@ export default function FormAturAsesmen({
       return a.name.localeCompare(b.name);
     });
   }, [options, searchTerm, isSearching]);
-
-  // Build per-bidang option lists from allTherapists
-  const optionsByBidang = useMemo(() => {
-    const result: Record<BidangKey, PetugasOption[]> = {
-      wicara: [],
-      paedagog: [],
-      fisio: [],
-      okupasi: [],
-    };
-    for (const t of allTherapists) {
-      const normSec = normalizeBidangKey(t.section);
-      if (normSec) {
-        result[normSec].push(t);
-      }
-    }
-    // Fallback: If any bidang has 0 therapists matched by section, provide allTherapists
-    for (const key of ["wicara", "paedagog", "fisio", "okupasi"] as BidangKey[]) {
-      if (result[key].length === 0 && allTherapists.length > 0) {
-        result[key] = allTherapists;
-      }
-    }
-    return result;
-  }, [allTherapists]);
 
   const handleSelectBidang = useCallback(
     (key: BidangKey, opt: PetugasOption | null) => {
@@ -618,11 +719,14 @@ export default function FormAturAsesmen({
           Boolean
         ) as PetugasOption[];
 
-        // Build per-bidang map { bidangKey: name }
+        // Build per-bidang map { bidangKey: "id:name" } agar createObservationAgreement bisa match by ID maupun name
         const byBidang: Record<string, string> = {};
         for (const b of activeBidangList) {
           const opt = selectedByBidang[b.key];
-          if (opt && opt.name) byBidang[b.key] = opt.name;
+          if (opt && opt.name) {
+            // Format: "id:name" jika ada id, atau hanya "name" jika tidak ada id
+            byBidang[b.key] = opt.id ? `${opt.id}:${opt.name}` : opt.name;
+          }
         }
 
         // Join names as comma-separated for the petugas field
@@ -749,7 +853,7 @@ export default function FormAturAsesmen({
                       bidangLabel={b.label}
                       color={b.color}
                       options={optionsByBidang[b.key]}
-                      isLoading={isLoadingPetugas}
+                      isLoading={isAssessorFilteredMode ? isLoadingAssessorOptions : isLoadingPetugas}
                       selected={selectedByBidang[b.key]}
                       onSelect={(opt) => handleSelectBidang(b.key, opt)}
                     />
