@@ -6,9 +6,11 @@ import { X, Download, ChevronDown, Check, Loader2, ArrowLeft } from "lucide-reac
 import { useTherapistProfile } from "@/context/ProfileTerapisContext";
 import {
   getExportFilterOptions,
+  downloadExportTherapySoap,
   downloadExportTherapySoapPdf,
-  getTherapySessions,
-  getTherapySoapBySession,
+  downloadExportTherapySoapExcel,
+  getTherapySoapPreview,
+  TherapySoapPreviewItem,
   ExportFilterOptions,
   ExportTherapySoapFilters,
 } from "@/lib/api/terapiTerapis";
@@ -271,7 +273,8 @@ export default function UnduhHasilPage() {
   const [exportRecords, setExportRecords] = useState<ExportSoapRecord[]>([]);
   const [totalFilteredCount, setTotalFilteredCount] = useState(0);
   const [isLoadingData, setIsLoadingData] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<"pdf" | "excel" | null>(null);
+  const isExporting = exportingFormat !== null;
 
   const therapistName =
     filterOptions?.therapist_name || profile?.therapist_name || "Memuat...";
@@ -335,7 +338,68 @@ export default function UnduhHasilPage() {
     return { anakOptions: options, childNameToId: mapping };
   }, [filterOptions]);
 
-  // Fetch completed therapy sessions with SOAP for preview table (Opsi A)
+  const buildApiFilters = (): ExportTherapySoapFilters => {
+    const apiFilters: ExportTherapySoapFilters = {};
+
+    const selectedId = childNameToId[selectedAnak];
+    if (selectedId) {
+      apiFilters.child_id = selectedId;
+    }
+
+    if (periode === "Harian") {
+      apiFilters.period_type = "daily";
+      if (hari) {
+        apiFilters.date = hari;
+        apiFilters.date_from = hari;
+        apiFilters.date_to = hari;
+      }
+    } else if (periode === "Mingguan") {
+      apiFilters.period_type = "weekly";
+      if (minggu) {
+        const parts = minggu.split("-W");
+        if (parts.length === 2) {
+          const y = parseInt(parts[0], 10);
+          const w = parseInt(parts[1], 10);
+          apiFilters.year = y;
+          apiFilters.week = w;
+          const simple = new Date(y, 0, 1 + (w - 1) * 7);
+          const dow = simple.getDay();
+          const ISOweekStart = new Date(simple);
+          if (dow <= 4) {
+            ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+          } else {
+            ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+          }
+          const ISOweekEnd = new Date(ISOweekStart);
+          ISOweekEnd.setDate(ISOweekStart.getDate() + 6);
+          apiFilters.date_from = ISOweekStart.toISOString().slice(0, 10);
+          apiFilters.date_to = ISOweekEnd.toISOString().slice(0, 10);
+        }
+      }
+    } else if (periode === "Bulanan") {
+      apiFilters.period_type = "monthly";
+      if (bulan) {
+        const parts = bulan.split("-");
+        if (parts.length === 2) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10);
+          apiFilters.year = y;
+          apiFilters.month = m;
+          const lastDay = new Date(y, m, 0).getDate();
+          apiFilters.date_from = `${parts[0]}-${parts[1]}-01`;
+          apiFilters.date_to = `${parts[0]}-${parts[1]}-${String(lastDay).padStart(2, "0")}`;
+        }
+      }
+    } else if (periode === "Custom") {
+      apiFilters.period_type = "custom";
+      if (dari) apiFilters.date_from = dari;
+      if (sampai) apiFilters.date_to = sampai;
+    }
+
+    return apiFilters;
+  };
+
+  // Fetch pratinjau data catatan SOAP langsung dari backend (GET /therapy_soaps/preview)
   useEffect(() => {
     let isMounted = true;
     setIsLoadingData(true);
@@ -351,84 +415,33 @@ export default function UnduhHasilPage() {
           return;
         }
 
-        const res = await getTherapySessions({
-          status: "completed",
-          my_sessions: true,
-          per_page: 50,
-        });
+        const apiFilters = buildApiFilters();
+        const items = await getTherapySoapPreview(apiFilters, 10);
 
         if (!isMounted) return;
 
-        let sessions = res.items || [];
+        const mapped: ExportSoapRecord[] = (items || []).map((item) => ({
+          id: String(item.id),
+          child_name: item.child_name,
+          medical_record_number: item.medical_record_number,
+          therapist_name: item.therapist_name || therapistName,
+          therapy_type_label: item.therapy_type || therapistSection,
+          performed_date_formatted: item.date,
+          performed_date: item.date,
+          performed_time: item.time,
+          therapy_diagnosis: item.diagnosis,
+        }));
 
-        // Filter by selected child
-        const selectedId = childNameToId[selectedAnak];
-        if (selectedId) {
-          sessions = sessions.filter(
-            (s) => s.child_id && s.child_id === selectedId
-          );
-        } else {
-          sessions = [];
-        }
-
-        // Filter by period
-        if (periode === "Harian" && hari) {
-          sessions = sessions.filter((s) => s.session_date === hari);
-        } else if (periode === "Mingguan" && minggu) {
-          const parts = minggu.split("-W");
-          if (parts.length === 2) {
-            const yr = parseInt(parts[0], 10);
-            sessions = sessions.filter((s) => {
-              if (!s.session_date) return false;
-              const d = new Date(s.session_date);
-              return d.getFullYear() === yr;
-            });
-          }
-        } else if (periode === "Bulanan" && bulan) {
-          sessions = sessions.filter(
-            (s) => s.session_date && s.session_date.startsWith(bulan)
-          );
-        } else if (periode === "Custom") {
-          if (dari) {
-            sessions = sessions.filter(
-              (s) => s.session_date && s.session_date >= dari
-            );
-          }
-          if (sampai) {
-            sessions = sessions.filter(
-              (s) => s.session_date && s.session_date <= sampai
-            );
-          }
-        }
-
-        // Fetch detail SOAP for top 10 items to display real diagnosis
-        const top10 = sessions.slice(0, 10);
-        const mappedRecords = await Promise.all(
-          top10.map(async (s) => {
-            const soap = await getTherapySoapBySession(s.id);
-            return {
-              id: s.id,
-              child_name: s.child_name,
-              therapist_name: s.therapist_name || therapistName,
-              therapy_type_label: s.therapy_type_label || therapistSection,
-              performed_date_formatted: s.session_date_formatted,
-              performed_date: s.session_date,
-              performed_time: `${s.start_time} – ${s.end_time}`,
-              therapy_diagnosis: soap?.therapy_diagnosis || s.notes || "—",
-            } as ExportSoapRecord;
-          })
-        );
-
-        if (isMounted) {
-          setTotalFilteredCount(sessions.length);
-          setExportRecords(mappedRecords);
-          setIsLoadingData(false);
-        }
+        setExportRecords(mapped);
+        setTotalFilteredCount(mapped.length);
       } catch (err) {
         console.error("Gagal memuat preview data SOAP:", err);
         if (isMounted) {
           setExportRecords([]);
           setTotalFilteredCount(0);
+        }
+      } finally {
+        if (isMounted) {
           setIsLoadingData(false);
         }
       }
@@ -441,61 +454,40 @@ export default function UnduhHasilPage() {
     };
   }, [selectedAnak, periode, hari, minggu, bulan, dari, sampai, childNameToId, therapistName, therapistSection]);
 
-  const handleExportPdf = async () => {
-    if (isExporting) return;
+  const handleExport = async (format: "pdf" | "excel") => {
+    if (exportingFormat) return;
     if (!selectedAnak) {
       showErrorToast("Silakan pilih anak / pasien terlebih dahulu untuk mengunduh SOAP.");
       return;
     }
-    setIsExporting(true);
+    if (exportRecords.length === 0) {
+      showErrorToast(
+        "Tidak ada catatan SOAP pada periode yang dipilih. Silakan pilih periode (misal: bulan sebelumnya) yang memiliki catatan SOAP."
+      );
+      return;
+    }
+    setExportingFormat(format);
 
     try {
-      const apiFilters: ExportTherapySoapFilters = {};
-
-      const selectedId = childNameToId[selectedAnak];
-      if (selectedId) {
-        apiFilters.child_id = selectedId;
-      }
-
-      if (periode === "Harian") {
-        apiFilters.period_type = "daily";
-        if (hari) apiFilters.date = hari;
-      } else if (periode === "Mingguan") {
-        apiFilters.period_type = "weekly";
-        if (minggu) {
-          const parts = minggu.split("-W");
-          if (parts.length === 2) {
-            apiFilters.year = parseInt(parts[0], 10);
-            apiFilters.week = parseInt(parts[1], 10);
-          }
-        }
-      } else if (periode === "Bulanan") {
-        apiFilters.period_type = "monthly";
-        if (bulan) {
-          const parts = bulan.split("-");
-          if (parts.length === 2) {
-            apiFilters.year = parseInt(parts[0], 10);
-            apiFilters.month = parseInt(parts[1], 10);
-          }
-        }
-      } else if (periode === "Custom") {
-        apiFilters.period_type = "custom";
-        if (dari) apiFilters.date_from = dari;
-        if (sampai) apiFilters.date_to = sampai;
-      }
-
-      const res = await downloadExportTherapySoapPdf(apiFilters);
+      const apiFilters = buildApiFilters();
+      const res = await downloadExportTherapySoap(apiFilters, format);
       if (res.success) {
-        showSuccessToast("Laporan SOAP PDF berhasil diunduh!", "Berhasil Unduh");
+        showSuccessToast(
+          "Laporan SOAP " + format.toUpperCase() + " berhasil diunduh!",
+          "Berhasil Unduh"
+        );
       } else {
-        showErrorToast(res.error || "Gagal mengunduh laporan SOAP.");
+        showErrorToast(res.error || ("Gagal mengunduh laporan SOAP " + format.toUpperCase() + "."));
       }
     } catch (err: any) {
-      showErrorToast(err?.message || "Terjadi kesalahan saat mengunduh SOAP.");
+      showErrorToast(err?.message || ("Terjadi kesalahan saat mengunduh SOAP " + format.toUpperCase() + "."));
     } finally {
-      setIsExporting(false);
+      setExportingFormat(null);
     }
   };
+
+  const handleExportPdf = () => handleExport("pdf");
+  const handleExportExcel = () => handleExport("excel");
 
   const handleReset = () => {
     setSelectedAnak("");
@@ -760,30 +752,36 @@ export default function UnduhHasilPage() {
           <div className="flex flex-wrap items-center justify-end gap-3 shrink-0">
             <button
               type="button"
-              disabled
-              title="Fitur Export Excel untuk catatan SOAP saat ini dipending karena backend belum mendukung"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#2B7A75] px-6 py-2.5 text-sm font-bold text-white shadow-xs opacity-50 cursor-not-allowed"
+              onClick={handleExportExcel}
+              disabled={isExporting || !selectedAnak}
+              className="cursor-pointer inline-flex items-center gap-2 rounded-2xl bg-[#2B7A75] hover:bg-[#23635f] px-5 py-2.5 text-sm font-bold text-white shadow-xs transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download className="w-4 h-4" strokeWidth={2.5} />
-              <span>Export Excel (.xlsx)</span>
-              <span className="rounded-md bg-white/20 border border-white/30 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
-                Pending
-              </span>
+              {exportingFormat === "excel" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Mengekspor Excel...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 text-white" strokeWidth={2.2} />
+                  <span>Export Excel (.xlsx)</span>
+                </>
+              )}
             </button>
             <button
               type="button"
               onClick={handleExportPdf}
               disabled={isExporting || !selectedAnak}
-              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#1E5C58]/90 rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="cursor-pointer inline-flex items-center gap-2 rounded-2xl border border-teal-300 bg-white hover:bg-teal-50/70 px-5 py-2.5 text-sm font-bold text-[#1E5C58] shadow-xs transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isExporting ? (
+              {exportingFormat === "pdf" ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-[#1E5C58]" />
                   <span>Mengekspor PDF...</span>
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" strokeWidth={2.5} />
+                  <Download className="w-4 h-4 text-[#1E5C58]" strokeWidth={2.2} />
                   <span>Export PDF</span>
                 </>
               )}

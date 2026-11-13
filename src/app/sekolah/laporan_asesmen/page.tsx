@@ -7,6 +7,7 @@ import {
   Eye,
   Download,
   Activity,
+  Phone,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -153,16 +154,23 @@ export default function LaporanAsesmenPage() {
   const totalPages = Math.max(1, meta.last_page);
 
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const [unavailableReportIds, setUnavailableReportIds] = useState<Set<string>>(new Set());
 
     // Handler unduh berkas laporan asesmen riil (unlimited re-download)
     const handleDownloadReport = async (childId: string, studentName: string) => {
+      if (unavailableReportIds.has(childId)) {
+        showErrorToast(`Laporan asesmen untuk ${studentName} belum dikirimkan oleh Admin.`, "Belum Dikirim");
+        return;
+      }
+
       setDownloadingId(childId);
       try {
         await downloadSchoolAssessmentReport(childId, studentName);
         showSuccessToast(`Laporan asesmen ${studentName} berhasil diunduh.`, "Unduhan Selesai");
       } catch (err: any) {
-        const msg = err?.response?.data?.message || err?.message || "Gagal mengunduh laporan asesmen";
-        showErrorToast(msg, "Gagal Mengunduh");
+        setUnavailableReportIds((prev) => new Set(prev).add(childId));
+        const msg = err?.message || `Laporan asesmen untuk ${studentName} belum dikirimkan oleh Admin.`;
+        showErrorToast(msg, "Belum Dikirim Admin");
       } finally {
         setDownloadingId(null);
       }
@@ -223,8 +231,8 @@ export default function LaporanAsesmenPage() {
                     <th className="px-3 pb-4 font-extrabold text-center w-14">NO</th>
                     <th className="px-4 pb-4 font-extrabold">INFORMASI PASIEN</th>
                     <th className="px-4 pb-4 font-extrabold">USIA / TGL LAHIR</th>
-                    <th className="px-4 pb-4 font-extrabold">STATUS TAHAPAN</th>
                     <th className="px-4 pb-4 font-extrabold">ORANGTUA / WALI</th>
+                    <th className="px-4 pb-4 font-extrabold">STATUS TAHAPAN</th>
                     <th className="px-4 pb-4 font-extrabold text-center w-28">AKSI</th>
                   </tr>
                 </thead>
@@ -261,6 +269,12 @@ export default function LaporanAsesmenPage() {
                         (student.assessment_status.toLowerCase() === "completed" ||
                           student.assessment_status.toLowerCase() === "selesai")
                       );
+                      const hasReport =
+                        student.has_report === true || Boolean(student.sent_to_school_at);
+                      const isExplicitlyNotSent = student.has_report === false;
+                      const canDownload =
+                        !unavailableReportIds.has(student.id) &&
+                        (student.has_report !== undefined ? hasReport : hasAssessment);
 
                       return (
                         <tr
@@ -304,20 +318,21 @@ export default function LaporanAsesmenPage() {
                             </div>
                           </td>
 
+                          {/* ORANGTUA / WALI */}
+                          <td className="px-4 py-4">
+                            <p className="font-bold text-[#1E5C58] text-xs sm:text-sm">
+                              {student.guardian_name || "-"}
+                            </p>
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600 font-medium mt-1">
+                              <Phone className="w-3.5 h-3.5 text-[#2B7A75] shrink-0" />
+                              <span>{student.guardian_phone || "-"}</span>
+                            </div>
+                          </td>
+
                           {/* STATUS TAHAPAN */}
                           <td className="px-4 py-4 whitespace-nowrap">
                             {renderStatusBadge(student.assessment_status, student.observation_status)}
                           </td>
-
-                            {/* ORANGTUA / WALI */}
-                            <td className="px-4 py-4">
-                              <p className="font-bold text-gray-700 text-xs sm:text-sm">
-                                {student.guardian_name || "-"}
-                              </p>
-                              <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                                {student.guardian_phone || "-"}
-                              </p>
-                            </td>
 
                             {/* AKSI */}
                             <td className="px-4 py-4 text-center">
@@ -332,8 +347,8 @@ export default function LaporanAsesmenPage() {
                                   <Eye className="w-4 h-4 text-[#1E5C58]" />
                                 </button>
 
-                                {/* Tombol Unduh Asesmen: Hanya bisa diklik jika anak sudah selesai asesmen */}
-                                {hasAssessment ? (
+                                {/* Tombol Unduh Asesmen: Hanya bisa diklik jika file laporan sudah dikirim oleh Admin */}
+                                {canDownload ? (
                                   <button
                                     type="button"
                                     disabled={downloadingId === student.id}
@@ -347,7 +362,11 @@ export default function LaporanAsesmenPage() {
                                   <button
                                     type="button"
                                     disabled
-                                    title="Laporan belum tersedia: Siswa belum melakukan asesmen"
+                                    title={
+                                      unavailableReportIds.has(student.id) || isExplicitlyNotSent
+                                        ? "Laporan belum tersedia: Belum dikirim oleh Admin"
+                                        : "Laporan belum tersedia: Siswa belum melakukan asesmen"
+                                    }
                                     className="flex items-center justify-center transition-all border shadow-xs w-9 h-9 rounded-xl border-gray-200/70 bg-gray-100/60 text-gray-400 cursor-not-allowed shrink-0 opacity-50"
                                   >
                                     <Download className="w-4 h-4 text-gray-400" />
@@ -403,6 +422,8 @@ export default function LaporanAsesmenPage() {
           isOpen={Boolean(selectedChildId)}
           open={Boolean(selectedChildId)}
           childId={selectedChildId}
+          fallbackGuardianPhone={studentList.find((s) => s.id === selectedChildId)?.guardian_phone}
+          fallbackGuardianName={studentList.find((s) => s.id === selectedChildId)?.guardian_name}
           onClose={() => setSelectedChildId(null)}
         />
       </div>

@@ -12,6 +12,8 @@ export interface SchoolStudentItem {
   guardian_type?: string | null;
   observation_status: string | null;
   assessment_status: string | null;
+  has_report?: boolean;
+  sent_to_school_at?: string | null;
   created_at: string | null;
 }
 
@@ -41,6 +43,8 @@ export interface SchoolStudentDetailItem {
   child_birth_place: string | null;
   child_birth_date: string | null;
   age: number | null;
+  child_religion?: string | null;
+  child_address?: string | null;
   child_complaint: string | null;
   school: {
     id: string;
@@ -50,6 +54,7 @@ export interface SchoolStudentDetailItem {
   guardians: Array<{
     guardian_name: string;
     guardian_type: string;
+    guardian_phone?: string | null;
   }>;
   observation_summary: any | null;
   assessment_summary: any | null;
@@ -133,6 +138,12 @@ export async function downloadSchoolAssessmentReport(
       },
     });
 
+    if (res.data?.type === "application/json") {
+      const text = await res.data.text();
+      const parsed = JSON.parse(text);
+      throw new Error(parsed.message || "Laporan asesmen belum dikirimkan oleh Admin.");
+    }
+
     const blob = new Blob([res.data], { type: "application/pdf" });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -143,8 +154,25 @@ export async function downloadSchoolAssessmentReport(
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
-  } catch (error) {
+  } catch (error: any) {
     console.error("ERROR downloadSchoolAssessmentReport:", error);
+
+    if (error.response?.data instanceof Blob) {
+      try {
+        const errorText = await error.response.data.text();
+        const json = JSON.parse(errorText);
+        throw new Error(json.message || "Laporan asesmen belum dikirimkan oleh Admin.");
+      } catch (parseErr: any) {
+        if (parseErr.message && !parseErr.message.includes("JSON")) {
+          throw parseErr;
+        }
+      }
+    }
+
+    if (error.response?.status === 404) {
+      throw new Error("Laporan asesmen belum dikirimkan oleh Admin untuk siswa ini.");
+    }
+
     throw error;
   }
 }

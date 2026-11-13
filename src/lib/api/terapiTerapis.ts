@@ -424,19 +424,60 @@ export async function getExportFilterOptions(params?: {
 }
 
 /**
- * Mengunduh berkas PDF catatan SOAP (GET /therapy_soaps/export)
+ * Interface item data untuk pratinjau catatan SOAP (GET /therapy_soaps/preview)
  */
-export async function downloadExportTherapySoapPdf(
-  filters: ExportTherapySoapFilters = {}
+export interface TherapySoapPreviewItem {
+  id: string | number;
+  child_name: string;
+  medical_record_number: string;
+  therapist_name: string;
+  therapy_type: string;
+  date: string;
+  time: string;
+  diagnosis: string;
+}
+
+/**
+ * Mengambil pratinjau data catatan SOAP (10 baris pertama) (GET /therapy_soaps/preview)
+ */
+export async function getTherapySoapPreview(
+  filters: ExportTherapySoapFilters = {},
+  limit = 10
+): Promise<TherapySoapPreviewItem[]> {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await axiosInstance.get("/therapy_soaps/preview", {
+      params: { ...filters, limit },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data?.data || [];
+  } catch (error) {
+    console.error("Gagal mengambil preview data SOAP:", error);
+    return [];
+  }
+}
+
+/**
+ * Mengunduh berkas catatan SOAP dalam format PDF atau Excel (.xlsx) (GET /therapy_soaps/export)
+ */
+export async function downloadExportTherapySoap(
+  filters: ExportTherapySoapFilters = {},
+  format: "pdf" | "excel" = "pdf"
 ): Promise<{ success: boolean; error?: string; fileName?: string }> {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const isExcel = format === "excel";
+    const mimeType = isExcel
+      ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      : "application/pdf";
+    const ext = isExcel ? "xlsx" : "pdf";
+
     const res = await axiosInstance.get("/therapy_soaps/export", {
-      params: filters,
+      params: { ...filters, format },
       responseType: "blob",
       headers: {
         Authorization: `Bearer ${token}`,
-        Accept: "application/pdf",
+        Accept: isExcel ? mimeType : "application/pdf",
       },
     });
 
@@ -449,7 +490,7 @@ export async function downloadExportTherapySoapPdf(
       };
     }
 
-    let fileName = `laporan_soap_${new Date().toISOString().slice(0, 10)}.pdf`;
+    let fileName = `catatan_soap_${new Date().toISOString().slice(0, 10)}.${ext}`;
     const disposition = res.headers["content-disposition"] || res.headers["Content-Disposition"];
     if (disposition && disposition.includes("filename=")) {
       const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -458,7 +499,7 @@ export async function downloadExportTherapySoapPdf(
       }
     }
 
-    const blob = new Blob([res.data], { type: "application/pdf" });
+    const blob = new Blob([res.data], { type: mimeType });
     const downloadUrl = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = downloadUrl;
@@ -470,32 +511,55 @@ export async function downloadExportTherapySoapPdf(
 
     return { success: true, fileName };
   } catch (error: any) {
-    console.error("Gagal mendownload PDF export SOAP:", error);
+    console.error(`Gagal mendownload ${format.toUpperCase()} export SOAP:`, error);
 
     if (error.response?.data instanceof Blob) {
       try {
         const errorText = await error.response.data.text();
         const json = JSON.parse(errorText);
+        const errMsg = json.message && json.message !== "Not Found"
+          ? json.message
+          : "Data catatan SOAP tidak ditemukan untuk periode atau filter yang dipilih.";
         return {
           success: false,
-          error: json.message || "Data catatan SOAP tidak ditemukan untuk filter ini.",
+          error: errMsg,
         };
       } catch {
         // Fallback jika gagal parse json
       }
     }
 
+    const rawMessage = error.response?.data?.message;
     const message =
-      error.response?.data?.message ||
-      (error.response?.status === 404
-        ? "Data catatan SOAP tidak ditemukan untuk filter yang dipilih."
-        : "Gagal mengunduh laporan PDF.");
+      rawMessage && rawMessage !== "Not Found"
+        ? rawMessage
+        : (error.response?.status === 404
+          ? "Data catatan SOAP tidak ditemukan untuk periode atau filter yang dipilih."
+          : `Gagal mengunduh laporan ${format.toUpperCase()}.`);
 
     return {
       success: false,
       error: message,
     };
   }
+}
+
+/**
+ * Mengunduh berkas PDF catatan SOAP (GET /therapy_soaps/export)
+ */
+export async function downloadExportTherapySoapPdf(
+  filters: ExportTherapySoapFilters = {}
+): Promise<{ success: boolean; error?: string; fileName?: string }> {
+  return downloadExportTherapySoap(filters, "pdf");
+}
+
+/**
+ * Mengunduh berkas Excel catatan SOAP (GET /therapy_soaps/export?format=excel)
+ */
+export async function downloadExportTherapySoapExcel(
+  filters: ExportTherapySoapFilters = {}
+): Promise<{ success: boolean; error?: string; fileName?: string }> {
+  return downloadExportTherapySoap(filters, "excel");
 }
 
 /**

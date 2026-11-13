@@ -11,17 +11,19 @@ import {
   FileText,
   ArrowRight,
   PieChart as PieChartIcon,
+  Loader2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { getSchoolDashboard } from "@/lib/api/dashboardSekolah";
-import { getSchoolStudents, SchoolStudentItem } from "@/lib/api/laporanAsesmenSekolah";
-import { showErrorToast } from "@/lib/toast";
+import { getSchoolStudents, SchoolStudentItem, downloadSchoolAssessmentReport } from "@/lib/api/laporanAsesmenSekolah";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
 
 export default function SekolahDashboardPage() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // 1. Query Data Statistik Dasbor Sekolah (GET /api/v1/school/dashboard)
   const { data: stats, isLoading: loadingStats } = useQuery({
@@ -37,6 +39,20 @@ export default function SekolahDashboardPage() {
 
   const recentItems = Array.isArray(recentStudentsData?.items) ? recentStudentsData.items : [];
 
+  // Handler Unduh Laporan Asesmen (GET /school/students/{child}/assessment-report)
+  const handleDownloadReport = async (childId: string, studentName: string) => {
+    setDownloadingId(childId);
+    try {
+      await downloadSchoolAssessmentReport(childId, studentName);
+      showSuccessToast(`Laporan asesmen ${studentName} berhasil diunduh.`, "Unduhan Selesai");
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || "Gagal mengunduh laporan asesmen";
+      showErrorToast(msg, "Gagal Mengunduh");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   // Loading State Utama
   if (loadingStats) {
     return (
@@ -46,14 +62,6 @@ export default function SekolahDashboardPage() {
       </div>
     );
   }
-
-  // Handler Tombol Unduh Laporan Asesmen (Pending Backend)
-  const handlePendingDownload = (studentName: string) => {
-    showErrorToast(
-      `Fitur unduh laporan asesmen untuk ${studentName} berstatus Pending (Menunggu dukungan endpoint backend). Nantinya laporan ini dapat diunduh berkali-kali tanpa batas.`,
-      "Pending Backend"
-    );
-  };
 
   // Kalkulasi data Donut Chart & Card Belum Diunduh (Opsi 1: Status Dokumen & Unduhan)
   const totalStudents = stats?.total_students ?? 0;
@@ -348,12 +356,22 @@ export default function SekolahDashboardPage() {
                         {hasAssessment ? (
                           <button
                             type="button"
-                            onClick={() => handlePendingDownload(student.child_name)}
-                            className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-blue-200/90 bg-blue-50/80 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 transition-all duration-200 active:scale-95 shrink-0 shadow-xs"
-                            title="Unduh Laporan Asesmen (Dapat diunduh berkali-kali tanpa batas • Status: Menunggu endpoint backend)"
+                            onClick={() => handleDownloadReport(student.id, student.child_name)}
+                            disabled={downloadingId === student.id}
+                            className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-blue-200/90 bg-blue-50/80 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 transition-all duration-200 active:scale-95 shrink-0 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Unduh Laporan Asesmen (Dapat diunduh berkali-kali tanpa batas)"
                           >
-                            <Download className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Unduh Laporan</span>
+                            {downloadingId === student.id ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                <span>Mengunduh...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Unduh Laporan</span>
+                              </>
+                            )}
                           </button>
                         ) : (
                           <button

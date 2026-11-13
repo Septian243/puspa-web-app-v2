@@ -59,6 +59,8 @@ interface FormDetailProfilAnakProps {
   isOpen?: boolean;
   onClose: () => void;
   childId?: string | null;
+  fallbackGuardianPhone?: string | null;
+  fallbackGuardianName?: string | null;
 }
 
 export default function FormDetailProfilAnak({
@@ -66,6 +68,8 @@ export default function FormDetailProfilAnak({
   isOpen,
   onClose,
   childId,
+  fallbackGuardianPhone,
+  fallbackGuardianName,
 }: FormDetailProfilAnakProps) {
   const isModalOpen = Boolean(open ?? isOpen);
 
@@ -74,11 +78,25 @@ export default function FormDetailProfilAnak({
     queryKey: queryKeys.school.studentDetail(childId || ""),
     queryFn: () => getSchoolStudentDetail(childId!),
     enabled: isModalOpen && Boolean(childId),
+    staleTime: 0,
   });
 
   if (!isModalOpen) return null;
 
-  const guardianName = student?.guardians?.[0]?.guardian_name || "-";
+  const primaryGuardian =
+    student?.guardians?.find((g) => g.guardian_phone && g.guardian_phone !== "-") ||
+    student?.guardians?.[0];
+  const guardianName = primaryGuardian?.guardian_name || fallbackGuardianName || "-";
+  const guardianPhone =
+    (primaryGuardian?.guardian_phone && primaryGuardian.guardian_phone !== "-"
+      ? primaryGuardian.guardian_phone
+      : null) ||
+    (fallbackGuardianPhone && fallbackGuardianPhone !== "-"
+      ? fallbackGuardianPhone
+      : null) ||
+    "-";
+  const religion = student?.child_religion || "-";
+  const address = student?.child_address || "-";
   const formattedBirthDate = formatTanggal(student?.child_birth_date);
   const birthPlaceDate =
     student?.child_birth_place && student?.child_birth_date
@@ -173,19 +191,19 @@ export default function FormDetailProfilAnak({
                     </p>
                   </div>
 
-                  {/* Agama (Pending: Belum disertakan pada backend response) */}
+                  {/* Agama */}
                   <div>
                     <p className="text-xs font-medium text-gray-400">Agama</p>
                     <p className="mt-1 text-xs font-bold text-gray-800 sm:text-sm">
-                      -
+                      {religion}
                     </p>
                   </div>
 
-                  {/* Alamat (Pending: Belum disertakan pada backend response) */}
+                  {/* Alamat */}
                   <div>
                     <p className="text-xs font-medium text-gray-400">Alamat</p>
                     <p className="mt-1 text-xs font-bold text-gray-800 sm:text-sm">
-                      -
+                      {address}
                     </p>
                   </div>
 
@@ -197,12 +215,12 @@ export default function FormDetailProfilAnak({
                     </p>
                   </div>
 
-                  {/* Nomor Handphone (Pending: Belum disertakan pada backend response) */}
+                  {/* Nomor Handphone */}
                   <div>
                     <p className="text-xs font-medium text-gray-400">Nomor Handphone</p>
                     <p className="text-xs sm:text-sm font-bold text-gray-800 mt-1 flex items-center gap-1.5">
                       <Phone className="w-4 h-4 text-gray-400" />
-                      <span>-</span>
+                      <span>{guardianPhone}</span>
                     </p>
                   </div>
                 </div>
