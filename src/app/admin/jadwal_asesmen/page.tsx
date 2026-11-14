@@ -19,7 +19,9 @@ import {
   CheckCircle2,
   FileCheck2,
   Home,
+  Send,
 } from "lucide-react";
+import { sendAssessmentToSchool } from "@/lib/api/asesment_admin";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { format } from "date-fns";
@@ -65,6 +67,9 @@ export interface Jadwal {
   waktu?: string | null;
   observer?: string | null;
   status?: string | null;
+  is_sent_to_school?: boolean;
+  sent_to_school_at?: string | null;
+  school_id?: string | null;
   /** Mapping bidang → nama asessor, e.g. { fisio: "Nindya Zahri", paedagog: "Alief Arifun" } */
   assessorsByBidang?: Record<string, string>;
 }
@@ -205,6 +210,21 @@ export default function JadwalAsesmenPage() {
   const handleDateSelect = async (date: Date) => {
     const formatted = format(date, "yyyy-MM-dd");
     setSelectedDate(formatted);
+  };
+
+  const [sendingSchoolId, setSendingSchoolId] = useState<number | null>(null);
+
+  const handleSendToSchool = async (assessmentId: number) => {
+    setSendingSchoolId(assessmentId);
+    try {
+      await sendAssessmentToSchool(assessmentId);
+      showSuccessToast("Laporan asesmen berhasil dikirimkan ke sekolah asal.");
+      await fetchData();
+    } catch (err: any) {
+      handleApiError(err, "Gagal mengirimkan laporan asesmen ke sekolah.");
+    } finally {
+      setSendingSchoolId(null);
+    }
   };
 
   const handleSekolahRoute = (action: string, assessment_id: number) => {
@@ -731,7 +751,7 @@ export default function JadwalAsesmenPage() {
                                               Kirim Hasil Asesmen
                                             </span>
                                           </div>
-                                          <div className="p-1">
+                                          <div className="p-1 space-y-1">
                                             <button
                                               type="button"
                                               onClick={() => {
@@ -741,13 +761,47 @@ export default function JadwalAsesmenPage() {
                                                   j.assessment_id,
                                                 );
                                               }}
-                                              className="w-full flex justify-between items-center px-3 py-2.5 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#156292] transition-colors"
+                                              className="w-full flex justify-between items-center px-3 py-2.5 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#156292] transition-colors cursor-pointer"
                                             >
                                               <div className="flex items-center gap-2.5">
                                                 <Upload className="w-4 h-4 text-[#156292]" />{" "}
                                                 Upload File
                                               </div>
                                               <ChevronRight className="w-3.5 h-3.5 opacity-40" />
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              disabled={Boolean(j.is_sent_to_school) || sendingSchoolId === j.assessment_id}
+                                              onClick={() => {
+                                                setOpenDropdown(null);
+                                                handleSendToSchool(j.assessment_id);
+                                              }}
+                                              className={`w-full flex justify-between items-center px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
+                                                j.is_sent_to_school
+                                                  ? "bg-emerald-50 text-emerald-700 cursor-not-allowed"
+                                                  : "text-[#1E5C58] hover:bg-teal-50 cursor-pointer"
+                                              }`}
+                                            >
+                                              <div className="flex items-center gap-2.5">
+                                                {j.is_sent_to_school ? (
+                                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                ) : (
+                                                  <Send className="w-4 h-4 text-[#2B7A75]" />
+                                                )}
+                                                <span>
+                                                  {j.is_sent_to_school
+                                                    ? "Sudah Terkirim"
+                                                    : sendingSchoolId === j.assessment_id
+                                                    ? "Mengirim..."
+                                                    : "Kirim ke Sekolah"}
+                                                </span>
+                                              </div>
+                                              {j.is_sent_to_school && (
+                                                <span className="text-[10px] font-semibold text-emerald-600">
+                                                  ✓
+                                                </span>
+                                              )}
                                             </button>
                                           </div>
                                         </motion.div>
@@ -1054,7 +1108,7 @@ export default function JadwalAsesmenPage() {
                                           Kirim Hasil Asesmen
                                         </span>
                                       </div>
-                                      <div className="p-1">
+                                      <div className="p-1 space-y-1">
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -1064,13 +1118,45 @@ export default function JadwalAsesmenPage() {
                                               j.assessment_id,
                                             );
                                           }}
-                                          className="w-full px-3 py-2.5 text-[10px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#156292] flex items-center justify-between rounded-lg"
+                                          className="w-full px-3 py-2 text-[10px] font-bold text-gray-700 hover:bg-gray-50 hover:text-[#156292] flex items-center justify-between rounded-lg cursor-pointer"
                                         >
                                           <div className="flex items-center gap-2">
                                             <Upload className="w-3.5 h-3.5 text-[#156292]" />
                                             <span>Upload File</span>
                                           </div>
                                           <ChevronRight className="w-3 h-3 opacity-30" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          disabled={Boolean(j.is_sent_to_school) || sendingSchoolId === j.assessment_id}
+                                          onClick={() => {
+                                            setOpenDropdown(null);
+                                            handleSendToSchool(j.assessment_id);
+                                          }}
+                                          className={`w-full px-3 py-2 text-[10px] font-bold flex items-center justify-between rounded-lg transition-colors ${
+                                            j.is_sent_to_school
+                                              ? "bg-emerald-50 text-emerald-700 cursor-not-allowed"
+                                              : "text-[#1E5C58] hover:bg-teal-50 cursor-pointer"
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            {j.is_sent_to_school ? (
+                                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                            ) : (
+                                              <Send className="w-3.5 h-3.5 text-[#2B7A75]" />
+                                            )}
+                                            <span>
+                                              {j.is_sent_to_school
+                                                ? "Sudah Terkirim"
+                                                : sendingSchoolId === j.assessment_id
+                                                ? "Mengirim..."
+                                                : "Kirim ke Sekolah"}
+                                            </span>
+                                          </div>
+                                          {j.is_sent_to_school && (
+                                            <span className="text-[10px] text-emerald-600">✓</span>
+                                          )}
                                         </button>
                                       </div>
                                     </motion.div>

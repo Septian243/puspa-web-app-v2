@@ -69,6 +69,10 @@ export async function getAssessmentsAdmin(
         assessorsByBidang: Object.keys(assessorsByBidang).length > 0 ? assessorsByBidang : undefined,
         tanggalObservasi: item.scheduled_date || "-",
         waktu: item.scheduled_time || "-",
+        sekolah: item.school_name || item.school || "-",
+        school_id: item.school_id,
+        is_sent_to_school: Boolean(item.is_sent_to_school),
+        sent_to_school_at: item.sent_to_school_at || null,
       };
     });
   } catch (error) {

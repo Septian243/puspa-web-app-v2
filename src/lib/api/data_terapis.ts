@@ -8,6 +8,8 @@ export interface Terapis {
   username: string;
   email: string;
   telepon: string;
+  school_id?: string | null;
+  school_name?: string | null;
   role: string;
   ditambahkan: string;
   diubah: string;
@@ -43,6 +45,8 @@ export async function getTerapis(): Promise<Terapis[]> {
       username: t.username,
       email: t.email,
       telepon: t.therapist_phone,
+      school_id: t.school_id || null,
+      school_name: t.school_name || t.school?.name || null,
       ditambahkan: t.created_at,
       diubah: t.updated_at,
       status: t.status,
@@ -60,6 +64,7 @@ export async function addTerapis(data: {
   email: string;
   telepon: string;
   password: string;
+  school_id?: string | null;
 }) {
   const token = localStorage.getItem("token_admin");
   return api.post(
@@ -71,6 +76,7 @@ export async function addTerapis(data: {
       email: data.email,
       therapist_phone: data.telepon,
       password: data.password,
+      school_id: data.school_id || null,
     },
     { headers: { Authorization: `Bearer ${token}` } }
   );
@@ -84,6 +90,7 @@ export async function updateTerapis(
     username: string;
     email: string;
     telepon: string;
+    school_id?: string | null;
   }
 ) {
   const token = localStorage.getItem("token_admin");
@@ -95,6 +102,7 @@ export async function updateTerapis(
       username: data.username,
       email: data.email,
       therapist_phone: data.telepon,
+      school_id: data.school_id || null,
     },
     { headers: { Authorization: `Bearer ${token}` } }
   );
@@ -122,6 +130,8 @@ export async function getDetailTerapis(id: string): Promise<Terapis | null> {
       username: t.username,
       email: t.email,
       telepon: t.therapist_phone,
+      school_id: t.school_id || null,
+      school_name: t.school_name || t.school?.name || null,
       ditambahkan: t.created_at,
       diubah: t.updated_at,
       status: t.status,

@@ -14,7 +14,10 @@ import {
   LockKeyhole,
   Eye,
   EyeOff,
+  School,
 } from "lucide-react";
+import SelectSekolahPasien from "./SelectSekolahPasien";
+import { getDaftarSekolah } from "@/lib/api/data_sekolah";
 
 const bidangOptions = [
   "Fisioterapi",
@@ -30,6 +33,8 @@ type FormState = {
   email: string;
   telepon: string;
   password: string;
+  school_id?: string | null;
+  school_name?: string | null;
 };
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
@@ -50,6 +55,8 @@ export default function FormTambahTerapis({
     email: "",
     telepon: "",
     password: "",
+    school_id: null,
+    school_name: "",
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -127,6 +134,8 @@ export default function FormTambahTerapis({
       email: "",
       telepon: "",
       password: "",
+      school_id: null,
+      school_name: "",
     });
     setErrors({});
     setShowPassword(false);
@@ -320,6 +329,25 @@ export default function FormTambahTerapis({
                     {errors.telepon}
                   </p>
                 )}
+              </div>
+
+              {/* Asal Sekolah / Instansi */}
+              <div className="space-y-1.5">
+                <SelectSekolahPasien
+                  value={formData.school_name || ""}
+                  onChange={(val) => {
+                    const allSchools = getDaftarSekolah();
+                    const matched = allSchools.find(
+                      (s) => s.nama.toLowerCase() === val.toLowerCase()
+                    );
+                    setFormData((prev) => ({
+                      ...prev,
+                      school_name: val,
+                      school_id: matched ? matched.id : null,
+                    }));
+                  }}
+                  label="Asal Sekolah / Afiliasi (Opsional)"
+                />
               </div>
 
               {/* Password */}

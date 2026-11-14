@@ -11,9 +11,12 @@ import {
   X,
   CheckCircle2,
   Stethoscope,
+  School,
 } from "lucide-react";
 
 import { handleApiError } from "@/lib/api-error";
+import SelectSekolahPasien from "./SelectSekolahPasien";
+import { getDaftarSekolah } from "@/lib/api/data_sekolah";
 
 interface FormUbahTerapisProps {
   open: boolean;
@@ -24,6 +27,8 @@ interface FormUbahTerapisProps {
     username: string;
     email: string;
     telepon: string;
+    school_id?: string | null;
+    school_name?: string | null;
   }) => void;
   initialData?: {
     nama: string;
@@ -31,6 +36,8 @@ interface FormUbahTerapisProps {
     username: string;
     email: string;
     telepon: string;
+    school_id?: string | null;
+    school_name?: string | null;
   };
 }
 
@@ -53,11 +60,23 @@ export default function FormUbahTerapis({
     username: "",
     email: "",
     telepon: "",
+    school_id: null as string | null,
+    school_name: "",
   });
 
   useEffect(() => {
     if (initialData && open) {
       setFormData({
+        nama: initialData.nama || "",
+        bidang: initialData.bidang || "",
+        username: initialData.username || "",
+        email: initialData.email || "",
+        telepon: initialData.telepon || "",
+        school_id: initialData.school_id || null,
+        school_name: initialData.school_name || "",
+      });
+    }
+  }, [initialData, open]);
         nama: initialData.nama || "",
         bidang: initialData.bidang || "",
         username: initialData.username || "",
@@ -232,6 +251,26 @@ export default function FormUbahTerapis({
                   required
                 />
               </div>
+            </div>
+
+            {/* Asal Sekolah / Afiliasi */}
+            <div className="space-y-1.5">
+              <SelectSekolahPasien
+                value={formData.school_name || ""}
+                onChange={(val) => {
+                  const allSchools = getDaftarSekolah();
+                  const matched = allSchools.find(
+                    (s) => s.nama.toLowerCase() === val.toLowerCase()
+                  );
+                  setFormData((prev) => ({
+                    ...prev,
+                    school_name: val,
+                    school_id: matched ? matched.id : null,
+                  }));
+                }}
+                theme="amber"
+                label="Asal Sekolah / Afiliasi (Opsional)"
+              />
             </div>
 
             {/* Action */}

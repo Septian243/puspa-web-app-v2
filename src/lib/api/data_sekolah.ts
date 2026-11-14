@@ -122,3 +122,24 @@ export async function updateSchool(id: string, payload: UpdateSchoolPayload): Pr
 export async function deleteSchool(id: string): Promise<void> {
   await api.delete(`/schools/${id}`);
 }
+
+let cachedSchoolsList: Sekolah[] = [];
+
+export function getDaftarSekolah(): Sekolah[] {
+  // Trigger background fetch if empty
+  if (cachedSchoolsList.length === 0 && typeof window !== "undefined") {
+    getSchools().then((schools) => {
+      cachedSchoolsList = schools;
+    }).catch((err) => {
+      console.warn("Background fetch schools failed:", err);
+    });
+  }
+  return cachedSchoolsList;
+}
+
+// Prefetch for instant dropdown availability
+if (typeof window !== "undefined") {
+  getSchools().then((s) => {
+    cachedSchoolsList = s;
+  }).catch(() => {});
+}

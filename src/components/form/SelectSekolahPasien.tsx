@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Search, School, X, ChevronDown, Check, PenLine, Sparkles } from "lucide-react";
-import { getDaftarSekolah, Sekolah } from "@/lib/api/data_sekolah";
+import { getDaftarSekolah, getSchools, Sekolah } from "@/lib/api/data_sekolah";
 
 interface SelectSekolahPasienProps {
   value: string;
@@ -31,7 +31,19 @@ export default function SelectSekolahPasien({
   // Ambil daftar sekolah sistem dan sinkronkan mode awal
   useEffect(() => {
     const list = getDaftarSekolah();
-    setSchools(list);
+    if (list.length > 0) {
+      setSchools(list);
+    }
+
+    getSchools()
+      .then((liveList) => {
+        if (Array.isArray(liveList) && liveList.length > 0) {
+          setSchools(liveList);
+        }
+      })
+      .catch((err) => {
+        console.warn("Gagal fetch live schools di SelectSekolahPasien:", err);
+      });
 
     if (value && value !== "Belum bersekolah") {
       const isKnown = list.some(
@@ -45,7 +57,7 @@ export default function SelectSekolahPasien({
 
   useEffect(() => {
     if (isOpen) {
-      setSchools(getDaftarSekolah());
+      getSchools().then((s) => setSchools(s)).catch(() => {});
     }
   }, [isOpen]);
 
