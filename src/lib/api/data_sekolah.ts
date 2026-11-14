@@ -1,264 +1,124 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import api from "@/lib/axios";
+
 export interface Sekolah {
   id: string;
   nama: string;
+  school_name?: string;
   npsn?: string | null;
   username: string;
   jenjang: string;
-  role: string;
+  jenjangKode?: string;
+  jenjangLabel?: string;
+  role?: string;
   email: string;
   phone: string;
+  school_phone?: string;
+  noTelepon?: string;
   alamat?: string;
-  status: "TERVERIFIKASI" | "MENUNGGU" | "DITOLAK" | string;
+  school_address?: string;
+  pic_name?: string;
+  status: "TERVERIFIKASI" | "MENUNGGU" | "DITOLAK" | "Terverifikasi" | "Tidak Terverifikasi" | string;
+  verification_status?: string;
+  students_count?: number;
   created_at?: string;
   updated_at?: string;
+  tanggalPendaftaran?: string;
 }
 
-export const DUMMY_SEKOLAH: Sekolah[] = [
-  // PAUD
-  {
-    id: "paud-1",
-    nama: "PAUD Tunas Bangsa",
-    username: "paudtunasbangsa",
-    jenjang: "PAUD",
-    role: "Sekolah",
-    email: "tunasbangsa@gmail.com",
-    phone: "081234567890",
-    alamat: "Jl. Tunas Bangsa No. 1, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "paud-2",
-    nama: "PAUD Melati",
-    username: "paudmelati",
-    jenjang: "PAUD",
-    role: "Sekolah",
-    email: "paudmelati@gmail.com",
-    phone: "081234567891",
-    alamat: "Jl. Melati No. 5, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "paud-3",
-    nama: "PAUD Ceria Anak",
-    username: "paudceria",
-    jenjang: "PAUD",
-    role: "Sekolah",
-    email: "paudceria@gmail.com",
-    phone: "081234567892",
-    alamat: "Jl. Ceria No. 8, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  // TK
-  {
-    id: "tk-1",
-    nama: "TK Al-Hikmah",
-    username: "tkalhikmah",
-    jenjang: "TK",
-    role: "Sekolah",
-    email: "alhikmah@gmail.com",
-    phone: "081234567893",
-    alamat: "Jl. Kebonsari No. 12, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "tk-2",
-    nama: "TK Aisyiyah Bustanul Athfal",
-    username: "tkaisyiyah",
-    jenjang: "TK",
-    role: "Sekolah",
-    email: "aisyiyah@gmail.com",
-    phone: "081234567894",
-    alamat: "Jl. KH Ahmad Dahlan No. 10, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "tk-3",
-    nama: "TK Kartika",
-    username: "tkkartika",
-    jenjang: "TK",
-    role: "Sekolah",
-    email: "kartika@gmail.com",
-    phone: "081234567895",
-    alamat: "Jl. Hayam Wuruk No. 3, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "tk-4",
-    nama: "TK Pembina",
-    username: "tkpembina",
-    jenjang: "TK",
-    role: "Sekolah",
-    email: "pembina@gmail.com",
-    phone: "081234567896",
-    alamat: "Jl. Pemuda No. 17, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "2",
-    nama: "TK 1 Jamsaren",
-    username: "jamsaren01",
-    jenjang: "TK",
-    role: "Sekolah",
-    email: "jamsaren@gmail.com",
-    phone: "089299886565",
-    alamat: "Jl. Veteran No. 14, Jamsaren, Kediri",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  // SD
-  {
-    id: "sd-1",
-    nama: "SD Permata Hati",
-    username: "sdpermatahati",
-    jenjang: "SD",
-    role: "Sekolah",
-    email: "permatahati@gmail.com",
-    phone: "081234567897",
-    alamat: "Jl. Kutai No. 20, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "sd-2",
-    nama: "SDN Darmo Permai",
-    username: "sdndarmopermai",
-    jenjang: "SD",
-    role: "Sekolah",
-    email: "darmopermai@gmail.com",
-    phone: "081234567898",
-    alamat: "Jl. Darmo Permai No. 8, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "sd-3",
-    nama: "SD Al-Azhar",
-    username: "sdalazhar",
-    jenjang: "SD",
-    role: "Sekolah",
-    email: "alazhar@gmail.com",
-    phone: "081234567899",
-    alamat: "Jl. Wisma Permai No. 4, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "sd-4",
-    nama: "MI Muhammadiyah",
-    username: "mimuhammadiyah",
-    jenjang: "SD",
-    role: "Sekolah",
-    email: "mimuhammadiyah@gmail.com",
-    phone: "081234567800",
-    alamat: "Jl. Pucang Anom No. 15, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "1",
-    nama: "SD 1 Jamsaren",
-    username: "jamsaren01",
-    jenjang: "SD",
-    role: "Sekolah",
-    email: "jamsaren@gmail.com",
-    phone: "089299886565",
-    alamat: "Jl. Veteran No. 12, Jamsaren, Kediri",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  // SMP
-  {
-    id: "smp-1",
-    nama: "SMPN 1 Surabaya",
-    username: "smpn1surabaya",
-    jenjang: "SMP",
-    role: "Sekolah",
-    email: "smpn1sby@gmail.com",
-    phone: "081234567801",
-    alamat: "Jl. Pacar No. 4, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "smp-2",
-    nama: "SMP Al-Hikmah",
-    username: "smpalhikmah",
-    jenjang: "SMP",
-    role: "Sekolah",
-    email: "smpalhikmah@gmail.com",
-    phone: "081234567802",
-    alamat: "Jl. Kebonsari No. 14, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "smp-3",
-    nama: "SMP Muhammadiyah",
-    username: "smpmuhammadiyah",
-    jenjang: "SMP",
-    role: "Sekolah",
-    email: "smpmuhammadiyah@gmail.com",
-    phone: "081234567803",
-    alamat: "Jl. Kapas Krampung No. 22, Surabaya",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-  {
-    id: "3",
-    nama: "SMP 1 Jamsaren",
-    username: "jamsaren01",
-    jenjang: "SMP",
-    role: "Sekolah",
-    email: "jamsaren@gmail.com",
-    phone: "089299886565",
-    alamat: "Jl. Veteran No. 10, Jamsaren, Kediri",
-    status: "TERVERIFIKASI",
-    created_at: "30 October 2026 13:04:54",
-    updated_at: "30 October 2026 13:04:54",
-  },
-];
+export interface CreateSchoolPayload {
+  username: string;
+  email: string;
+  password: string;
+  school_name: string;
+  jenjang?: string;
+  npsn?: string | null;
+  school_phone?: string;
+  school_address?: string;
+  pic_name?: string;
+}
 
-export function getDaftarSekolah(): Sekolah[] {
-  if (typeof window !== "undefined") {
-    try {
-      const saved = localStorage.getItem("puspa_data_sekolah_dummy");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Gabungkan data tersimpan dengan dummy baru jika belum ada
-          const savedNames = new Set(parsed.map((item: Sekolah) => item.nama.toLowerCase()));
-          const extraDummies = DUMMY_SEKOLAH.filter(
-            (dummy) => !savedNames.has(dummy.nama.toLowerCase())
-          );
-          return [...parsed, ...extraDummies];
-        }
-      }
-    } catch (e) {
-      console.error("Gagal memuat data sekolah dari localStorage:", e);
-    }
+export interface UpdateSchoolPayload {
+  school_name?: string;
+  jenjang?: string;
+  npsn?: string | null;
+  school_phone?: string;
+  school_address?: string;
+  pic_name?: string;
+}
+
+export async function getSchools(search?: string): Promise<Sekolah[]> {
+  const params: Record<string, string> = {};
+  if (search && search.trim()) {
+    params.search = search.trim();
   }
-  return DUMMY_SEKOLAH;
+
+  const res = await api.get("/schools", { params });
+  const rawData = res.data?.data ?? [];
+
+  return rawData.map((item: any) => ({
+    id: item.id,
+    nama: item.namaSekolah || item.school_name || "-",
+    school_name: item.school_name || item.namaSekolah || "-",
+    npsn: item.npsn || null,
+    username: item.username || "-",
+    jenjang: item.jenjang || "-",
+    jenjangKode: item.jenjangKode || item.jenjang || "-",
+    jenjangLabel: item.jenjangLabel || item.jenjang || "-",
+    role: "Sekolah",
+    email: item.email || "-",
+    phone: item.noTelepon || item.school_phone || "-",
+    school_phone: item.school_phone || item.noTelepon || "-",
+    noTelepon: item.noTelepon || item.school_phone || "-",
+    alamat: item.alamat || item.school_address || "-",
+    school_address: item.school_address || item.alamat || "-",
+    pic_name: item.pic_name || "-",
+    status: item.status || (item.verification_status === "verified" ? "Terverifikasi" : "Tidak Terverifikasi"),
+    verification_status: item.verification_status,
+    students_count: item.students_count ?? 0,
+    created_at: item.created_at || "-",
+    tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
+  }));
+}
+
+export async function getSchoolById(id: string): Promise<Sekolah> {
+  const res = await api.get(`/schools/${id}`);
+  const item = res.data?.data;
+  return {
+    id: item.id,
+    nama: item.namaSekolah || item.school_name || "-",
+    school_name: item.school_name || item.namaSekolah || "-",
+    npsn: item.npsn || null,
+    username: item.username || "-",
+    jenjang: item.jenjang || "-",
+    jenjangKode: item.jenjangKode || item.jenjang || "-",
+    jenjangLabel: item.jenjangLabel || item.jenjang || "-",
+    role: "Sekolah",
+    email: item.email || "-",
+    phone: item.noTelepon || item.school_phone || "-",
+    school_phone: item.school_phone || item.noTelepon || "-",
+    noTelepon: item.noTelepon || item.school_phone || "-",
+    alamat: item.alamat || item.school_address || "-",
+    school_address: item.school_address || item.alamat || "-",
+    pic_name: item.pic_name || "-",
+    status: item.status || (item.verification_status === "verified" ? "Terverifikasi" : "Tidak Terverifikasi"),
+    verification_status: item.verification_status,
+    students_count: item.students_count ?? 0,
+    created_at: item.created_at || "-",
+    tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
+  };
+}
+
+export async function createSchool(payload: CreateSchoolPayload): Promise<Sekolah> {
+  const res = await api.post("/schools", payload);
+  return res.data?.data;
+}
+
+export async function updateSchool(id: string, payload: UpdateSchoolPayload): Promise<Sekolah> {
+  const res = await api.put(`/schools/${id}`, payload);
+  return res.data?.data;
+}
+
+export async function deleteSchool(id: string): Promise<void> {
+  await api.delete(`/schools/${id}`);
 }
