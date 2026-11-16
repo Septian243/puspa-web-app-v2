@@ -20,76 +20,6 @@ export interface RiwayatPembayaran {
   jumlah: number;
 }
 
-export const DUMMY_RIWAYAT: RiwayatPembayaran[] = [
-  {
-    id: "1",
-    tanggal: "29 Sep 2026",
-    noInvoice: "INV/2026/PKT/0005",
-    anak: "Zahra",
-    wali: "Ibu Siti Nurhaliza",
-    status: "Pemasukan",
-    metode: "Transfer bank",
-    bukti: "-",
-    jumlah: 9600000,
-  },
-  {
-    id: "2",
-    tanggal: "29 Sep 2026",
-    noInvoice: "INV/2026/08/0007",
-    anak: "Kenzo",
-    wali: "Ibu Rina Wulandari",
-    status: "Periode selanjutnya",
-    metode: "-",
-    bukti: "-",
-    jumlah: 300000,
-  },
-  {
-    id: "3",
-    tanggal: "28 Sep 2026",
-    noInvoice: "INV/2026/08/0001",
-    anak: "Alya",
-    wali: "Bpk. Andi Pratama",
-    status: "Dikembalikan",
-    metode: "Transfer bank",
-    bukti: "bukti_transfer.jpg",
-    jumlah: 150000,
-  },
-  {
-    id: "4",
-    tanggal: "28 Sep 2026",
-    noInvoice: "INV/2026/08/0002",
-    anak: "Raka",
-    wali: "Bpk. Andi Pratama",
-    status: "Periode selanjutnya",
-    metode: "-",
-    bukti: "-",
-    jumlah: 175000,
-  },
-  {
-    id: "5",
-    tanggal: "28 Sep 2026",
-    noInvoice: "INV/2026/09/0003",
-    anak: "Zahra",
-    wali: "Ibu Siti Nurhaliza",
-    status: "Pemasukan",
-    metode: "QRIS",
-    bukti: "-",
-    jumlah: 1600000,
-  },
-];
-for (let i = 0; i < 15; i++) {
-  DUMMY_RIWAYAT.push({
-    id: `dummy-${i + 6}`,
-    tanggal: "25 Sep 2026",
-    noInvoice: `INV/2026/09/001${i}`,
-    anak: "Dummy Anak " + i,
-    wali: "Dummy Wali " + i,
-    status: "Pemasukan",
-    metode: "QRIS",
-    bukti: "-",
-    jumlah: 1200000,
-  });
-}
 export interface PotonganData {
   id: string;
   anak: string;
@@ -122,7 +52,7 @@ export default function TabPembayaran({
   const [transactions, setTransactions] = useState<RiwayatPembayaran[]>([]);
 
 
-  const activeList = (riwayatList && riwayatList.length > 0) ? riwayatList : (transactions.length > 0 ? transactions : DUMMY_RIWAYAT);
+  const activeList = (riwayatList && riwayatList.length > 0) ? riwayatList : transactions;
   const currentYear = new Date().getFullYear();
   const [riwayatSearch, setRiwayatSearch] = useState("");
   const [filterMetode, setFilterMetode] = useState("Semua metode");

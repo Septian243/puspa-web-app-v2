@@ -214,7 +214,11 @@ export default function JadwalAsesmenPage() {
 
   const [sendingSchoolId, setSendingSchoolId] = useState<number | null>(null);
 
-  const handleSendToSchool = async (assessmentId: number) => {
+  const handleSendToSchool = async (assessmentId: number, item?: any) => {
+    if (item && !item.school_id && (!item.sekolah || item.sekolah === "-" || item.sekolah === "Belum bersekolah")) {
+      handleApiError({ response: { data: { message: "Anak belum terafiliasi dengan sekolah mana pun." } } }, "Anak belum terafiliasi dengan sekolah mana pun.");
+      return;
+    }
     setSendingSchoolId(assessmentId);
     try {
       await sendAssessmentToSchool(assessmentId);
@@ -775,7 +779,7 @@ export default function JadwalAsesmenPage() {
                                               disabled={Boolean(j.is_sent_to_school) || sendingSchoolId === j.assessment_id}
                                               onClick={() => {
                                                 setOpenDropdown(null);
-                                                handleSendToSchool(j.assessment_id);
+                                                handleSendToSchool(j.assessment_id, j);
                                               }}
                                               className={`w-full flex justify-between items-center px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
                                                 j.is_sent_to_school
@@ -1132,7 +1136,7 @@ export default function JadwalAsesmenPage() {
                                           disabled={Boolean(j.is_sent_to_school) || sendingSchoolId === j.assessment_id}
                                           onClick={() => {
                                             setOpenDropdown(null);
-                                            handleSendToSchool(j.assessment_id);
+                                            handleSendToSchool(j.assessment_id, j);
                                           }}
                                           className={`w-full px-3 py-2 text-[10px] font-bold flex items-center justify-between rounded-lg transition-colors ${
                                             j.is_sent_to_school

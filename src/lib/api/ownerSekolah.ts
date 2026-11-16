@@ -10,11 +10,14 @@ export interface OwnerSchoolItem {
   jenjangKode: string;
   jenjangLabel: string;
   alamat: string;
+  school_address?: string;
   peran: string;
   username: string;
   email: string;
   noTelepon: string;
+  school_phone?: string;
   tanggalPendaftaran: string;
+  created_at?: string;
   status: "Terverifikasi" | "Tidak Terverifikasi" | "Ditolak";
   verification_status?: string;
   pic_name?: string;

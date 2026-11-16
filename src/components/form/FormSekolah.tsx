@@ -89,7 +89,7 @@ export default function FormSekolah({
         setForm({
           nama: initialData.nama || "",
           jenjang: matchedJenjang,
-          alamat: initialData.alamat || "Jl. Veteran No. 12, Jamsaren, Kediri",
+          alamat: (initialData.alamat && initialData.alamat !== "-") ? initialData.alamat : "",
           username: initialData.username || "",
           email: initialData.email || "",
           telepon: initialData.phone || "",

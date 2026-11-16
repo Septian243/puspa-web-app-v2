@@ -103,7 +103,7 @@ function DetailContent() {
             let childInfo: any = null;
             if (res.child_id) {
               const childRes = await getChildDetail(res.child_id);
-              childInfo = childRes.data;
+              childInfo = (childRes as any)?.data || childRes;
             }
 
             setDetailData({

@@ -11,12 +11,9 @@ import {
   X,
   CheckCircle2,
   Stethoscope,
-  School,
 } from "lucide-react";
 
 import { handleApiError } from "@/lib/api-error";
-import SelectSekolahPasien from "./SelectSekolahPasien";
-import { getDaftarSekolah } from "@/lib/api/data_sekolah";
 
 interface FormUbahTerapisProps {
   open: boolean;
@@ -27,8 +24,6 @@ interface FormUbahTerapisProps {
     username: string;
     email: string;
     telepon: string;
-    school_id?: string | null;
-    school_name?: string | null;
   }) => void;
   initialData?: {
     nama: string;
@@ -36,8 +31,6 @@ interface FormUbahTerapisProps {
     username: string;
     email: string;
     telepon: string;
-    school_id?: string | null;
-    school_name?: string | null;
   };
 }
 
@@ -60,8 +53,6 @@ export default function FormUbahTerapis({
     username: "",
     email: "",
     telepon: "",
-    school_id: null as string | null,
-    school_name: "",
   });
 
   useEffect(() => {
@@ -72,8 +63,6 @@ export default function FormUbahTerapis({
         username: initialData.username || "",
         email: initialData.email || "",
         telepon: initialData.telepon || "",
-        school_id: initialData.school_id || null,
-        school_name: initialData.school_name || "",
       });
     }
   }, [initialData, open]);
@@ -110,11 +99,11 @@ export default function FormUbahTerapis({
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative"
+          className="relative w-full max-w-md overflow-hidden bg-white shadow-2xl rounded-3xl"
         >
           {/* Header */}
-          <div className="bg-linear-to-br from-amber-500 to-amber-600 p-6 text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2 pointer-events-none z-0" />
+          <div className="relative p-6 overflow-hidden text-white bg-linear-to-br from-amber-500 to-amber-600">
+            <div className="absolute top-0 right-0 z-0 w-32 h-32 transform translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none bg-white/10 blur-2xl" />
 
             <button
               onClick={onClose}
@@ -123,13 +112,13 @@ export default function FormUbahTerapis({
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/30 text-white shrink-0">
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="flex items-center justify-center w-12 h-12 text-white border bg-white/20 rounded-2xl backdrop-blur-md border-white/30 shrink-0">
                 <Edit3 className="w-6 h-6" />
               </div>
               <div>
                 <h2 className="text-xl font-bold">Ubah Data Terapis</h2>
-                <div className="text-xs font-semibold text-white/80 mt-1 flex items-center gap-1">
+                <div className="flex items-center gap-1 mt-1 text-xs font-semibold text-white/80">
                   <UserCog className="w-3.5 h-3.5" /> @{initialData?.username}
                 </div>
               </div>
@@ -139,19 +128,19 @@ export default function FormUbahTerapis({
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             {/* Input Nama Lengkap */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Nama Lengkap
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
+                  <User className="w-5 h-5 text-gray-400 transition-colors group-focus-within:text-amber-500" />
                 </div>
                 <input
                   type="text"
                   name="nama"
                   value={formData.nama}
                   onChange={handleChange}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
+                  className="w-full py-3 pr-4 text-sm font-medium text-gray-700 transition-all border border-gray-200 outline-none pl-11 bg-gray-50 rounded-xl focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
               </div>
@@ -159,18 +148,18 @@ export default function FormUbahTerapis({
 
             {/* Input Bidang */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Bidang / Spesialisasi
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Stethoscope className="h-5 w-5 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
+                  <Stethoscope className="w-5 h-5 text-gray-400 transition-colors group-focus-within:text-amber-500" />
                 </div>
                 <select
                   name="bidang"
                   value={formData.bidang}
                   onChange={handleChange}
-                  className="appearance-none w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10 cursor-pointer"
+                  className="w-full py-3 pr-4 text-sm font-medium text-gray-700 transition-all border border-gray-200 outline-none appearance-none cursor-pointer pl-11 bg-gray-50 rounded-xl focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 >
                   <option value="" disabled>
@@ -187,19 +176,19 @@ export default function FormUbahTerapis({
 
             {/* Input Username */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Nama Pengguna
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <UserCog className="h-5 w-5 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
+                  <UserCog className="w-5 h-5 text-gray-400 transition-colors group-focus-within:text-amber-500" />
                 </div>
                 <input
                   type="text"
                   name="username"
                   value={formData.username}
                   onChange={handleChange}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
+                  className="w-full py-3 pr-4 text-sm font-medium text-gray-700 transition-all border border-gray-200 outline-none pl-11 bg-gray-50 rounded-xl focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
               </div>
@@ -207,19 +196,19 @@ export default function FormUbahTerapis({
 
             {/* Input Email */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Email
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
+                  <Mail className="w-5 h-5 text-gray-400 transition-colors group-focus-within:text-amber-500" />
                 </div>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
+                  className="w-full py-3 pr-4 text-sm font-medium text-gray-700 transition-all border border-gray-200 outline-none pl-11 bg-gray-50 rounded-xl focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
               </div>
@@ -227,46 +216,26 @@ export default function FormUbahTerapis({
 
             {/* Input Telepon */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700 ml-1">
+              <label className="ml-1 text-sm font-semibold text-gray-700">
                 Telepon
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Phone className="h-5 w-5 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
+                  <Phone className="w-5 h-5 text-gray-400 transition-colors group-focus-within:text-amber-500" />
                 </div>
                 <input
                   type="text"
                   name="telepon"
                   value={formData.telepon}
                   onChange={handleChange}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
+                  className="w-full py-3 pr-4 text-sm font-medium text-gray-700 transition-all border border-gray-200 outline-none pl-11 bg-gray-50 rounded-xl focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
               </div>
             </div>
 
-            {/* Asal Sekolah / Afiliasi */}
-            <div className="space-y-1.5">
-              <SelectSekolahPasien
-                value={formData.school_name || ""}
-                onChange={(val) => {
-                  const allSchools = getDaftarSekolah();
-                  const matched = allSchools.find(
-                    (s) => s.nama.toLowerCase() === val.toLowerCase()
-                  );
-                  setFormData((prev) => ({
-                    ...prev,
-                    school_name: val,
-                    school_id: matched ? matched.id : null,
-                  }));
-                }}
-                theme="amber"
-                label="Asal Sekolah / Afiliasi (Opsional)"
-              />
-            </div>
-
             {/* Action */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-2">
+            <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-100">
               <button
                 type="button"
                 onClick={onClose}

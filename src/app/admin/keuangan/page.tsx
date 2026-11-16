@@ -27,7 +27,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import TabPembayaran, { PotonganData, RiwayatPembayaran, DUMMY_RIWAYAT } from "@/components/keuangan/TabPembayaran";
+import TabPembayaran, { PotonganData, RiwayatPembayaran } from "@/components/keuangan/TabPembayaran";
 import PengembalianDanaModal from "@/components/keuangan/PengembalianDanaModal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -82,158 +82,6 @@ interface TerapiRow {
   harga_sesi: number | "";
 }
 
-// ── Dummy Data ────────────────────────────────────────────────────────────────
-const dummyInvoices: Invoice[] = [
-  {
-    id: "kezia-1",
-    no_invoice: "INV-LC/2026/10/3832",
-    anak: "Kezia Aurelia",
-    wali: "Ibu Aurelia",
-    tipe: "Bulanan",
-    periode: "Oktober 2026",
-    total: 265000,
-    tanggal_terbit: "01 Okt 2026",
-    status: "LUNAS",
-    pembayaran: { tanggal: "03/10/2026", metode: "Transfer bank", noResi: "TRX-3832" },
-    terapiRows: [
-      { id: "t1", jenis: "Terapi Wicara", jumlah_sesi: 4, harga_sesi: 15000 },
-      { id: "t2", jenis: "Terapi Okupasi", jumlah_sesi: 3, harga_sesi: 20000 },
-      { id: "t3", jenis: "Fisioterapi", jumlah_sesi: 7, harga_sesi: 10000 },
-      { id: "t4", jenis: "PLB (Paedagog)", jumlah_sesi: 5, harga_sesi: 15000 },
-    ],
-  },
-  {
-    id: "1",
-    no_invoice: "INV/2025/11/0000",
-    anak: "Kenzo",
-    wali: "Ibu Rina Wulandari",
-    tipe: "Bulanan",
-    periode: "November 2025",
-    total: 1200000,
-    tanggal_terbit: "28 Nov 2025",
-    status: "LUNAS",
-    pembayaran: { tanggal: "30 Nov 2025", metode: "Transfer bank", noResi: "" },
-  },
-  {
-    id: "2",
-    no_invoice: "INV/2026/08/0001",
-    anak: "Alya",
-    wali: "Bpk. Andi Pratama",
-    tipe: "Bulanan",
-    periode: "Agustus 2026",
-    total: 1200000,
-    tanggal_terbit: "25 Agu 2026",
-    status: "LUNAS",
-    pembayaran: { tanggal: "26 Agu 2026", metode: "Transfer bank", noResi: "" },
-    pengembalian: { tanggal: "10 Sep 2026", jumlah: 150000 },
-  },
-  {
-    id: "3",
-    no_invoice: "INV/2026/08/0002",
-    anak: "Raka",
-    wali: "Bpk. Andi Pratama",
-    tipe: "Bulanan",
-    periode: "Agustus 2026",
-    total: 700000,
-    tanggal_terbit: "25 Agu 2026",
-    status: "LUNAS",
-    pembayaran: { tanggal: "26 Agu 2026", metode: "Tunai", noResi: "" },
-    periodeBerikutnya: { tanggal: "6 Sep 2026", jumlah: 175000 },
-  },
-  {
-    id: "4",
-    no_invoice: "INV/2026/09/0003",
-    anak: "Zahra",
-    wali: "Ibu Siti Nurhaliza",
-    tipe: "Bulanan",
-    periode: "September 2026",
-    total: 1600000,
-    tanggal_terbit: "25 Sep 2026",
-    status: "LUNAS",
-    pembayaran: { tanggal: "28 Sep 2026", metode: "QRIS", noResi: "" },
-  },
-  {
-    id: "5",
-    no_invoice: "INV/2026/09/0004",
-    anak: "Kenzo",
-    wali: "Ibu Rina Wulandari",
-    tipe: "Bulanan",
-    periode: "September 2026",
-    total: 1900000,
-    tanggal_terbit: "25 Sep 2026",
-    status: "BELUM DIBAYAR",
-    terapiRows: [
-      { id: "r5a", jenis: "Terapi Wicara", jumlah_sesi: 8, harga_sesi: 150000 },
-      { id: "r5b", jenis: "Terapi Okupasi", jumlah_sesi: 4, harga_sesi: 175000 },
-    ],
-  },
-  {
-    id: "6",
-    no_invoice: "INV/2026/PKT/0005",
-    anak: "Zahra",
-    wali: "Ibu Siti Nurhaliza",
-    tipe: "Paket Durasi",
-    periode: "1 Okt 2026 – 31 Mar 2027 (181 hari)",
-    total: 9600000,
-    tanggal_terbit: "28 Sep 2026",
-    status: "LUNAS",
-    pembayaran: { tanggal: "1 Okt 2026", metode: "Transfer bank", noResi: "" },
-  },
-  {
-    id: "7",
-    no_invoice: "INV/2026/09/0006",
-    anak: "Raka",
-    wali: "Bpk. Andi Pratama",
-    tipe: "Bulanan",
-    periode: "September 2026",
-    total: 525000,
-    tanggal_terbit: "26 Sep 2026",
-    status: "BELUM DIBAYAR",
-    terapiRows: [
-      { id: "r7a", jenis: "PLB (Paedagog)", jumlah_sesi: 3, harga_sesi: 175000 },
-    ],
-  },
-  {
-    id: "8",
-    no_invoice: "INV/2026/08/0007",
-    anak: "Kenzo",
-    wali: "Ibu Rina Wulandari",
-    tipe: "Bulanan",
-    periode: "Agustus 2026",
-    total: 1200000,
-    tanggal_terbit: "25 Agu 2026",
-    status: "LUNAS",
-    pembayaran: { tanggal: "26 Agu 2026", metode: "Transfer bank", noResi: "" },
-    periodeBerikutnya: { tanggal: "5 Sep 2026", jumlah: 300000 },
-  },
-];
-
-const DUMMY_WALI = [
-  "Ibu Rina Wulandari",
-  "Bpk. Andi Pratama",
-  "Ibu Siti Nurhaliza",
-  "Bpk. Teguh Santoso",
-  "Ibu Dewi Lestari",
-  "Bpk. Hendra Wijaya",
-];
-
-const DUMMY_ANAK: Record<string, string[]> = {
-  "Ibu Rina Wulandari": ["Kenzo"],
-  "Bpk. Andi Pratama": ["Alya", "Raka"],
-  "Ibu Siti Nurhaliza": ["Zahra"],
-  "Bpk. Teguh Santoso": ["Bima"],
-  "Ibu Dewi Lestari": ["Naufal"],
-  "Bpk. Hendra Wijaya": ["Queenza"],
-};
-
-const DUMMY_POTONGAN: PotonganData[] = [
-  { id: "1", anak: "Kenzo", wali: "Ibu Rina Wulandari", jumlah: 300000 },
-  { id: "2", anak: "Naufal", wali: "Ibu Dewi Lestari", jumlah: 450000 },
-  { id: "3", anak: "Queenza", wali: "Bpk. Hendra Wijaya", jumlah: 400000 },
-  { id: "4", anak: "Alya", wali: "Bpk. Andi Pratama", jumlah: 500000 },
-  { id: "5", anak: "Zahra", wali: "Ibu Siti Nurhaliza", jumlah: 350000 },
-  { id: "6", anak: "Bima", wali: "Bpk. Teguh Santoso", jumlah: 260000 },
-];
 const JENIS_TERAPI_OPTIONS = [
   "Terapi Wicara",
   "Terapi Okupasi",
@@ -372,10 +220,10 @@ function ConfirmDialogModal({
           <div className={`p-3.5 rounded-full mb-4 ${confirmVariant === "danger" ? "bg-red-50 text-red-500" : "bg-teal-50 text-[#1E5C58]"}`}>
             <AlertCircle size={28} />
           </div>
-          <h3 className="text-base font-extrabold text-gray-900 mb-2">{title}</h3>
-          <p className="text-xs font-medium text-gray-500 mb-6 leading-relaxed">{message}</p>
+          <h3 className="mb-2 text-base font-extrabold text-gray-900">{title}</h3>
+          <p className="mb-6 text-xs font-medium leading-relaxed text-gray-500">{message}</p>
 
-          <div className="flex items-center gap-3 w-full">
+          <div className="flex items-center w-full gap-3">
             <button
               type="button"
               onClick={onCancel}
@@ -452,7 +300,7 @@ function BuktiTransferModal({
             )}
           </div>
 
-          <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex gap-3">
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -1351,8 +1199,8 @@ function CetakInvoiceModal({
             <div id="receipt-print-inner" className="p-5 mx-auto bg-white border border-gray-300 border-dashed shadow-sm rounded-xl"
               style={{ maxWidth: 290, fontFamily: "'Courier New', Courier, monospace" }}>
 
-              <div className="text-center mb-3">
-                <p className="text-base font-black text-gray-900 tracking-wide" style={{ fontFamily: "sans-serif" }}>PUSPA</p>
+              <div className="mb-3 text-center">
+                <p className="text-base font-black tracking-wide text-gray-900" style={{ fontFamily: "sans-serif" }}>PUSPA</p>
                 <p className="text-[9px] text-gray-500" style={{ fontFamily: "sans-serif" }}>Holistic Integrative Care</p>
                 <p className="text-[9px] text-gray-400 mt-0.5" style={{ fontFamily: "sans-serif" }}>Rek. BCA 000-000-0000 a.n. Puspa</p>
               </div>
@@ -1363,11 +1211,11 @@ function CetakInvoiceModal({
               </div>
               <div className="border-t border-dashed border-gray-300 my-2.5" />
 
-              <div className="space-y-1 mb-2">
+              <div className="mb-2 space-y-1">
                 {[{ label: "Anak", value: invoice.anak }, { label: "Wali", value: invoice.wali }, { label: "Periode", value: invoice.periode }, { label: "Terbit", value: invoice.tanggal_terbit }].map(({ label, value }) => (
                   <div key={label} className="flex justify-between text-[10px]">
                     <span className="text-gray-400">{label}</span>
-                    <span className="font-bold text-gray-800 text-right" style={{ maxWidth: 170 }}>{value}</span>
+                    <span className="font-bold text-right text-gray-800" style={{ maxWidth: 170 }}>{value}</span>
                   </div>
                 ))}
               </div>
@@ -1767,17 +1615,19 @@ function BuatTagihanForm({
   onSave,
   initialData,
   prefillData,
+  isSubmitting,
 }: {
   onBack: () => void;
   onSave: (invData: any) => void;
   initialData?: Invoice;
-  prefillData?: { anak: string; wali: string; potongan?: number } | null;
+  prefillData?: { anak: string; wali: string; potongan?: number; childId?: string; guardianId?: string } | null;
+  isSubmitting?: boolean;
 }) {
   const [childrenList, setChildrenList] = useState<ChildGuardianItem[]>([]);
   const [tipeTagihan, setTipeTagihan] = useState<"Bulanan" | "Paket Durasi">(initialData?.tipe ?? "Bulanan");
 
-  const [selectedChildId, setSelectedChildId] = useState(initialData?.child_id ?? "");
-  const [selectedGuardianId, setSelectedGuardianId] = useState(initialData?.guardian_id ?? "");
+  const [selectedChildId, setSelectedChildId] = useState(initialData?.child_id ?? prefillData?.childId ?? "");
+  const [selectedGuardianId, setSelectedGuardianId] = useState(initialData?.guardian_id ?? prefillData?.guardianId ?? "");
   const [selectedWaliName, setSelectedWaliName] = useState(initialData?.wali ?? prefillData?.wali ?? "");
   const [selectedAnakName, setSelectedAnakName] = useState(initialData?.anak ?? prefillData?.anak ?? "");
 
@@ -1795,8 +1645,11 @@ function BuatTagihanForm({
           setSelectedWaliName(found.guardian_name);
           setSelectedAnakName(found.child_name);
         }
-      } else if (prefillData?.anak) {
-        const found = data.find((c) => c.child_name.toLowerCase() === prefillData.anak.toLowerCase());
+      } else if (prefillData?.childId || prefillData?.anak) {
+        const found = data.find((c) =>
+          (prefillData.childId && c.child_id === prefillData.childId) ||
+          (prefillData.anak && c.child_name.toLowerCase() === prefillData.anak.toLowerCase())
+        );
         if (found) {
           setSelectedChildId(found.child_id);
           setSelectedGuardianId(found.guardian_id);
@@ -1906,7 +1759,16 @@ function BuatTagihanForm({
     const newErrors: typeof errors = { terapi: [] };
     let hasError = false;
 
+    let guardianId = selectedGuardianId;
+    if (!guardianId && selectedChildId) {
+      const childItem = childrenList.find((c) => c.child_id === selectedChildId);
+      if (childItem?.guardian_id) {
+        guardianId = childItem.guardian_id;
+      }
+    }
+
     if (!selectedChildId) { newErrors.anak = true; hasError = true; }
+    if (!guardianId) { newErrors.wali = true; hasError = true; }
     if (tipeTagihan === "Bulanan" && !periode) { newErrors.periode = true; hasError = true; }
     if (tipeTagihan === "Paket Durasi") {
       if (!tanggalMulai) { newErrors.tanggalMulai = true; hasError = true; }
@@ -1924,13 +1786,22 @@ function BuatTagihanForm({
       return;
     }
 
+    let computedStartDate = isPaket ? tanggalMulai : null;
+    let computedEndDate = isPaket ? tanggalSelesai : null;
+    if (!isPaket && periode) {
+      const [y, m] = periode.split("-");
+      const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+      computedStartDate = `${y}-${m}-01`;
+      computedEndDate = `${y}-${m}-${String(lastDay).padStart(2, "0")}`;
+    }
+
     const payload = {
       child_id: selectedChildId,
-      guardian_id: selectedGuardianId,
+      guardian_id: guardianId,
       type: tipeTagihan,
       period_label: periodeLabel,
-      start_date: isPaket ? tanggalMulai : null,
-      end_date: isPaket ? tanggalSelesai : null,
+      start_date: computedStartDate,
+      end_date: computedEndDate,
       discount: Number(potongan) || 0,
       notes: catatan,
       items: terapiRows.map((r) => ({
@@ -2059,7 +1930,7 @@ function BuatTagihanForm({
                     type="month"
                     value={periode}
                     onChange={(e) => { setPeriode(e.target.value); setErrors(prev => ({ ...prev, periode: false })); }}
-                    className="absolute inset-0 opacity-0 pointer-events-none w-0 h-0"
+                    className="absolute inset-0 w-0 h-0 opacity-0 pointer-events-none"
                     tabIndex={-1}
                   />
                 </div>
@@ -2186,7 +2057,7 @@ function BuatTagihanForm({
                     type="button"
                     onClick={() => removeTerapiRow(row.id)}
                     disabled={terapiRows.length === 1}
-                    className="flex items-center justify-center w-7 h-7 text-red-400 transition-colors cursor-pointer hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
+                    className="flex items-center justify-center text-red-400 transition-colors rounded-lg cursor-pointer w-7 h-7 hover:text-red-600 hover:bg-red-50 disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
                     title="Hapus baris"
                   >
 
@@ -2300,14 +2171,16 @@ function BuatTagihanForm({
             )}
           </AnimatePresence>
 
-          <div className="flex items-center flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               id="btn-simpan-tagihan"
               type="button"
+              disabled={isSubmitting}
               onClick={handleSimpan}
-              className={`cursor-pointer px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-sm transition-colors ${initialData ? "bg-[#059669] hover:bg-[#047857] shadow-emerald-700/20" : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"}`}
+              className={`cursor-pointer px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-sm transition-colors ${isSubmitting ? "opacity-60 cursor-not-allowed" : ""
+                } ${initialData ? "bg-[#059669] hover:bg-[#047857] shadow-emerald-700/20" : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"}`}
             >
-              {initialData ? "Simpan Perubahan" : "Simpan tagihan"}
+              {isSubmitting ? "Menyimpan..." : initialData ? "Simpan Perubahan" : "Simpan tagihan"}
             </button>
             <button
               id="btn-batal-tagihan"
@@ -2350,8 +2223,8 @@ function BuatTagihanForm({
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 export default function KeuanganPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(dummyInvoices);
-  const [riwayatList, setRiwayatList] = useState<RiwayatPembayaran[]>(DUMMY_RIWAYAT);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [riwayatList, setRiwayatList] = useState<RiwayatPembayaran[]>([]);
   const [potonganList, setPotonganList] = useState<PotonganData[]>([]);
   const [summary, setSummary] = useState({
     jumlah_tagihan: 0,
@@ -2375,8 +2248,9 @@ export default function KeuanganPage() {
   const [cetakInvoiceData, setCetakInvoiceData] = useState<Invoice | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [previousTab, setPreviousTab] = useState<MainTab>("Tagihan");
-  const [prefillData, setPrefillData] = useState<{ anak: string; wali: string; potongan?: number } | null>(null);
+  const [prefillData, setPrefillData] = useState<{ anak: string; wali: string; potongan?: number; childId?: string; guardianId?: string } | null>(null);
   const [selectedBuktiUrl, setSelectedBuktiUrl] = useState<string | null>(null);
+  const [isSubmittingInvoice, setIsSubmittingInvoice] = useState(false);
 
   // Confirmation Pop-up state
   const [confirmState, setConfirmState] = useState<{
@@ -2407,9 +2281,23 @@ export default function KeuanganPage() {
     }
   };
 
-  const handleSaveInvoice = (invData: any) => {
-    fetchInvoicesData();
-    handleBack();
+  const handleSaveInvoice = async (invData: any) => {
+    try {
+      setIsSubmittingInvoice(true);
+      if (editingInvoice) {
+        await updateInvoice(editingInvoice.id, invData);
+        showSuccessToast("Tagihan berhasil diperbarui!", "Berhasil");
+      } else {
+        await createInvoice(invData);
+        showSuccessToast("Tagihan berhasil dibuat!", "Berhasil");
+      }
+      await fetchInvoicesData();
+      handleBack();
+    } catch (e: any) {
+      handleApiError(e, editingInvoice ? "Gagal memperbarui tagihan" : "Gagal membuat tagihan");
+    } finally {
+      setIsSubmittingInvoice(false);
+    }
   };
 
   const handleDeleteInvoice = async (invoiceId: string) => {
@@ -2471,15 +2359,15 @@ export default function KeuanganPage() {
           pembayaran: inv.payments && inv.payments.length > 0 ? {
             tanggal: inv.payments[0].payment_date
               ? (() => {
-                  const raw = String(inv.payments[0].payment_date);
-                  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-                  const d = new Date(raw);
-                  if (!isNaN(d.getTime())) {
-                    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-                  }
-                  return raw;
-                })()
+                const raw = String(inv.payments[0].payment_date);
+                const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+                const d = new Date(raw);
+                if (!isNaN(d.getTime())) {
+                  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                }
+                return raw;
+              })()
               : "—",
             metode: inv.payments[0].payment_method,
             noResi: inv.payments[0].receipt_number || "",
@@ -2677,6 +2565,7 @@ export default function KeuanganPage() {
                 prefillData={prefillData}
                 onBack={handleBack}
                 onSave={handleSaveInvoice}
+                isSubmitting={isSubmittingInvoice}
               />
             </div>
           ) : mainTab === "Tagihan" ? (
@@ -2706,7 +2595,7 @@ export default function KeuanganPage() {
               </div>
 
               {/* Filters Bar */}
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto border-b border-gray-100 no-scrollbar">
                 {/* Semua tipe */}
                 <div className="relative shrink-0">
                   <select
@@ -2757,7 +2646,7 @@ export default function KeuanganPage() {
                   <div className="relative w-[210px]">
                     <Search
                       size={14}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
+                      className="absolute text-gray-300 -translate-y-1/2 pointer-events-none left-3 top-1/2"
                     />
                     <input
                       id="search-invoice"
@@ -2958,7 +2847,7 @@ export default function KeuanganPage() {
                         <button
                           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                           disabled={currentPage === 1}
-                          className="p-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="p-1 text-gray-500 transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <ChevronLeft size={14} />
                         </button>
@@ -2968,7 +2857,7 @@ export default function KeuanganPage() {
                         <button
                           onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                           disabled={currentPage === totalPages}
-                          className="p-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="p-1 text-gray-500 transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <ChevronRight size={14} />
                         </button>
@@ -2985,7 +2874,13 @@ export default function KeuanganPage() {
               onBuatTagihan={(anak, wali, childId, guardianId) => {
                 setPreviousTab("Pembayaran");
                 const potItem = potonganList.find((p) => p.anak === anak);
-                setPrefillData({ anak, wali, potongan: potItem?.jumlah });
+                setPrefillData({
+                  anak,
+                  wali,
+                  potongan: potItem?.jumlah,
+                  childId: childId || potItem?.child_id,
+                  guardianId: guardianId || potItem?.guardian_id,
+                });
                 setEditingInvoice(null);
                 setPageView("buat-tagihan");
                 if (typeof window !== "undefined") {
@@ -3035,7 +2930,7 @@ export default function KeuanganPage() {
               bukti: data.bukti || "-",
               jumlah: data.jumlah,
             };
-            setRiwayatList((prev) => [newRiwayat, ...(prev ?? DUMMY_RIWAYAT)]);
+            setRiwayatList((prev) => [newRiwayat, ...(prev ?? [])]);
 
             // Jika dialihkan ke periode berikutnya -> tambahkan ke potongan untuk tagihan berikutnya
             if (mode === "catat") {
