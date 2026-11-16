@@ -77,14 +77,6 @@ export default function FormUbahTerapis({
       });
     }
   }, [initialData, open]);
-        nama: initialData.nama || "",
-        bidang: initialData.bidang || "",
-        username: initialData.username || "",
-        email: initialData.email || "",
-        telepon: initialData.telepon || "",
-      });
-    }
-  }, [initialData, open]);
 
   if (!open) return null;
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -29,6 +30,10 @@ import {
   deleteAdmin,
   Admin,
 } from "@/lib/api/data_admin";
+import {
+  getAdminComputedStatus,
+  registerNewUnverifiedAdmin,
+} from "@/lib/api/ownerAdmin";
 
 function DetailAdmin({
   open,
@@ -175,7 +180,19 @@ export default function AdminPage() {
     setIsFetching(true);
     try {
       const res = await getAdmins();
-      setAdmins(res);
+      // Hanya tampilkan admin yang sudah terverifikasi (disetujui/ditolak)
+      const processed = res
+        .map((item: any) => {
+          const computed = getAdminComputedStatus(item);
+          return {
+            ...item,
+            status: computed.status,
+            isVerifiedOrRejected: computed.isVerifiedOrRejected,
+          };
+        })
+        .filter((item: any) => item.isVerifiedOrRejected);
+
+      setAdmins(processed);
     } catch (error) {
       console.error("Gagal mengambil data admin:", error);
     } finally {
@@ -185,6 +202,18 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchAdmins();
+
+    const handleStatusUpdate = () => {
+      fetchAdmins();
+    };
+
+    window.addEventListener("admin_status_updated", handleStatusUpdate);
+    window.addEventListener("storage", handleStatusUpdate);
+
+    return () => {
+      window.removeEventListener("admin_status_updated", handleStatusUpdate);
+      window.removeEventListener("storage", handleStatusUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -194,7 +223,8 @@ export default function AdminPage() {
   const handleDetail = async (admin_id: string) => {
     try {
       const item = await getAdminById(admin_id);
-      setSelectedAdmin(item);
+      const computed = getAdminComputedStatus(item);
+      setSelectedAdmin({ ...item, status: computed.status });
       setShowDetail(true);
     } catch (error) {
       console.error("Gagal memuat detail admin:", error);
@@ -210,6 +240,8 @@ export default function AdminPage() {
   }) => {
     try {
       await addAdmin(data);
+      // Tandai sebagai admin baru yang belum diverifikasi
+      registerNewUnverifiedAdmin(data);
       setShowTambah(false);
       fetchAdmins();
     } catch (error) {

@@ -10,6 +10,8 @@ import {
   deleteAdminRole,
   getAdminRoleUsers,
   AdminUserInRole,
+  getStoredAdminRoles,
+  saveStoredAdminRoles,
 } from "@/lib/api/ownerHakAkses";
 
 /* ─────────────────────────── TYPES ─────────────────────────── */
@@ -50,6 +52,7 @@ const ALL_LEAF_IDS = [
   "dashboard",
   "admin",
   "terapis",
+  "sekolah",
   "pasien_anak",
   "observasi",
   "asesmen",
@@ -76,6 +79,7 @@ const MENU_SECTIONS: MenuSection[] = [
     entries: [
       { type: "leaf", item: { id: "admin", label: "Admin" } },
       { type: "leaf", item: { id: "terapis", label: "Terapis" } },
+      { type: "leaf", item: { id: "sekolah", label: "Sekolah" } },
       { type: "leaf", item: { id: "pasien_anak", label: "Pasien / Anak" } },
       {
         type: "parent",
@@ -245,16 +249,29 @@ export default function HakAksesPage() {
       const res = await getAdminRoles();
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         setRoles(res.data);
+        saveStoredAdminRoles(res.data);
         const current = res.data.find((r) => r.id === selectedRoleId) || res.data[0];
         setSelectedRoleId(current.id);
         setEditName(current.name);
         setEditDesc(current.desc || "");
         setEditCheckedIds(current.checkedIds || []);
+        return;
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+
+    // Fallback ke localStorage atau initial roles
+    const localRoles = getStoredAdminRoles();
+    setRoles(localRoles);
+    const current = localRoles.find((r) => r.id === selectedRoleId) || localRoles[0];
+    if (current) {
+      setSelectedRoleId(current.id);
+      setEditName(current.name);
+      setEditDesc(current.desc || "");
+      setEditCheckedIds(current.checkedIds || []);
     }
   };
 
@@ -278,7 +295,7 @@ export default function HakAksesPage() {
     setShowUsersModal(true);
     setLoadingUsers(true);
     try {
-      const res = await getAdminRoleUsers(selectedRoleId);
+      const res = await getAdminRoleUsers(selectedRoleId, selectedRole?.name);
       setRoleUsers(res.data || []);
     } catch {
       setRoleUsers([]);
@@ -334,13 +351,13 @@ export default function HakAksesPage() {
           checkedIds: editCheckedIds,
         });
       }
-      setRoles((prev) =>
-        prev.map((r) =>
-          r.id === selectedRoleId
-            ? { ...r, name: editName, desc: editDesc, checkedIds: editCheckedIds }
-            : r
-        )
+      const updatedRoles = roles.map((r) =>
+        r.id === selectedRoleId
+          ? { ...r, name: editName, desc: editDesc, checkedIds: editCheckedIds }
+          : r
       );
+      setRoles(updatedRoles);
+      saveStoredAdminRoles(updatedRoles);
       setIsDirty(false);
       showToast("Hak akses berhasil disimpan.");
     } catch (err) {
@@ -377,7 +394,9 @@ export default function HakAksesPage() {
         checkedIds: [...WAJIB_IDS],
       };
 
-      setRoles((prev) => [...prev, newRole]);
+      const nextRoles = [...roles, newRole];
+      setRoles(nextRoles);
+      saveStoredAdminRoles(nextRoles);
       setShowAddModal(false);
       setNewName("");
       setNewDesc("");
@@ -400,6 +419,7 @@ export default function HakAksesPage() {
       }
       const remaining = roles.filter((r) => r.id !== selectedRoleId);
       setRoles(remaining);
+      saveStoredAdminRoles(remaining);
       setShowDeleteModal(false);
       if (remaining.length > 0) {
         selectRole(remaining[0].id);
@@ -426,9 +446,12 @@ export default function HakAksesPage() {
         {/* Title row */}
         <div className="flex items-start justify-between shrink-0">
           <div>
-            <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
-              Manajemen Hak Akses
-            </h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight">
+                Manajemen Hak Akses
+              </h1>
+              {loading && <Loader2 size={18} className="text-[#1E5C58] animate-spin" />}
+            </div>
             <p className="text-sm text-gray-400 font-medium mt-0.5">
               Buat jenis admin dan ceklis menu yang dapat diakses oleh masing-masing jenis admin.
             </p>
@@ -467,7 +490,7 @@ export default function HakAksesPage() {
                     {role.name}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {countChecked(role.checkedIds)} dari 12 menu
+                    {countChecked(role.checkedIds)} dari {ALL_LEAF_IDS.length} menu
                   </p>
                 </button>
               );
@@ -507,7 +530,7 @@ export default function HakAksesPage() {
             {/* Menu header */}
             <div className="flex items-center justify-between px-6 py-2.5 border-t border-b border-gray-100 shrink-0">
               <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Menu yang Dapat Diakses · {checkedCount} dari 12 Menu
+                Menu yang Dapat Diakses · {checkedCount} dari {ALL_LEAF_IDS.length} Menu
               </span>
               <div className="flex items-center gap-3 text-xs font-bold text-[#2B7A75]">
                 <button onClick={selectAll} className="hover:underline transition-all">
