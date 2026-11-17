@@ -8,6 +8,7 @@ import {
   Check,
   X,
   AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import {
   getUnverifiedSchools,
@@ -74,28 +75,32 @@ export default function VerifikasiSekolahPage() {
     setIsSubmitting(true);
 
     try {
-      if (typeof item.id === "string" && !item.id.startsWith("sample-")) {
-        if (type === "approve") {
-          await verifySchool(item.id);
-        } else {
-          await rejectSchool(item.id);
-        }
+      if (type === "approve") {
+        await verifySchool(item.id);
+      } else {
+        await rejectSchool(item.id);
       }
-      setSekolahList((prev) => prev.filter((s) => s.id !== item.id));
+
+      await fetchSchools();
       setActionModal(null);
       showToast(
         type === "approve"
           ? `Sekolah ${item.namaSekolah} berhasil disetujui!`
           : `Pendaftaran ${item.namaSekolah} telah ditolak.`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast("Terjadi kesalahan saat memproses data sekolah.");
+      showToast(err.message || "Terjadi kesalahan saat memproses data sekolah.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleResetData = () => {
+    fetchSchools();
+    setSearch("");
+    showToast("Data antrean sekolah berhasil diperbarui.");
+  };
   const filteredSekolah = sekolahList.filter(
     (item) =>
       item.namaSekolah.toLowerCase().includes(search.toLowerCase()) ||
@@ -150,6 +155,13 @@ export default function VerifikasiSekolahPage() {
                   ? `Tidak ada hasil verifikasi sekolah yang cocok dengan pencarian "${search}".`
                   : "Saat ini belum ada sekolah baru yang menunggu verifikasi dari Anda."}
               </p>
+              <button
+                onClick={handleResetData}
+                className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <RotateCcw size={14} />
+                Muat Ulang Data
+              </button>
             </div>
           ) : (
             <>

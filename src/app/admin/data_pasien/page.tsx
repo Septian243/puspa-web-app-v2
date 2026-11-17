@@ -114,11 +114,18 @@ function DetailPatient({
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 mb-0.5">
-                    Asal Sekolah
+                    Asal Sekolah / Afiliasi
                   </p>
-                  <p className="font-bold text-gray-800">
-                    {patient.child_school || "-"}
-                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-bold text-gray-800">
+                      {patient.school_name || patient.child_school || "-"}
+                    </p>
+                    {patient.school_id && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
+                        Mitra Sekolah
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 mb-0.5">
@@ -451,10 +458,15 @@ export default function PatientPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-600 font-bold whitespace-nowrap">
-                            <BookOpen className="w-3.5 h-3.5 text-gray-400" />
-                            {pasien.child_school || "Tidak ada data"}
+                          <div className="flex items-center gap-1.5 text-xs text-gray-700 font-bold whitespace-nowrap">
+                            <BookOpen className="w-3.5 h-3.5 text-[#2B7A75]" />
+                            <span>{pasien.child_school || "Tidak ada data"}</span>
                           </div>
+                          {pasien.school_id && (
+                            <span className="inline-flex items-center w-fit px-2 py-0.5 text-[9px] font-bold text-[#1E5C58] bg-teal-50 border border-teal-100 rounded-full">
+                              Afiliasi Mitra
+                            </span>
+                          )}
                         </div>
                       </td>
 

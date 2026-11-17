@@ -50,6 +50,7 @@ export default function FormUbahPatient({
     child_name: "",
     child_birth_date: "",
     child_gender: "",
+    school_id: null as string | null,
     child_school: "",
     child_address: "",
     father_identity_number: "",
@@ -83,6 +84,7 @@ export default function FormUbahPatient({
       child_birth_date:
         toISODate(initialData.child_birth_date) || toISODate(parsed.date),
       child_gender: initialData.child_gender ?? "",
+      school_id: initialData.school_id ?? null,
       child_school: initialData.child_school ?? "",
       child_address: initialData.child_address ?? "",
       father_identity_number: initialData.father_identity_number ?? "",
@@ -136,6 +138,7 @@ export default function FormUbahPatient({
       child_name: form.child_name.trim(),
       child_birth_date: form.child_birth_date,
       child_gender: emptyToNull(form.child_gender),
+      school_id: form.school_id ?? null,
       child_school: emptyToNull(form.child_school) ?? "",
       child_address: emptyToNull(form.child_address) ?? "",
       father_identity_number: emptyToNull(form.father_identity_number),
@@ -262,8 +265,12 @@ export default function FormUbahPatient({
                   <div>
                     <SelectSekolahPasien
                       value={form.child_school}
-                      onChange={(val) =>
-                        setForm((prev) => ({ ...prev, child_school: val }))
+                      onChange={(val, schoolId) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          child_school: val,
+                          school_id: schoolId ?? null,
+                        }))
                       }
                       theme="amber"
                       label="Asal Sekolah"

@@ -14,6 +14,7 @@ import {
   Users,
   ShieldAlert,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 import {
   getUnverifiedAdmins,
@@ -87,17 +88,19 @@ function getRoleIconAndColors(roleName: string, roleId: string) {
 }
 
 function mapToRoleOptions(roles: AdminRoleItem[]): RoleOption[] {
-  return roles.map((role) => {
-    const style = getRoleIconAndColors(role.name, role.id);
-    return {
-      id: role.id,
-      title: role.name,
-      desc: role.desc || "Memiliki izin akses menu sesuai pengaturan Hak Akses.",
-      icon: style.icon,
-      iconBg: style.iconBg,
-      iconColor: style.iconColor,
-    };
-  });
+  return roles
+    .filter((role) => role.name.toLowerCase() !== "admin")
+    .map((role) => {
+      const style = getRoleIconAndColors(role.name, role.id);
+      return {
+        id: role.name,
+        title: role.name,
+        desc: role.desc || "Memiliki izin akses menu sesuai pengaturan Hak Akses.",
+        icon: style.icon,
+        iconBg: style.iconBg,
+        iconColor: style.iconColor,
+      };
+    });
 }
 
 function formatTanggalDaftar(dateString?: string): string {
@@ -321,7 +324,7 @@ const VerifikasiAdminPage: React.FC = () => {
       setAdmins((prev) => prev.filter((a) => a.user_id !== targetAdmin.user_id && a.email !== targetAdmin.email));
       setRejectModalAdmin(null);
       showToast(`Pendaftaran admin ${targetAdmin.admin_name} telah ditolak.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       markAdminRejected(
         [targetAdmin.user_id, targetAdmin.admin_id, targetAdmin.email, targetAdmin.admin_name]
@@ -334,6 +337,12 @@ const VerifikasiAdminPage: React.FC = () => {
     }
   };
 
+  const handleResetData = () => {
+    fetchUnverifiedAdmins();
+    loadRoleOptions();
+    setSearch("");
+    showToast("Data verifikasi admin berhasil diperbarui.");
+  };
   const filteredAdmins = admins.filter(
     (item) =>
       (item.admin_name || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -397,6 +406,13 @@ const VerifikasiAdminPage: React.FC = () => {
                   ? `Tidak ada administrator yang cocok dengan pencarian "${search}".`
                   : "Saat ini belum ada administrator baru yang menunggu verifikasi dari Anda."}
               </p>
+              <button
+                onClick={handleResetData}
+                className="mt-4 cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <RotateCcw size={14} />
+                Muat Ulang Data
+              </button>
             </div>
           ) : (
             <>

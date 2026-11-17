@@ -36,11 +36,22 @@ export interface InvoiceFilters {
   per_page?: number;
 }
 
+function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token && token !== "null" && token !== "undefined") {
+      const tokenType = localStorage.getItem("tokenType") || "Bearer";
+      headers.Authorization = `${tokenType} ${token}`;
+    }
+  }
+  return headers;
+}
+
 export async function getChildrenWithGuardians(): Promise<ChildGuardianItem[]> {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.get("/finance/children-guardians", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data?.data || [];
   } catch (error) {
@@ -51,10 +62,9 @@ export async function getChildrenWithGuardians(): Promise<ChildGuardianItem[]> {
 
 export async function getInvoices(filters: InvoiceFilters = {}) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.get("/finance/invoices", {
       params: filters,
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data?.data;
   } catch (error) {
@@ -65,9 +75,8 @@ export async function getInvoices(filters: InvoiceFilters = {}) {
 
 export async function createInvoice(payload: CreateInvoicePayload) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.post("/finance/invoices", payload, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data?.data;
   } catch (error) {
@@ -78,9 +87,8 @@ export async function createInvoice(payload: CreateInvoicePayload) {
 
 export async function updateInvoice(id: string, payload: Partial<CreateInvoicePayload>) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.put(`/finance/invoices/${id}`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data?.data;
   } catch (error) {
@@ -91,9 +99,8 @@ export async function updateInvoice(id: string, payload: Partial<CreateInvoicePa
 
 export async function deleteInvoice(id: string) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.delete(`/finance/invoices/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data;
   } catch (error) {
@@ -104,13 +111,9 @@ export async function deleteInvoice(id: string) {
 
 export async function payInvoice(id: string, payload: FormData | { payment_method: string; payment_date: string; receipt_number?: string }) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const isFormData = payload instanceof FormData;
     const res = await api.post(`/finance/invoices/${id}/pay`, payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": isFormData ? "multipart/form-data" : "application/json",
-      },
+      headers: getAuthHeaders(isFormData ? { "Content-Type": "multipart/form-data" } : { "Content-Type": "application/json" }),
     });
     return res.data?.data;
   } catch (error) {
@@ -121,9 +124,8 @@ export async function payInvoice(id: string, payload: FormData | { payment_metho
 
 export async function getAttendanceForRefund(id: string) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.get(`/finance/invoices/${id}/refund-attendance`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data?.data;
   } catch (error) {
@@ -134,13 +136,9 @@ export async function getAttendanceForRefund(id: string) {
 
 export async function refundInvoice(id: string, payload: FormData | { mode: string; kehadiran: number; total_sesi: number; tanggal?: string; metode_pengembalian?: string; no_resi?: string }) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const isFormData = payload instanceof FormData;
     const res = await api.post(`/finance/invoices/${id}/refund`, payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": isFormData ? "multipart/form-data" : "application/json",
-      },
+      headers: getAuthHeaders(isFormData ? { "Content-Type": "multipart/form-data" } : { "Content-Type": "application/json" }),
     });
     return res.data?.data;
   } catch (error) {
@@ -151,9 +149,8 @@ export async function refundInvoice(id: string, payload: FormData | { mode: stri
 
 export async function getCredits() {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.get("/finance/credits", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data?.data;
   } catch (error) {
@@ -164,10 +161,9 @@ export async function getCredits() {
 
 export async function getTransactions(filters: { metode?: string; tahun?: string; bulan?: string; search?: string; page?: number; per_page?: number } = {}) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await api.get("/finance/transactions", {
       params: filters,
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     return res.data?.data;
   } catch (error) {

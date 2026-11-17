@@ -360,6 +360,18 @@ export default function HakAksesPage() {
       saveStoredAdminRoles(updatedRoles);
       setIsDirty(false);
       showToast("Hak akses berhasil disimpan.");
+
+      // Broadcast instant update across all browser tabs
+      if (typeof window !== "undefined") {
+        try {
+          if ("BroadcastChannel" in window) {
+            const channel = new BroadcastChannel("puspa_rbac");
+            channel.postMessage({ type: "PERMISSIONS_UPDATED" });
+            channel.close();
+          }
+        } catch {}
+        window.dispatchEvent(new Event("puspa_rbac_updated"));
+      }
     } catch (err) {
       console.error(err);
       showToast("Gagal menyimpan hak akses.");

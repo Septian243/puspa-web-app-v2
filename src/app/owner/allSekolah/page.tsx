@@ -14,6 +14,7 @@ import {
   MapPin,
   BadgeCheck,
   Calendar,
+  Clock,
   Activity,
   Loader2,
 } from "lucide-react";
@@ -33,6 +34,8 @@ interface SekolahData {
   email: string;
   noTelepon: string;
   tanggalPendaftaran: string;  // display format: "04 November 2026 15:03:38"
+  created_at?: string;
+  updated_at?: string;
   status: "Terverifikasi" | "Tidak Terverifikasi" | "Ditolak";
 }
 
@@ -52,12 +55,16 @@ const JENJANG_LABEL: Record<string, string> = {
 // =========================================
 function StatusBadge({ status }: { status: SekolahData["status"] }) {
   const isVerified = status === "Terverifikasi";
+  const isRejected = status === "Ditolak";
   return (
     <div
-      className={`inline-flex flex-col items-center justify-center px-3.5 py-1.5 rounded-xl text-xs font-bold text-center leading-tight border transition-all ${isVerified
-        ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-        : "bg-rose-50 text-rose-700 border-rose-100"
-        }`}
+      className={`inline-flex flex-col items-center justify-center px-3.5 py-1.5 rounded-xl text-xs font-bold text-center leading-tight border transition-all ${
+        isVerified
+          ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+          : isRejected
+          ? "bg-rose-50 text-rose-700 border-rose-100"
+          : "bg-amber-50 text-amber-700 border-amber-100"
+      }`}
     >
       {isVerified ? (
         <span>Terverifikasi</span>
@@ -113,10 +120,11 @@ function DetailModal({
         </span>
       ),
     },
-    { icon: User, label: "USERNAME", value: sekolah.username },
-    { icon: Mail, label: "ALAMAT EMAIL", value: sekolah.email },
-    { icon: Phone, label: "NO. TELEPON", value: sekolah.noTelepon },
-    { icon: Calendar, label: "TANGGAL PENDAFTARAN", value: sekolah.tanggalPendaftaran },
+    { icon: User,     label: "USERNAME",             value: sekolah.username },
+    { icon: Mail,     label: "ALAMAT EMAIL",         value: sekolah.email },
+    { icon: Phone,    label: "NO. TELEPON",          value: sekolah.noTelepon },
+    { icon: Calendar, label: "TANGGAL PENDAFTARAN",  value: sekolah.tanggalPendaftaran || sekolah.created_at || "-" },
+    { icon: Clock,    label: "TERAKHIR DIUBAH",      value: sekolah.updated_at || sekolah.tanggalPendaftaran || "-" },
   ];
 
   return (
@@ -212,6 +220,8 @@ export default function AllSekolahPage() {
             email: item.email || "-",
             noTelepon: item.noTelepon || item.school_phone || "-",
             tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
+            created_at: item.created_at || item.tanggalPendaftaran || "-",
+            updated_at: item.updated_at || item.tanggalPendaftaran || item.created_at || "-",
             status: item.status as SekolahData["status"],
           }))
         );

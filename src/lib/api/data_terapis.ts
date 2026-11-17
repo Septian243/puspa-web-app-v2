@@ -32,10 +32,7 @@ const reverseBidangMap: Record<string, string> = {
 
 
 export async function getTerapis(): Promise<Terapis[]> {
-  const token = localStorage.getItem("token_admin");
-  const res = await api.get("/therapists", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await api.get("/therapists");
 
   if (res.data.success && Array.isArray(res.data.data)) {
     return res.data.data.map((t: any) => ({
@@ -66,7 +63,6 @@ export async function addTerapis(data: {
   password: string;
   school_id?: string | null;
 }) {
-  const token = localStorage.getItem("token_admin");
   return api.post(
     "/therapists",
     {
@@ -77,8 +73,7 @@ export async function addTerapis(data: {
       therapist_phone: data.telepon,
       password: data.password,
       school_id: data.school_id || null,
-    },
-    { headers: { Authorization: `Bearer ${token}` } }
+    }
   );
 }
 
@@ -93,7 +88,6 @@ export async function updateTerapis(
     school_id?: string | null;
   }
 ) {
-  const token = localStorage.getItem("token_admin");
   return api.put(
     `/therapists/${id}`,
     {
@@ -103,23 +97,16 @@ export async function updateTerapis(
       email: data.email,
       therapist_phone: data.telepon,
       school_id: data.school_id || null,
-    },
-    { headers: { Authorization: `Bearer ${token}` } }
+    }
   );
 }
 
 export async function deleteTerapis(id: string) {
-  const token = localStorage.getItem("token_admin");
-  return api.delete(`/therapists/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  return api.delete(`/therapists/${id}`);
 }
 
 export async function getDetailTerapis(id: string): Promise<Terapis | null> {
-  const token = localStorage.getItem("token_admin");
-  const res = await api.get(`/therapists/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await api.get(`/therapists/${id}`);
 
   if (res.data.success && res.data.data) {
     const t = res.data.data;

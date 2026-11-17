@@ -76,7 +76,8 @@ export async function getSchools(search?: string): Promise<Sekolah[]> {
     status: item.status || (item.verification_status === "verified" ? "Terverifikasi" : "Tidak Terverifikasi"),
     verification_status: item.verification_status,
     students_count: item.students_count ?? 0,
-    created_at: item.created_at || "-",
+    created_at: item.created_at || item.tanggalPendaftaran || "-",
+    updated_at: item.updated_at || item.created_at || item.tanggalPendaftaran || "-",
     tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
   }));
 }
@@ -104,7 +105,8 @@ export async function getSchoolById(id: string): Promise<Sekolah> {
     status: item.status || (item.verification_status === "verified" ? "Terverifikasi" : "Tidak Terverifikasi"),
     verification_status: item.verification_status,
     students_count: item.students_count ?? 0,
-    created_at: item.created_at || "-",
+    created_at: item.created_at || item.tanggalPendaftaran || "-",
+    updated_at: item.updated_at || item.created_at || item.tanggalPendaftaran || "-",
     tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
   };
 }
