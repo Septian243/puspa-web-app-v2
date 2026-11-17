@@ -17,6 +17,7 @@ import {
   activateAdmin,
   deactivateAdmin,
 } from "@/lib/api/ownerAdmin";
+import { getAdminRoles } from "@/lib/api/ownerHakAkses";
 
 interface AdminData {
   user_id: string;
@@ -27,28 +28,9 @@ interface AdminData {
   createdAt: string;
 }
 
-const DEFAULT_SAMPLE_ADMINS: AdminData[] = [
+const DEFAULT_ROLE_OPTIONS = [
   {
-    user_id: "sample-1",
-    admin_id: "adm-001",
-    admin_name: "Kaila",
-    email: "kaila@gmail.com",
-    admin_phone: "081234567890",
-    createdAt: "24 April 2026",
-  },
-  {
-    user_id: "sample-2",
-    admin_id: "adm-002",
-    admin_name: "Budi Santoso",
-    email: "budi.santoso@gmail.com",
-    admin_phone: "088234567891",
-    createdAt: "02 Mei 2026",
-  },
-];
-
-const ROLE_OPTIONS = [
-  {
-    id: "keuangan",
+    id: "Admin Keuangan",
     title: "Admin Keuangan",
     desc: "Mengelola tagihan, pembayaran, dan pengembalian dana pasien.",
     icon: Wallet,
@@ -56,7 +38,7 @@ const ROLE_OPTIONS = [
     iconColor: "text-amber-600",
   },
   {
-    id: "presensi",
+    id: "Admin Presensi",
     title: "Admin Presensi",
     desc: "Mengelola kehadiran terapi serta pencatatan izin, sakit, dan tidak hadir.",
     icon: ClipboardCheck,
@@ -64,7 +46,7 @@ const ROLE_OPTIONS = [
     iconColor: "text-emerald-600",
   },
   {
-    id: "layanan",
+    id: "Admin Layanan",
     title: "Admin Layanan",
     desc: "Mengelola jadwal observasi, asesmen, dan terapi pasien.",
     icon: Heart,
@@ -96,6 +78,7 @@ function formatTanggalDaftar(dateString?: string): string {
 const VerifikasiAdminPage: React.FC = () => {
   const [admins, setAdmins] = useState<AdminData[]>([]);
   const [search, setSearch] = useState("");
+  const [roleOptions, setRoleOptions] = useState(DEFAULT_ROLE_OPTIONS);
   const [loading, setLoading] = useState(true);
 
   // Modal States
@@ -112,19 +95,62 @@ const VerifikasiAdminPage: React.FC = () => {
     }, 3500);
   };
 
+  const fetchCustomRoles = async () => {
+    try {
+      const res = await getAdminRoles();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        // Exclude base admin from assignment if preferred, but allow all specialized / custom admin roles
+        const validRoles = res.data.filter((r) => r.name !== "admin");
+        if (validRoles.length > 0) {
+          const mapped = validRoles.map((r) => {
+            const lowerName = r.name.toLowerCase();
+            let icon = ShieldCheck;
+            let iconBg = "bg-teal-50";
+            let iconColor = "text-[#1E5C58]";
+
+            if (lowerName.includes("uang") || lowerName.includes("finance")) {
+              icon = Wallet;
+              iconBg = "bg-amber-50";
+              iconColor = "text-amber-600";
+            } else if (lowerName.includes("presensi") || lowerName.includes("hadir")) {
+              icon = ClipboardCheck;
+              iconBg = "bg-emerald-50";
+              iconColor = "text-emerald-600";
+            } else if (lowerName.includes("layanan") || lowerName.includes("service") || lowerName.includes("jadwal")) {
+              icon = Heart;
+              iconBg = "bg-rose-50";
+              iconColor = "text-rose-500";
+            }
+
+            return {
+              id: r.name,
+              title: r.name,
+              desc: r.desc || `Akses ${r.checkedIds?.length || 0} menu operasional admin.`,
+              icon,
+              iconBg,
+              iconColor,
+            };
+          });
+          setRoleOptions(mapped);
+        }
+      }
+    } catch (e) {
+      console.error("Gagal memuat peran admin:", e);
+    }
+  };
+
   const fetchUnverifiedAdmins = async () => {
     setLoading(true);
     try {
       const res = await getUnverifiedAdmins();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data)) {
         setAdmins(res.data);
       } else {
-        // Fallback to sample data if backend has no pending admins
-        setAdmins(DEFAULT_SAMPLE_ADMINS);
+        setAdmins([]);
       }
     } catch (err) {
       console.error(err);
-      setAdmins(DEFAULT_SAMPLE_ADMINS);
+      setAdmins([]);
     } finally {
       setLoading(false);
     }
@@ -132,6 +158,7 @@ const VerifikasiAdminPage: React.FC = () => {
 
   useEffect(() => {
     fetchUnverifiedAdmins();
+    fetchCustomRoles();
   }, []);
 
   const handleOpenApproveModal = (admin: AdminData) => {
@@ -148,21 +175,19 @@ const VerifikasiAdminPage: React.FC = () => {
     setIsSubmitting(true);
 
     const targetAdmin = approveModalAdmin;
-    const selectedRoleData = ROLE_OPTIONS.find((r) => r.id === selectedRole);
+    const selectedRoleData = roleOptions.find((r) => r.id === selectedRole);
 
     try {
-      if (!targetAdmin.user_id.startsWith("sample-")) {
-        await activateAdmin(targetAdmin.user_id, selectedRole);
-      }
-      setAdmins((prev) => prev.filter((a) => a.user_id !== targetAdmin.user_id));
+      await activateAdmin(targetAdmin.user_id, selectedRole);
+      await fetchUnverifiedAdmins();
       setApproveModalAdmin(null);
       setSelectedRole(null);
       showToast(
         `Admin ${targetAdmin.admin_name} berhasil disetujui sebagai ${selectedRoleData?.title}!`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast("Terjadi kesalahan saat memproses persetujuan.");
+      showToast(err.message || "Terjadi kesalahan saat memproses persetujuan.");
     } finally {
       setIsSubmitting(false);
     }
@@ -175,14 +200,13 @@ const VerifikasiAdminPage: React.FC = () => {
     const targetAdmin = rejectModalAdmin;
 
     try {
-      if (!targetAdmin.user_id.startsWith("sample-")) {
-        await deactivateAdmin(targetAdmin.user_id);
-      }
-      setAdmins((prev) => prev.filter((a) => a.user_id !== targetAdmin.user_id));
+      await deactivateAdmin(targetAdmin.user_id);
+      await fetchUnverifiedAdmins();
       setRejectModalAdmin(null);
       showToast(`Pendaftaran admin ${targetAdmin.admin_name} telah ditolak.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(err.message || "Terjadi kesalahan saat memproses penolakan.");
       showToast("Terjadi kesalahan saat memproses penolakan.");
     } finally {
       setIsSubmitting(false);
@@ -190,9 +214,9 @@ const VerifikasiAdminPage: React.FC = () => {
   };
 
   const handleResetData = () => {
-    setAdmins(DEFAULT_SAMPLE_ADMINS);
+    fetchUnverifiedAdmins();
     setSearch("");
-    showToast("Data verifikasi admin berhasil direset.");
+    showToast("Data verifikasi admin berhasil diperbarui.");
   };
 
   const filteredAdmins = admins.filter(
@@ -201,7 +225,7 @@ const VerifikasiAdminPage: React.FC = () => {
       item.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const selectedRoleObj = ROLE_OPTIONS.find((r) => r.id === selectedRole);
+  const selectedRoleObj = roleOptions.find((r) => r.id === selectedRole);
 
   return (
     <div className="flex min-h-[calc(100vh-80px)] bg-transparent w-full">
@@ -258,15 +282,13 @@ const VerifikasiAdminPage: React.FC = () => {
                   ? `Tidak ada administrator yang cocok dengan pencarian "${search}".`
                   : "Saat ini belum ada administrator baru yang menunggu verifikasi dari Anda."}
               </p>
-              {admins.length < DEFAULT_SAMPLE_ADMINS.length && (
-                <button
-                  onClick={handleResetData}
-                  className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
-                >
-                  <RotateCcw size={14} />
-                  Reset Data Awal
-                </button>
-              )}
+              <button
+                onClick={handleResetData}
+                className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <RotateCcw size={14} />
+                Muat Ulang Data
+              </button>
             </div>
           ) : (
             <>
@@ -437,8 +459,8 @@ const VerifikasiAdminPage: React.FC = () => {
                     PILIH PERAN ADMIN
                   </p>
 
-                  <div className="space-y-3">
-                    {ROLE_OPTIONS.map((role) => {
+                  <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                    {roleOptions.map((role) => {
                       const isSelected = selectedRole === role.id;
                       return (
                         <div

@@ -137,7 +137,12 @@ function BidangCombobox({
   const filteredOptions = useMemo(() => {
     if (!isSearching || !searchTerm.trim()) return options;
     const q = searchTerm.trim().toLowerCase();
-    const matches = options.filter((o) => o.name.toLowerCase().includes(q));
+    const matches = options.filter(
+      (o) =>
+        o.name.toLowerCase().includes(q) ||
+        (o.section && o.section.toLowerCase().includes(q)) ||
+        (o.role && o.role.toLowerCase().includes(q))
+    );
     return matches.sort((a, b) => {
       const aS = a.name.toLowerCase().startsWith(q);
       const bS = b.name.toLowerCase().startsWith(q);
@@ -276,7 +281,14 @@ function BidangCombobox({
                         : "text-gray-700 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
                         }`}
                     >
-                      <span className="truncate">{opt.name}</span>
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <span className="truncate">{opt.name}</span>
+                        {(opt.section || opt.role) && (
+                          <span className="text-[10px] font-semibold text-gray-400 capitalize shrink-0">
+                            · {opt.section || opt.role}
+                          </span>
+                        )}
+                      </div>
                       {isSel && (
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#2B7A75] shrink-0 ml-2" />
                       )}
@@ -683,8 +695,11 @@ export default function FormAturAsesmen({
   const filteredOptions = useMemo(() => {
     if (!isSearching || !searchTerm.trim()) return options;
     const query = searchTerm.trim().toLowerCase();
-    const matches = options.filter((opt) =>
-      opt.name.toLowerCase().includes(query)
+    const matches = options.filter(
+      (opt) =>
+        opt.name.toLowerCase().includes(query) ||
+        (opt.section && opt.section.toLowerCase().includes(query)) ||
+        (opt.role && opt.role.toLowerCase().includes(query))
     );
     return matches.sort((a, b) => {
       const aStarts = a.name.toLowerCase().startsWith(query);
@@ -972,7 +987,14 @@ export default function FormAturAsesmen({
                                   : "text-gray-700 hover:bg-[#F4F9F8] hover:text-[#2B7A75]"
                                   }`}
                               >
-                                <span className="truncate">{opt.name}</span>
+                                <div className="flex items-center gap-2 min-w-0 pr-2">
+                                  <span className="truncate font-semibold text-gray-800">{opt.name}</span>
+                                  {(opt.section || opt.role) && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-[#2B7A75] border border-teal-100/80 capitalize shrink-0">
+                                      {opt.section || opt.role}
+                                    </span>
+                                  )}
+                                </div>
                                 {isSelected && (
                                   <CheckCircle2 className="w-4 h-4 text-[#2B7A75] shrink-0 ml-2" />
                                 )}
@@ -989,6 +1011,16 @@ export default function FormAturAsesmen({
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {/* Info Peran / Spesialisasi Petugas Terpilih */}
+                  {selectedPetugas && (selectedPetugas.section || selectedPetugas.role) && (
+                    <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-teal-50/70 border border-teal-100 text-xs">
+                      <span className="text-gray-500 font-medium">Peran / Spesialisasi:</span>
+                      <span className="font-bold text-[#1E5C58] capitalize">
+                        {selectedPetugas.section || selectedPetugas.role}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

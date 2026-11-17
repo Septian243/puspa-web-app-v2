@@ -10,12 +10,16 @@ export interface OwnerSchoolItem {
   jenjangKode: string;
   jenjangLabel: string;
   alamat: string;
+  school_address?: string;
   peran: string;
   username: string;
   email: string;
   noTelepon: string;
+  school_phone?: string;
   tanggalPendaftaran: string;
-  status: "Terverifikasi" | "Tidak Terverifikasi" | "Ditolak";
+  created_at?: string;
+  updated_at?: string;
+  status: "Terverifikasi" | "Tidak Terverifikasi" | "Ditolak" | string;
   verification_status?: string;
   pic_name?: string;
   students_count?: number;
@@ -45,7 +49,7 @@ export async function getUnverifiedSchools() {
 /**
  * Menyetujui pendaftaran sekolah
  */
-export async function verifySchool(schoolId: string) {
+export async function verifySchool(schoolId: string | number) {
   try {
     const response = await axiosInstance.post(`/owner/schools/${schoolId}/verify`);
     return {
@@ -55,18 +59,15 @@ export async function verifySchool(schoolId: string) {
     };
   } catch (error: any) {
     console.error("API Error verifySchool:", error);
-    return {
-      success: false,
-      message: error.response?.data?.message || "Gagal memverifikasi sekolah",
-      data: null,
-    };
+    const msg = error.response?.data?.message || "Gagal memverifikasi sekolah";
+    throw new Error(msg);
   }
 }
 
 /**
  * Menolak pendaftaran sekolah
  */
-export async function rejectSchool(schoolId: string) {
+export async function rejectSchool(schoolId: string | number) {
   try {
     const response = await axiosInstance.post(`/owner/schools/${schoolId}/reject`);
     return {
@@ -76,11 +77,8 @@ export async function rejectSchool(schoolId: string) {
     };
   } catch (error: any) {
     console.error("API Error rejectSchool:", error);
-    return {
-      success: false,
-      message: error.response?.data?.message || "Gagal menolak pendaftaran sekolah",
-      data: null,
-    };
+    const msg = error.response?.data?.message || "Gagal menolak pendaftaran sekolah";
+    throw new Error(msg);
   }
 }
 

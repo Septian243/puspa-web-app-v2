@@ -14,6 +14,7 @@ import {
   MapPin,
   BadgeCheck,
   Calendar,
+  Clock,
   Activity,
   Loader2,
 } from "lucide-react";
@@ -33,6 +34,8 @@ interface SekolahData {
   email: string;
   noTelepon: string;
   tanggalPendaftaran: string;  // display format: "04 November 2026 15:03:38"
+  created_at?: string;
+  updated_at?: string;
   status: "Terverifikasi" | "Tidak Terverifikasi" | "Ditolak";
 }
 
@@ -48,74 +51,19 @@ const JENJANG_LABEL: Record<string, string> = {
 };
 
 // =========================================
-// Mock Data (replace with API call later)
-// =========================================
-const MOCK_SEKOLAH: SekolahData[] = [
-  {
-    id: 1,
-    namaSekolah: "SD 1 Jamsaren",
-    jenjangKode: "SD",
-    jenjangLabel: JENJANG_LABEL["SD"],
-    alamat: "Serengan Surakarta",
-    peran: "Sekolah",
-    username: "jamsaren01",
-    email: "jamsaren01@mail.com",
-    noTelepon: "08823451676812",
-    tanggalPendaftaran: "04 November 2026 15:03:38",
-    status: "Terverifikasi",
-  },
-  {
-    id: 2,
-    namaSekolah: "PAUD Ahmad Dahlan",
-    jenjangKode: "PAUD",
-    jenjangLabel: JENJANG_LABEL["PAUD"],
-    alamat: "Laweyan Surakarta",
-    peran: "Sekolah",
-    username: "ahmaddahlah",
-    email: "ahmaddahlah@gmail.com",
-    noTelepon: "08123456789",
-    tanggalPendaftaran: "27 June 2026 09:14:21",
-    status: "Tidak Terverifikasi",
-  },
-  {
-    id: 3,
-    namaSekolah: "SMP N 9 Surakarta",
-    jenjangKode: "SMP",
-    jenjangLabel: JENJANG_LABEL["SMP"],
-    alamat: "Banjarsari Surakarta",
-    peran: "Sekolah",
-    username: "09esempe",
-    email: "09esempe@gmail.com",
-    noTelepon: "123456789012",
-    tanggalPendaftaran: "30 September 2026 11:22:00",
-    status: "Terverifikasi",
-  },
-  {
-    id: 4,
-    namaSekolah: "SD Al Islam 1",
-    jenjangKode: "SD",
-    jenjangLabel: JENJANG_LABEL["SD"],
-    alamat: "Pasar Kliwon Surakarta",
-    peran: "Sekolah",
-    username: "alislam01",
-    email: "alislam01@gmail.com",
-    noTelepon: "080090898979",
-    tanggalPendaftaran: "04 November 2026 10:45:55",
-    status: "Terverifikasi",
-  },
-];
-
-// =========================================
 // Status Badge Component
 // =========================================
 function StatusBadge({ status }: { status: SekolahData["status"] }) {
   const isVerified = status === "Terverifikasi";
+  const isRejected = status === "Ditolak";
   return (
     <div
       className={`inline-flex flex-col items-center justify-center px-3.5 py-1.5 rounded-xl text-xs font-bold text-center leading-tight border transition-all ${
         isVerified
           ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-          : "bg-rose-50 text-rose-700 border-rose-100"
+          : isRejected
+          ? "bg-rose-50 text-rose-700 border-rose-100"
+          : "bg-amber-50 text-amber-700 border-amber-100"
       }`}
     >
       {isVerified ? (
@@ -175,7 +123,8 @@ function DetailModal({
     { icon: User,     label: "USERNAME",             value: sekolah.username },
     { icon: Mail,     label: "ALAMAT EMAIL",         value: sekolah.email },
     { icon: Phone,    label: "NO. TELEPON",          value: sekolah.noTelepon },
-    { icon: Calendar, label: "TANGGAL PENDAFTARAN",  value: sekolah.tanggalPendaftaran },
+    { icon: Calendar, label: "TANGGAL PENDAFTARAN",  value: sekolah.tanggalPendaftaran || sekolah.created_at || "-" },
+    { icon: Clock,    label: "TERAKHIR DIUBAH",      value: sekolah.updated_at || sekolah.tanggalPendaftaran || "-" },
   ];
 
   return (
@@ -258,7 +207,7 @@ export default function AllSekolahPage() {
     setLoading(true);
     try {
       const res = await getAllSchools();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data)) {
         setSekolahList(
           res.data.map((item) => ({
             id: item.id,
@@ -271,14 +220,16 @@ export default function AllSekolahPage() {
             email: item.email || "-",
             noTelepon: item.noTelepon || item.school_phone || "-",
             tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
+            created_at: item.created_at || item.tanggalPendaftaran || "-",
+            updated_at: item.updated_at || item.tanggalPendaftaran || item.created_at || "-",
             status: item.status as SekolahData["status"],
           }))
         );
       } else {
-        setSekolahList(MOCK_SEKOLAH);
+        setSekolahList([]);
       }
     } catch {
-      setSekolahList(MOCK_SEKOLAH);
+      setSekolahList([]);
     } finally {
       setLoading(false);
     }
@@ -462,7 +413,7 @@ export default function AllSekolahPage() {
           <p className="text-xs text-gray-400 font-medium -mt-2">
             Menampilkan{" "}
             <span className="font-bold text-[#1E5C58]">{filteredSekolah.length}</span>{" "}
-            dari {MOCK_SEKOLAH.length} sekolah terdaftar
+            dari {sekolahList.length} sekolah terdaftar
           </p>
         )}
       </div>

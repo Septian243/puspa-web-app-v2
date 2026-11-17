@@ -77,14 +77,6 @@ export default function FormUbahTerapis({
       });
     }
   }, [initialData, open]);
-        nama: initialData.nama || "",
-        bidang: initialData.bidang || "",
-        username: initialData.username || "",
-        email: initialData.email || "",
-        telepon: initialData.telepon || "",
-      });
-    }
-  }, [initialData, open]);
 
   if (!open) return null;
 
@@ -251,26 +243,6 @@ export default function FormUbahTerapis({
                   required
                 />
               </div>
-            </div>
-
-            {/* Asal Sekolah / Afiliasi */}
-            <div className="space-y-1.5">
-              <SelectSekolahPasien
-                value={formData.school_name || ""}
-                onChange={(val) => {
-                  const allSchools = getDaftarSekolah();
-                  const matched = allSchools.find(
-                    (s) => s.nama.toLowerCase() === val.toLowerCase()
-                  );
-                  setFormData((prev) => ({
-                    ...prev,
-                    school_name: val,
-                    school_id: matched ? matched.id : null,
-                  }));
-                }}
-                theme="amber"
-                label="Asal Sekolah / Afiliasi (Opsional)"
-              />
             </div>
 
             {/* Action */}

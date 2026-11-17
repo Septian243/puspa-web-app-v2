@@ -24,32 +24,8 @@ interface TherapistData {
   createdAt: string;
 }
 
-const DEFAULT_SAMPLE_THERAPISTS: TherapistData[] = [
-  {
-    user_id: "sample-th-1",
-    therapist_id: "th-001",
-    therapist_name: "Sarah Wijaya, S.Psi",
-    email: "sarah.wijaya@gmail.com",
-    createdAt: "14 April 2026",
-  },
-  {
-    user_id: "sample-th-2",
-    therapist_id: "th-002",
-    therapist_name: "Dimas Pratama, S.Pd",
-    email: "dimas.pratama@gmail.com",
-    createdAt: "28 April 2026",
-  },
-  {
-    user_id: "sample-th-3",
-    therapist_id: "th-003",
-    therapist_name: "Anisa Putri, S.Tr.Kes",
-    email: "anisa.putri@gmail.com",
-    createdAt: "05 Mei 2026",
-  },
-];
-
 const VerifikasiTerapisPage: React.FC = () => {
-  const [therapists, setTherapists] = useState<TherapistData[]>(DEFAULT_SAMPLE_THERAPISTS);
+  const [therapists, setTherapists] = useState<TherapistData[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [actionModal, setActionModal] = useState<{
@@ -69,14 +45,14 @@ const VerifikasiTerapisPage: React.FC = () => {
     setLoading(true);
     try {
       const response = await getUnverifiedTherapists();
-      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+      if (response.success && Array.isArray(response.data)) {
         setTherapists(response.data);
       } else {
-        setTherapists(DEFAULT_SAMPLE_THERAPISTS);
+        setTherapists([]);
       }
     } catch (err) {
       console.error(err);
-      setTherapists(DEFAULT_SAMPLE_THERAPISTS);
+      setTherapists([]);
     } finally {
       setLoading(false);
     }
@@ -91,30 +67,28 @@ const VerifikasiTerapisPage: React.FC = () => {
     const { type, item } = actionModal;
 
     try {
-      if (!item.user_id.startsWith("sample-")) {
-        if (type === "approve") {
-          await activateTherapist(item.user_id);
-        } else {
-          await deactivateTherapist(item.user_id);
-        }
+      if (type === "approve") {
+        await activateTherapist(item.user_id);
+      } else {
+        await deactivateTherapist(item.user_id);
       }
-    } catch (err) {
+      await loadTherapists();
+      setActionModal(null);
+      showToast(
+        type === "approve"
+          ? `Terapis ${item.therapist_name} berhasil disetujui!`
+          : `Pendaftaran terapis ${item.therapist_name} telah ditolak.`
+      );
+    } catch (err: any) {
       console.error("Gagal melakukan aksi verifikasi terapis:", err);
+      showToast(err.message || "Gagal memproses verifikasi terapis.");
     }
-
-    setTherapists((prev) => prev.filter((t) => t.user_id !== item.user_id));
-    setActionModal(null);
-    showToast(
-      type === "approve"
-        ? `Terapis ${item.therapist_name} berhasil disetujui!`
-        : `Pendaftaran terapis ${item.therapist_name} telah ditolak.`
-    );
   };
 
   const handleResetData = () => {
-    setTherapists(DEFAULT_SAMPLE_THERAPISTS);
+    loadTherapists();
     setSearch("");
-    showToast("Data pendaftaran terapis berhasil direset ke tampilan awal.");
+    showToast("Data antrean terapis diperbarui.");
   };
 
   const filteredTherapists = therapists.filter(
@@ -178,15 +152,13 @@ const VerifikasiTerapisPage: React.FC = () => {
                   ? `Tidak ada hasil verifikasi terapis yang cocok dengan pencarian "${search}".`
                   : "Saat ini belum ada terapis baru yang menunggu verifikasi dari Anda."}
               </p>
-              {therapists.length < DEFAULT_SAMPLE_THERAPISTS.length && (
-                <button
-                  onClick={handleResetData}
-                  className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
-                >
-                  <RotateCcw size={14} />
-                  Reset Data Awal
-                </button>
-              )}
+              <button
+                onClick={handleResetData}
+                className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <RotateCcw size={14} />
+                Muat Ulang Data
+              </button>
             </div>
           ) : (
             <>

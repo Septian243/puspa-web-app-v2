@@ -12,6 +12,14 @@ export default function AdminLayout({
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
+  const handleCloseSidebar = React.useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
+  const handleOpenSidebar = React.useCallback(() => {
+    setIsSidebarOpen(true);
+  }, []);
+
   return (
     <AdminProfileProvider>
       <Suspense
@@ -25,14 +33,14 @@ export default function AdminLayout({
           {/* SIDEBAR */}
           <Sidebar
             isOpen={isSidebarOpen}
-            onClose={() => setIsSidebarOpen(false)}
+            onClose={handleCloseSidebar}
           />
 
           {/* MAIN AREA */}
           <div className="flex flex-col flex-1 relative overflow-hidden">
             {/* HEADER */}
             <header className="sticky top-0 z-30">
-              <Header onOpenSidebar={() => setIsSidebarOpen(true)} />
+              <Header onOpenSidebar={handleOpenSidebar} />
             </header>
 
             {/* CONTENT */}

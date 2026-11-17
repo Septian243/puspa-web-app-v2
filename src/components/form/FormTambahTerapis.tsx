@@ -331,25 +331,6 @@ export default function FormTambahTerapis({
                 )}
               </div>
 
-              {/* Asal Sekolah / Instansi */}
-              <div className="space-y-1.5">
-                <SelectSekolahPasien
-                  value={formData.school_name || ""}
-                  onChange={(val) => {
-                    const allSchools = getDaftarSekolah();
-                    const matched = allSchools.find(
-                      (s) => s.nama.toLowerCase() === val.toLowerCase()
-                    );
-                    setFormData((prev) => ({
-                      ...prev,
-                      school_name: val,
-                      school_id: matched ? matched.id : null,
-                    }));
-                  }}
-                  label="Asal Sekolah / Afiliasi (Opsional)"
-                />
-              </div>
-
               {/* Password */}
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-gray-700 ml-1">

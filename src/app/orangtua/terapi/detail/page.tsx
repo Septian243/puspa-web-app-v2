@@ -103,11 +103,11 @@ function DetailContent() {
             let childInfo: any = null;
             if (res.child_id) {
               const childRes = await getChildDetail(res.child_id);
-              childInfo = childRes.data;
+              childInfo = childRes as any;
             }
 
             setDetailData({
-              namaAnak: res.child_name || childInfo?.name || "-",
+              namaAnak: res.child_name || childInfo?.child_name || childInfo?.name || "-",
               noRekam: formatNoRekam(res.medical_record_number || childInfo?.medical_record_number),
               jenisTerapi: res.therapy_type ? res.therapy_type.toUpperCase() : "-",
               terapis: res.therapist_name || "-",
@@ -117,11 +117,11 @@ function DetailContent() {
               status: res.status === "aktif" ? "Terjadwal" : res.status === "selesai" ? "Selesai" : "Reschedule",
               namaOrangtua: res.guardian_name || "-",
               nomorTelepon: res.guardian_phone || "-",
-              jenisKelamin: childInfo?.gender || "-",
-              usia: childInfo?.age ? `${childInfo.age} Tahun` : "-",
-              tempatTanggalLahir: childInfo?.birth_date ? `${childInfo.birth_place || ""}, ${childInfo.birth_date}` : "-",
-              asalSekolah: childInfo?.school || "-",
-              alamat: childInfo?.address || "-",
+              jenisKelamin: childInfo?.child_gender || childInfo?.gender || "-",
+              usia: childInfo?.child_age ? (String(childInfo.child_age).includes("Tahun") ? childInfo.child_age : `${childInfo.child_age} Tahun`) : childInfo?.age ? `${childInfo.age} Tahun` : "-",
+              tempatTanggalLahir: childInfo?.child_birth_info || (childInfo?.child_birth_date ? `${childInfo.child_birth_place || ""}, ${childInfo.child_birth_date}` : "-"),
+              asalSekolah: childInfo?.child_school || childInfo?.school || "-",
+              alamat: childInfo?.child_address || childInfo?.address || "-",
             });
           }
         } catch (err) {

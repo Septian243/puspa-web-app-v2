@@ -6,7 +6,7 @@ import { getDaftarSekolah, getSchools, Sekolah } from "@/lib/api/data_sekolah";
 
 interface SelectSekolahPasienProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, schoolId?: string | null) => void;
   error?: string;
   theme?: "teal" | "amber";
   label?: string;
@@ -145,8 +145,8 @@ export default function SelectSekolahPasien({
   }, [schools, searchQuery]);
 
   // Handler memilih dari dropdown
-  const handleSelectSchool = (schoolName: string) => {
-    onChange(schoolName);
+  const handleSelectSchool = (schoolName: string, schoolId?: string | null) => {
+    onChange(schoolName, schoolId ?? null);
     setIsManual(false);
     setIsOpen(false);
     setSearchQuery("");
@@ -156,8 +156,8 @@ export default function SelectSekolahPasien({
   const handleSwitchToManual = (initialValue?: string) => {
     setIsManual(true);
     setIsOpen(false);
-    if (initialValue) {
-      onChange(initialValue);
+    if (initialValue !== undefined) {
+      onChange(initialValue, null);
     }
     setSearchQuery("");
   };
@@ -206,7 +206,7 @@ export default function SelectSekolahPasien({
             type="text"
             placeholder="Ketik nama sekolah manual..."
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => onChange(e.target.value, null)}
             className={`w-full p-2.5 pl-9 pr-9 bg-gray-50 border rounded-xl outline-none text-sm transition-all focus:ring-2 ${error ? "border-red-300" : "border-gray-200"
               } ${focusBorderColor}`}
           />
@@ -214,7 +214,7 @@ export default function SelectSekolahPasien({
           {value && (
             <button
               type="button"
-              onClick={() => onChange("")}
+              onClick={() => onChange("", null)}
               className="absolute right-3 top-3 p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full cursor-pointer transition-colors"
               title="Hapus teks"
             >
@@ -330,7 +330,7 @@ export default function SelectSekolahPasien({
                         <button
                           type="button"
                           key={item.id}
-                          onClick={() => handleSelectSchool(item.nama)}
+                          onClick={() => handleSelectSchool(item.nama, item.id)}
                           className={`w-full text-left px-3 py-2 text-sm rounded-xl transition-colors cursor-pointer flex items-center justify-between ${isSelected
                             ? "bg-[#FDF1CB] text-gray-900 font-semibold"
                             : "text-gray-800 hover:bg-[#FEF6DD]"
@@ -357,7 +357,7 @@ export default function SelectSekolahPasien({
                 {/* Belum bersekolah */}
                 <button
                   type="button"
-                  onClick={() => handleSelectSchool("Belum bersekolah")}
+                  onClick={() => handleSelectSchool("Belum bersekolah", null)}
                   className={`w-full text-left px-3 py-2 text-sm rounded-xl transition-colors cursor-pointer flex items-center justify-between ${value === "Belum bersekolah"
                     ? "bg-[#FDF1CB] text-gray-900 font-semibold"
                     : "text-gray-800 hover:bg-[#FEF6DD]"

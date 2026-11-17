@@ -32,6 +32,7 @@ export default function FormTambahPasien({
     child_gender: "",
     child_birth_place: "",
     child_birth_date: "",
+    school_id: null as string | null,
     child_school: "",
     child_address: "",
     child_complaint: "",
@@ -96,6 +97,7 @@ export default function FormTambahPasien({
       child_gender: form.child_gender,
       child_birth_place: form.child_birth_place,
       child_birth_date: form.child_birth_date,
+      school_id: form.school_id,
       child_school: form.child_school,
       child_address: form.child_address,
       child_complaint: form.child_complaint,
@@ -252,8 +254,12 @@ export default function FormTambahPasien({
                   <div>
                     <SelectSekolahPasien
                       value={form.child_school}
-                      onChange={(val) =>
-                        setForm((prev) => ({ ...prev, child_school: val }))
+                      onChange={(val, schoolId) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          child_school: val,
+                          school_id: schoolId ?? null,
+                        }))
                       }
                       error={errors.child_school}
                       theme="teal"

@@ -25,6 +25,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TabPembayaran, { PotonganData, RiwayatPembayaran, DUMMY_RIWAYAT } from "@/components/keuangan/TabPembayaran";
@@ -1769,56 +1770,108 @@ function BuatTagihanForm({
   prefillData,
 }: {
   onBack: () => void;
-  onSave: (invData: any) => void;
+  onSave: (invData: any) => Promise<void> | void;
   initialData?: Invoice;
   prefillData?: { anak: string; wali: string; potongan?: number } | null;
 }) {
   const [childrenList, setChildrenList] = useState<ChildGuardianItem[]>([]);
+  const [isLoadingChildren, setIsLoadingChildren] = useState(false);
+  const [isChildDropdownOpen, setIsChildDropdownOpen] = useState(false);
+  const [childSearchTerm, setChildSearchTerm] = useState("");
+  const childDropdownRef = useRef<HTMLDivElement>(null);
+  const childInputRef = useRef<HTMLInputElement>(null);
+
   const [tipeTagihan, setTipeTagihan] = useState<"Bulanan" | "Paket Durasi">(initialData?.tipe ?? "Bulanan");
+  const [isSaving, setIsSaving] = useState(false);
 
   const [selectedChildId, setSelectedChildId] = useState(initialData?.child_id ?? "");
   const [selectedGuardianId, setSelectedGuardianId] = useState(initialData?.guardian_id ?? "");
   const [selectedWaliName, setSelectedWaliName] = useState(initialData?.wali ?? prefillData?.wali ?? "");
   const [selectedAnakName, setSelectedAnakName] = useState(initialData?.anak ?? prefillData?.anak ?? "");
 
+  // Outside click listener for child searchable combobox
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (
+        childDropdownRef.current &&
+        !childDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsChildDropdownOpen(false);
+        setChildSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
   // Load children list from Backend API
   useEffect(() => {
+    let isMounted = true;
     const fetchList = async () => {
-      const data = await getChildrenWithGuardians();
-      setChildrenList(data);
+      setIsLoadingChildren(true);
+      try {
+        const data = await getChildrenWithGuardians();
+        if (!isMounted) return;
+        setChildrenList(data);
 
-      if (initialData?.child_id) {
-        const found = data.find((c) => c.child_id === initialData.child_id);
-        if (found) {
-          setSelectedChildId(found.child_id);
-          setSelectedGuardianId(found.guardian_id);
-          setSelectedWaliName(found.guardian_name);
-          setSelectedAnakName(found.child_name);
+        if (initialData?.child_id) {
+          const found = data.find((c) => c.child_id === initialData.child_id);
+          if (found) {
+            setSelectedChildId(found.child_id);
+            setSelectedGuardianId(found.guardian_id);
+            setSelectedWaliName(found.guardian_name);
+            setSelectedAnakName(found.child_name);
+          }
+        } else if (prefillData?.anak) {
+          const found = data.find((c) => c.child_name.toLowerCase() === prefillData.anak.toLowerCase());
+          if (found) {
+            setSelectedChildId(found.child_id);
+            setSelectedGuardianId(found.guardian_id);
+            setSelectedWaliName(found.guardian_name);
+            setSelectedAnakName(found.child_name);
+          }
         }
-      } else if (prefillData?.anak) {
-        const found = data.find((c) => c.child_name.toLowerCase() === prefillData.anak.toLowerCase());
-        if (found) {
-          setSelectedChildId(found.child_id);
-          setSelectedGuardianId(found.guardian_id);
-          setSelectedWaliName(found.guardian_name);
-          setSelectedAnakName(found.child_name);
+      } catch (err) {
+        console.error("Gagal memuat data anak:", err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingChildren(false);
         }
       }
     };
     fetchList();
+    return () => {
+      isMounted = false;
+    };
   }, [initialData, prefillData]);
 
   // Child selection handler: auto-populates Guardian
-  const handleChildChange = (childId: string) => {
-    setSelectedChildId(childId);
-    const item = childrenList.find((c) => c.child_id === childId);
-    if (item) {
-      setSelectedAnakName(item.child_name);
-      setSelectedGuardianId(item.guardian_id);
-      setSelectedWaliName(item.guardian_name);
-      setErrors((prev) => ({ ...prev, anak: false, wali: false }));
-    }
+  const handleSelectChild = (c: ChildGuardianItem) => {
+    setSelectedChildId(c.child_id);
+    setSelectedAnakName(c.child_name);
+    setSelectedGuardianId(c.guardian_id);
+    setSelectedWaliName(c.guardian_name);
+    setErrors((prev) => ({ ...prev, anak: false, wali: false }));
+    setIsChildDropdownOpen(false);
+    setChildSearchTerm("");
   };
+
+  const handleClearChild = () => {
+    setSelectedChildId("");
+    setSelectedAnakName("");
+    setSelectedGuardianId("");
+    setSelectedWaliName("");
+    setChildSearchTerm("");
+  };
+
+  const filteredChildren = childrenList.filter((c) => {
+    const term = childSearchTerm.toLowerCase().trim();
+    if (!term) return true;
+    return (
+      c.child_name.toLowerCase().includes(term) ||
+      (c.guardian_name && c.guardian_name.toLowerCase().includes(term))
+    );
+  });
 
   let initPeriode = "";
   if (initialData?.tipe === "Bulanan" && initialData.periode && initialData.periode !== "—") {
@@ -1902,7 +1955,7 @@ function BuatTagihanForm({
   const selectClass =
     "w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] transition-all cursor-pointer appearance-none";
 
-  const handleSimpan = () => {
+  const handleSimpan = async () => {
     const newErrors: typeof errors = { terapi: [] };
     let hasError = false;
 
@@ -1921,6 +1974,7 @@ function BuatTagihanForm({
 
     if (hasError) {
       setErrors(newErrors);
+      showErrorToast("Silakan lengkapi semua data wajib pada formulir!", "Validasi Formulir");
       return;
     }
 
@@ -1940,7 +1994,14 @@ function BuatTagihanForm({
       })),
     };
 
-    onSave(payload);
+    setIsSaving(true);
+    try {
+      await onSave(payload);
+    } catch {
+      // Error is handled in onSave
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -1982,26 +2043,135 @@ function BuatTagihanForm({
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
+              <div ref={childDropdownRef} className="relative">
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
                   Pilih Anak
+                  {childrenList.length > 0 && (
+                    <span className="ml-1.5 font-normal text-gray-400">
+                      ({childrenList.length} anak terdaftar)
+                    </span>
+                  )}
                 </label>
-                <div className="relative">
-                  <select
-                    id="select-anak"
-                    value={selectedChildId}
-                    onChange={(e) => handleChildChange(e.target.value)}
-                    className={`${selectClass} ${errors.anak ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""} ${!selectedChildId ? "text-gray-400" : "text-gray-700"}`}
+                <div
+                  className={`relative flex items-center rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium transition-all ${
+                    errors.anak
+                      ? "!border-red-500 !ring-red-500/20 !bg-red-50"
+                      : "border-gray-200 focus-within:border-[#2B7A75] focus-within:ring-2 focus-within:ring-[#2B7A75]/20"
+                  }`}
+                >
+                  <input
+                    ref={childInputRef}
+                    id="input-cari-anak"
+                    type="text"
+                    value={isChildDropdownOpen ? childSearchTerm : selectedAnakName}
+                    onFocus={() => setIsChildDropdownOpen(true)}
+                    onChange={(e) => {
+                      setChildSearchTerm(e.target.value);
+                      setIsChildDropdownOpen(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setIsChildDropdownOpen(false);
+                        setChildSearchTerm("");
+                      }
+                    }}
+                    placeholder={
+                      isLoadingChildren
+                        ? "Memuat daftar anak..."
+                        : isChildDropdownOpen
+                        ? "Cari nama anak / nama orang tua..."
+                        : "Pilih Nama Anak"
+                    }
+                    className="w-full pr-14 text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-800 font-medium"
+                    readOnly={isLoadingChildren}
+                  />
+
+                  {/* Clear button if child is selected */}
+                  {selectedChildId && !isChildDropdownOpen && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClearChild();
+                      }}
+                      title="Hapus pilihan"
+                      className="absolute right-8 p-1 text-gray-400 hover:text-red-500 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {/* Chevron / Loading indicator */}
+                  <div
+                    onClick={() => {
+                      if (isLoadingChildren) return;
+                      setIsChildDropdownOpen((prev) => !prev);
+                      if (!isChildDropdownOpen) {
+                        requestAnimationFrame(() => childInputRef.current?.focus());
+                      }
+                    }}
+                    className="absolute right-3 flex items-center cursor-pointer text-gray-400"
                   >
-                    <option value="" disabled className="text-gray-400">Pilih Nama Anak</option>
-                    {childrenList.map((c) => (
-                      <option key={c.child_id} value={c.child_id} className="text-gray-700">
-                        {c.child_name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={15} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
+                    {isLoadingChildren ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-[#2B7A75]" />
+                    ) : (
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          isChildDropdownOpen ? "rotate-180 text-[#2B7A75]" : ""
+                        }`}
+                      />
+                    )}
+                  </div>
                 </div>
+
+                {/* Dropdown Menu */}
+                {isChildDropdownOpen && (
+                  <div className="absolute left-0 right-0 z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-teal-100 bg-white shadow-xl">
+                    {isLoadingChildren ? (
+                      <div className="flex items-center justify-center gap-2 p-4 text-xs font-medium text-gray-500">
+                        <Loader2 className="w-4 h-4 animate-spin text-[#2B7A75]" />
+                        <span>Memuat data anak...</span>
+                      </div>
+                    ) : filteredChildren.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-gray-400">
+                        {childrenList.length === 0
+                          ? "Belum ada data anak di sistem"
+                          : `Tidak ditemukan anak dengan kata kunci "${childSearchTerm}"`}
+                      </div>
+                    ) : (
+                      <div className="p-1.5 space-y-0.5">
+                        {filteredChildren.map((child) => {
+                          const isSelected = child.child_id === selectedChildId;
+                          return (
+                            <button
+                              key={child.child_id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleSelectChild(child)}
+                              className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                                isSelected
+                                  ? "bg-teal-50 text-[#1E5C58] font-bold"
+                                  : "hover:bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              <div>
+                                <p className="font-semibold text-gray-800 text-[13px]">
+                                  {child.child_name}
+                                </p>
+                                <p className="text-[11px] text-gray-400">
+                                  Wali: {child.guardian_name || "—"}
+                                </p>
+                              </div>
+                              {isSelected && (
+                                <CheckCircle2 className="w-4 h-4 text-[#2B7A75] shrink-0 ml-2" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -2304,10 +2474,18 @@ function BuatTagihanForm({
             <button
               id="btn-simpan-tagihan"
               type="button"
+              disabled={isSaving}
               onClick={handleSimpan}
-              className={`cursor-pointer px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-sm transition-colors ${initialData ? "bg-[#059669] hover:bg-[#047857] shadow-emerald-700/20" : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"}`}
+              className={`cursor-pointer px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-sm transition-colors inline-flex items-center gap-2 ${
+                isSaving ? "opacity-75 cursor-not-allowed" : ""
+              } ${initialData ? "bg-[#059669] hover:bg-[#047857] shadow-emerald-700/20" : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"}`}
             >
-              {initialData ? "Simpan Perubahan" : "Simpan tagihan"}
+              {isSaving && <Loader2 size={16} className="animate-spin" />}
+              {isSaving
+                ? "Menyimpan..."
+                : initialData
+                ? "Simpan Perubahan"
+                : "Simpan tagihan"}
             </button>
             <button
               id="btn-batal-tagihan"
@@ -2407,9 +2585,21 @@ export default function KeuanganPage() {
     }
   };
 
-  const handleSaveInvoice = (invData: any) => {
-    fetchInvoicesData();
-    handleBack();
+  const handleSaveInvoice = async (invData: any) => {
+    try {
+      if (pageView === "edit-tagihan" && editingInvoice) {
+        await updateInvoice(editingInvoice.id, invData);
+        showSuccessToast("Tagihan berhasil diperbarui!", "Berhasil");
+      } else {
+        await createInvoice(invData);
+        showSuccessToast("Tagihan berhasil dibuat!", "Berhasil");
+      }
+      await fetchInvoicesData();
+      handleBack();
+    } catch (e: any) {
+      handleApiError(e, "Gagal menyimpan tagihan");
+      throw e;
+    }
   };
 
   const handleDeleteInvoice = async (invoiceId: string) => {

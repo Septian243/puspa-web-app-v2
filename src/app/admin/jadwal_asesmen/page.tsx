@@ -219,7 +219,7 @@ export default function JadwalAsesmenPage() {
     try {
       await sendAssessmentToSchool(assessmentId);
       showSuccessToast("Laporan asesmen berhasil dikirimkan ke sekolah asal.");
-      await fetchData();
+      await fetchJadwal();
     } catch (err: any) {
       handleApiError(err, "Gagal mengirimkan laporan asesmen ke sekolah.");
     } finally {

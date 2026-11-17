@@ -123,20 +123,6 @@ function DetailTerapis({
                   </p>
                 </div>
               </div>
-
-              {terapis.school_name && (
-                <div className="flex items-start gap-3 bg-[#F4F9F8] p-3 rounded-xl border border-teal-50">
-                  <School className="w-5 h-5 text-[#2B7A75] mt-0.5" />
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-0.5">
-                      Asal Sekolah / Afiliasi
-                    </p>
-                    <p className="text-sm font-bold text-[#1E5C58]">
-                      {terapis.school_name}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
 
             <hr className="border-teal-50" />
@@ -419,12 +405,6 @@ export default function DataTerapisPage() {
                             <p className="text-xs text-gray-550 font-medium mt-0.5 line-clamp-1">
                               @{terapis.username}
                             </p>
-                            {terapis.school_name && (
-                              <p className="text-[11px] font-semibold text-[#2B7A75] flex items-center gap-1 mt-0.5">
-                                <School className="w-3 h-3 shrink-0" />
-                                <span className="truncate max-w-[150px]">{terapis.school_name}</span>
-                              </p>
-                            )}
                           </div>
                         </div>
                       </td>

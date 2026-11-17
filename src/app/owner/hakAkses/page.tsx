@@ -50,6 +50,7 @@ const ALL_LEAF_IDS = [
   "dashboard",
   "admin",
   "terapis",
+  "sekolah",
   "pasien_anak",
   "observasi",
   "asesmen",
@@ -76,6 +77,7 @@ const MENU_SECTIONS: MenuSection[] = [
     entries: [
       { type: "leaf", item: { id: "admin", label: "Admin" } },
       { type: "leaf", item: { id: "terapis", label: "Terapis" } },
+      { type: "leaf", item: { id: "sekolah", label: "Sekolah" } },
       { type: "leaf", item: { id: "pasien_anak", label: "Pasien / Anak" } },
       {
         type: "parent",
@@ -343,6 +345,18 @@ export default function HakAksesPage() {
       );
       setIsDirty(false);
       showToast("Hak akses berhasil disimpan.");
+
+      // Broadcast instant update across all browser tabs
+      if (typeof window !== "undefined") {
+        try {
+          if ("BroadcastChannel" in window) {
+            const channel = new BroadcastChannel("puspa_rbac");
+            channel.postMessage({ type: "PERMISSIONS_UPDATED" });
+            channel.close();
+          }
+        } catch {}
+        window.dispatchEvent(new Event("puspa_rbac_updated"));
+      }
     } catch (err) {
       console.error(err);
       showToast("Gagal menyimpan hak akses.");

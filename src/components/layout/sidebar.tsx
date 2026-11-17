@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import axiosInstance from "@/lib/axios";
 import {
   LayoutGrid,
   Settings,
@@ -19,7 +20,6 @@ import {
   User,
   Lock,
   AlertTriangle,
-  X,
   ChevronLeft,
   ChevronRight,
   CalendarCheck,
@@ -100,11 +100,19 @@ export default function SidebarAdmin({ isOpen, onClose }: SidebarAdminProps) {
   const pathname = usePathname();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [allowedMenus, setAllowedMenus] = useState<string[] | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const { isCollapsed, toggleSidebar } = useSidebar();
 
   const [mounted, setMounted] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(0);
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1200
+  );
+
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   const handleLogout = () => {
     localStorage.clear();
@@ -112,34 +120,220 @@ export default function SidebarAdmin({ isOpen, onClose }: SidebarAdminProps) {
     setShowLogoutModal(false);
   };
 
+  const fetchPermissions = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const res = await axiosInstance.get("/auth/me/permissions");
+      if (res.data?.data) {
+        const { menus, permissions, roles } = res.data.data;
+        if (menus && Array.isArray(menus)) {
+          setAllowedMenus(menus);
+          localStorage.setItem("user_menus", JSON.stringify(menus));
+        }
+        if (permissions && Array.isArray(permissions)) {
+          localStorage.setItem("user_permissions", JSON.stringify(permissions));
+        }
+        if (roles && Array.isArray(roles) && roles.length > 0) {
+          setRole(roles[0]);
+          localStorage.setItem("role", roles[0]);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const fetchPermissionsRef = useRef(fetchPermissions);
   useEffect(() => {
-    setRole(localStorage.getItem("role"));
+    fetchPermissionsRef.current = fetchPermissions;
+  });
+
+  useEffect(() => {
+    const currentRole = localStorage.getItem("role");
+    if (currentRole) setRole(currentRole);
     setMounted(true);
     setWindowWidth(window.innerWidth);
 
+    const storedMenus = localStorage.getItem("user_menus");
+    if (storedMenus) {
+      try {
+        setAllowedMenus(JSON.parse(storedMenus));
+      } catch (e) {
+        console.error("Failed to parse user_menus", e);
+      }
+    }
+
+    // Refresh immediately on mount
+    fetchPermissions();
+
+    // 1. Cross-tab BroadcastChannel listener
+    let channel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      channel = new BroadcastChannel("puspa_rbac");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "PERMISSIONS_UPDATED") {
+          fetchPermissions();
+        }
+      };
+    }
+
+    // 2. Custom local event listener
+    const handleLocalUpdate = () => {
+      fetchPermissions();
+    };
+    window.addEventListener("puspa_rbac_updated", handleLocalUpdate);
+
+    // 3. Tab focus listener: instantly refresh when switching to this tab
+    const handleFocus = () => {
+      const stored = localStorage.getItem("user_menus");
+      if (stored) {
+        try {
+          setAllowedMenus(JSON.parse(stored));
+        } catch {}
+      }
+      fetchPermissions();
+    };
+    window.addEventListener("focus", handleFocus);
+
+    // 4. Storage event across tabs
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "user_menus" && e.newValue) {
+        try {
+          setAllowedMenus(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
-  // Close sidebar on path change (mobile)
+    return () => {
+      channel?.close();
+      window.removeEventListener("puspa_rbac_updated", handleLocalUpdate);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [fetchPermissions]);
+
+  // Close sidebar on path change (mobile) & refresh permissions on navigation
   useEffect(() => {
-    if (windowWidth < 768) {
-      onClose();
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      onCloseRef.current();
     }
-  }, [pathname, windowWidth]);
+    fetchPermissionsRef.current();
+  }, [pathname]);
 
   const toggleDropdown = (name: string) => {
     setOpenDropdown((prev) => (prev === name ? null : name));
   };
 
-  const menu =
-    role === "asesor"
-      ? baseMenu
-      : baseMenu.map((group) => ({
-        ...group,
-        items: group.items.filter((item) => item.name !== "Asesmen"),
-      }));
+  const menu = useMemo<MenuGroup[]>(() => {
+    // If owner or manager, show all menus
+    if (role === "owner" || role === "manager") {
+      return baseMenu;
+    }
+
+    // For admin: if allowedMenus is not yet loaded, NEVER show baseMenu (all 12 menus)!
+    // Instead show safe mandatory menu only: Dashboard, Pengaturan, Log Out.
+    if (!allowedMenus || !Array.isArray(allowedMenus)) {
+      const fallbackMenu: MenuGroup[] = [
+        {
+          section: null,
+          items: [{ name: "Dashboard", href: "/admin/dashboard", icon: LayoutGrid }],
+        },
+        {
+          section: "Kelola Akun",
+          items: [
+            {
+              name: "Pengaturan",
+              href: "/admin/pengaturan",
+              icon: Settings,
+              dropdown: [
+                { name: "Ubah Profile", href: "/admin/profile_admin", icon: User },
+                { name: "Ubah Password", href: "/admin/ubah_password", icon: Lock },
+              ],
+            },
+            { name: "Log Out", href: "/auth/login", icon: LogOut },
+          ],
+        },
+      ];
+      return fallbackMenu;
+    }
+
+    const isAllowed = (id: string) => allowedMenus.includes(id);
+
+    return baseMenu
+      .map((group) => {
+        const filteredItems = group.items
+          .map((item) => {
+            // Check dropdown items first
+            if (item.dropdown && item.dropdown.length > 0) {
+              const filteredDropdown = item.dropdown.filter((sub) => {
+                const subId =
+                  sub.name === "Observasi"
+                    ? "observasi"
+                    : sub.name === "Asesmen"
+                    ? "asesmen"
+                    : sub.name === "Terapi"
+                    ? "terapi_menu"
+                    : sub.name === "Ubah Profile"
+                    ? "ubah_profile"
+                    : sub.name === "Ubah Password"
+                    ? "ubah_password"
+                    : "";
+                return subId ? isAllowed(subId) : true;
+              });
+
+              if (filteredDropdown.length === 0) {
+                return null;
+              }
+
+              return {
+                ...item,
+                dropdown: filteredDropdown,
+              };
+            }
+
+            // Leaf items
+            const menuId =
+              item.name === "Dashboard"
+                ? "dashboard"
+                : item.name === "Admin"
+                ? "admin"
+                : item.name === "Terapis"
+                ? "terapis"
+                : item.name === "Sekolah"
+                ? "sekolah"
+                : item.name === "Pasien / Anak"
+                ? "pasien_anak"
+                : item.name === "Presensi"
+                ? "presensi"
+                : item.name === "Laporan SOAP"
+                ? "laporan_soap"
+                : item.name === "Keuangan"
+                ? "keuangan"
+                : item.name === "Log Out"
+                ? "logout"
+                : "";
+
+            if (menuId === "logout") return item;
+            if (!menuId || isAllowed(menuId)) return item;
+            return null;
+          })
+          .filter(Boolean) as MenuItem[];
+
+        return {
+          ...group,
+          items: filteredItems,
+        };
+      })
+      .filter((group) => group.items.length > 0);
+  }, [role, allowedMenus]);
 
   return (
     <>
@@ -212,14 +406,24 @@ export default function SidebarAdmin({ isOpen, onClose }: SidebarAdminProps) {
           </button>
         </div>
 
-        <nav className="flex-1 px-4 py-8 overflow-y-auto space-y-7 sidebar-scroll">
-          {menu.map((group, idx) => (
-            <div key={idx} className="flex flex-col gap-1.5">
-              {group.section && (
-                <p className="sidebar-section-title text-[11px] font-bold tracking-wider uppercase mb-1 px-3 text-[#2B7A75]/60">
-                  {group.section}
-                </p>
-              )}
+        <nav className="flex-1 px-4 py-8 overflow-y-auto space-y-7 sidebar-scroll" suppressHydrationWarning>
+          {!mounted ? (
+            <div className="flex flex-col gap-3 px-1 animate-pulse">
+              <div className="h-10 bg-teal-50/70 rounded-xl w-full" />
+              <div className="h-3 bg-teal-50/50 rounded w-20 mt-4 mb-1 px-3" />
+              <div className="h-10 bg-teal-50/70 rounded-xl w-full" />
+              <div className="h-10 bg-teal-50/70 rounded-xl w-full" />
+              <div className="h-3 bg-teal-50/50 rounded w-24 mt-4 mb-1 px-3" />
+              <div className="h-10 bg-teal-50/70 rounded-xl w-full" />
+            </div>
+          ) : (
+            menu.map((group, idx) => (
+              <div key={idx} className="flex flex-col gap-1.5">
+                {group.section && (
+                  <p className="sidebar-section-title text-[11px] font-bold tracking-wider uppercase mb-1 px-3 text-[#2B7A75]/60">
+                    {group.section}
+                  </p>
+                )}
 
               {group.items.map((item, i) => {
                 const isParentActive =
@@ -419,8 +623,9 @@ export default function SidebarAdmin({ isOpen, onClose }: SidebarAdminProps) {
                 );
               })}
             </div>
-          ))}
-        </nav>
+          ))
+        )}
+      </nav>
 
         {/* Small footer branding in sidebar */}
         <div className="flex items-center justify-center gap-2 p-4 border-t border-gray-100">

@@ -13,6 +13,8 @@ export interface LoginResponse {
   token: string;
   tokenType: string;
   role: string;
+  menus?: string[];
+  permissions?: string[];
 }
 
 export interface LoginErrorResponse {
@@ -29,7 +31,7 @@ export const login = async (payload: LoginPayload): Promise<LoginResponse> => {
       throw res.data;
     }
 
-    const { user_id, username, email, token, tokenType, role } = res.data.data;
+    const { user_id, username, email, token, tokenType, role, menus, permissions } = res.data.data;
 
     // Simpan ke localStorage agar bisa digunakan di halaman lain
     localStorage.setItem("token", token);
@@ -38,8 +40,14 @@ export const login = async (payload: LoginPayload): Promise<LoginResponse> => {
     localStorage.setItem("username", username);
     localStorage.setItem("email", email);
     localStorage.setItem("user_id", user_id);
+    if (menus) {
+      localStorage.setItem("user_menus", JSON.stringify(menus));
+    }
+    if (permissions) {
+      localStorage.setItem("user_permissions", JSON.stringify(permissions));
+    }
 
-    return { user_id, username, email, token, tokenType, role };
+    return { user_id, username, email, token, tokenType, role, menus, permissions };
   } catch (err: any) {
     if (err.response?.status === 401) {
       throw { general: "Username atau password salah." };

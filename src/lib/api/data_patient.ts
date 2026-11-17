@@ -11,6 +11,8 @@ export interface PatientList {
   child_age: string;
   child_gender?: string | null;
   child_school: string;
+  school_id?: string | null;
+  school_name?: string | null;
 }
 
 
@@ -28,6 +30,8 @@ export interface PatientDetail {
   child_gender?: string | null;
   child_religion: string;
   child_school: string;
+  school_id?: string | null;
+  school_name?: string | null;
   child_address: string;
 
   father_identity_number?: string | null;
@@ -68,6 +72,7 @@ export interface PatientUpdatePayload {
   child_name: string;
   child_birth_date: string; // YYYY-MM-DD
   child_gender?: string | null;
+  school_id?: string | null;
   child_school: string;
   child_address: string;
 
@@ -108,7 +113,9 @@ export async function getPatients(): Promise<PatientList[]> {
     child_birth_date: item.child_birth_date,
     child_age: item.child_age,
     child_gender: item.child_gender,
-    child_school: item.child_school,
+    child_school: item.child_school || item.school_name || item.school?.name || "-",
+    school_id: item.school_id || item.school?.id || null,
+    school_name: item.school_name || item.school?.name || null,
   }));
 }
 
@@ -128,7 +135,9 @@ export async function getPatientById(id: string): Promise<PatientDetail> {
     child_age: item.child_age,
     child_gender: item.child_gender,
     child_religion: item.child_religion,
-    child_school: item.child_school,
+    child_school: item.child_school || item.school_name || "-",
+    school_id: item.school_id ?? null,
+    school_name: item.school_name ?? item.child_school ?? null,
     child_address: item.child_address,
 
     father_identity_number: item.father_identity_number,
@@ -194,6 +203,7 @@ export interface PatientCreatePayload {
   child_birth_place: string;
   child_birth_date: string;
 
+  school_id?: string | null;
   child_school?: string;
   child_address?: string;
   child_complaint?: string;

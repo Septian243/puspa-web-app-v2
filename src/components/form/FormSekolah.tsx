@@ -18,6 +18,7 @@ import {
   EyeOff,
   ChevronDown,
   UserCog,
+  Loader2,
 } from "lucide-react";
 import { Sekolah } from "@/lib/api/data_sekolah";
 
@@ -37,6 +38,7 @@ interface FormSekolahProps {
   onClose: () => void;
   onSubmit: (data: FormSekolahState) => void;
   initialData?: Sekolah | null;
+  submitting?: boolean;
 }
 
 type FormErrors = Partial<Record<keyof FormSekolahState, string>>;
@@ -57,6 +59,7 @@ export default function FormSekolah({
   onClose,
   onSubmit,
   initialData,
+  submitting = false,
 }: FormSekolahProps) {
   const isEdit = mode === "ubah";
 
@@ -169,6 +172,7 @@ export default function FormSekolah({
   // ================= SUBMIT =================
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
 
     const validationErrors = validate();
     setErrors(validationErrors);
@@ -502,16 +506,31 @@ export default function FormSekolah({
               <button
                 type="button"
                 onClick={onClose}
-                className="cursor-pointer px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 active:scale-95 transition-all"
+                disabled={submitting}
+                className={`cursor-pointer px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 active:scale-95 transition-all ${
+                  submitting ? "opacity-50 cursor-not-allowed pointer-events-none" : ""
+                }`}
               >
                 Batal
               </button>
               <button
                 type="submit"
-                className={`cursor-pointer flex items-center gap-2 px-6 py-2.5 rounded-xl ${submitButtonClass} text-white font-semibold text-sm transition-all shadow-md active:scale-95`}
+                disabled={submitting}
+                className={`cursor-pointer flex items-center gap-2 px-6 py-2.5 rounded-xl ${submitButtonClass} text-white font-semibold text-sm transition-all shadow-md active:scale-95 ${
+                  submitting ? "opacity-60 cursor-not-allowed pointer-events-none" : ""
+                }`}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                {isEdit ? "Simpan Perubahan" : "Simpan Sekolah"}
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    {isEdit ? "Simpan Perubahan" : "Simpan Sekolah"}
+                  </>
+                )}
               </button>
             </div>
           </form>

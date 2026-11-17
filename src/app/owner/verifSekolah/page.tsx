@@ -24,33 +24,6 @@ interface SekolahData {
   tanggalPendaftaran: string;
 }
 
-const INITIAL_SEKOLAH_DATA: SekolahData[] = [
-  {
-    id: 1,
-    namaSekolah: "SD 1 Jamsaren",
-    email: "jamsaren01@gmail.com",
-    tanggalPendaftaran: "14 April 2026",
-  },
-  {
-    id: 2,
-    namaSekolah: "PAUD Ahmad Dahlan",
-    email: "ahmaddahlan@paud.id",
-    tanggalPendaftaran: "27 June 2026",
-  },
-  {
-    id: 3,
-    namaSekolah: "SMP N 9 Surakarta",
-    email: "09NegeriSKA@mail.com",
-    tanggalPendaftaran: "30 September 2026",
-  },
-  {
-    id: 4,
-    namaSekolah: "SD Al Islam 1",
-    email: "alislam@islam.com",
-    tanggalPendaftaran: "04 November 2026",
-  },
-];
-
 export default function VerifikasiSekolahPage() {
   const [sekolahList, setSekolahList] = useState<SekolahData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +39,7 @@ export default function VerifikasiSekolahPage() {
     setLoading(true);
     try {
       const res = await getUnverifiedSchools();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data)) {
         setSekolahList(
           res.data.map((item) => ({
             id: item.id,
@@ -76,10 +49,10 @@ export default function VerifikasiSekolahPage() {
           }))
         );
       } else {
-        setSekolahList(INITIAL_SEKOLAH_DATA);
+        setSekolahList([]);
       }
     } catch {
-      setSekolahList(INITIAL_SEKOLAH_DATA);
+      setSekolahList([]);
     } finally {
       setLoading(false);
     }
@@ -102,23 +75,22 @@ export default function VerifikasiSekolahPage() {
     setIsSubmitting(true);
 
     try {
-      if (typeof item.id === "string" && !item.id.startsWith("sample-")) {
-        if (type === "approve") {
-          await verifySchool(item.id);
-        } else {
-          await rejectSchool(item.id);
-        }
+      if (type === "approve") {
+        await verifySchool(item.id);
+      } else {
+        await rejectSchool(item.id);
       }
-      setSekolahList((prev) => prev.filter((s) => s.id !== item.id));
+
+      await fetchSchools();
       setActionModal(null);
       showToast(
         type === "approve"
           ? `Sekolah ${item.namaSekolah} berhasil disetujui!`
           : `Pendaftaran ${item.namaSekolah} telah ditolak.`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast("Terjadi kesalahan saat memproses data sekolah.");
+      showToast(err.message || "Terjadi kesalahan saat memproses data sekolah.");
     } finally {
       setIsSubmitting(false);
     }
@@ -127,7 +99,7 @@ export default function VerifikasiSekolahPage() {
   const handleResetData = () => {
     fetchSchools();
     setSearch("");
-    showToast("Data pendaftaran sekolah berhasil diperbarui.");
+    showToast("Data antrean sekolah berhasil diperbarui.");
   };
 
   const filteredSekolah = sekolahList.filter(
@@ -184,15 +156,13 @@ export default function VerifikasiSekolahPage() {
                   ? `Tidak ada hasil verifikasi sekolah yang cocok dengan pencarian "${search}".`
                   : "Saat ini belum ada sekolah baru yang menunggu verifikasi dari Anda."}
               </p>
-              {sekolahList.length < INITIAL_SEKOLAH_DATA.length && (
-                <button
-                  onClick={handleResetData}
-                  className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
-                >
-                  <RotateCcw size={14} />
-                  Reset Data Awal
-                </button>
-              )}
+              <button
+                onClick={handleResetData}
+                className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1E5C58] hover:bg-[#163F3C] text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <RotateCcw size={14} />
+                Muat Ulang Data
+              </button>
             </div>
           ) : (
             <>

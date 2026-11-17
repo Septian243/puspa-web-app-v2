@@ -77,13 +77,7 @@ export default function DataSekolahPage() {
     if (s === "terverifikasi" || s === "aktif" || s === "verified") {
       return "bg-emerald-50 text-emerald-700 border-emerald-100";
     }
-    if (
-      s.includes("tidak") ||
-      s.includes("belum") ||
-      s === "ditolak" ||
-      s === "nonaktif" ||
-      s === "rejected"
-    ) {
+    if (s === "ditolak" || s === "rejected") {
       return "bg-rose-50 text-rose-700 border-rose-100";
     }
     return "bg-amber-50 text-amber-700 border-amber-100";
@@ -160,7 +154,10 @@ export default function DataSekolahPage() {
         school_address: formData.alamat,
       });
 
-      showSuccessToast("Akun sekolah berhasil didaftarkan dan diaktifkan", "Sukses");
+      showSuccessToast(
+        "Pendaftaran akun sekolah berhasil. Menunggu verifikasi oleh Manager.",
+        "Pendaftaran Berhasil"
+      );
       setShowTambah(false);
       await fetchData(search);
     } catch (err: any) {
@@ -506,6 +503,7 @@ export default function DataSekolahPage() {
         mode="tambah"
         onClose={() => setShowTambah(false)}
         onSubmit={handleSaveSekolah}
+        submitting={submitting}
       />
 
       {/* Modal Detail Sekolah */}
@@ -528,6 +526,7 @@ export default function DataSekolahPage() {
         }}
         onSubmit={handleUpdateSekolah}
         initialData={selectedSekolah}
+        submitting={submitting}
       />
 
       {/* Modal Hapus Sekolah */}
