@@ -164,19 +164,6 @@ export const getAssessmentQuestionsAdmin = async (
    KIRIM LAPORAN KE SEKOLAH
 ======================= */
 export const sendAssessmentToSchool = async (assessmentId: number | string) => {
-  try {
-    const res = await axiosInstance.post(`/assessments/${assessmentId}/send-to-school`);
-    return {
-      success: res.data?.success ?? true,
-      message: res.data?.message ?? "Laporan asesmen berhasil dikirim ke sekolah",
-      data: res.data?.data,
-    };
-  } catch (error: any) {
-    console.error("❌ sendAssessmentToSchool error:", error);
-    return {
-      success: false,
-      message: error.response?.data?.message || "Gagal mengirim laporan ke sekolah",
-      data: null,
-    };
-  }
+  const res = await axiosInstance.post(`/assessments/${assessmentId}/send-to-school`);
+  return res.data;
 };

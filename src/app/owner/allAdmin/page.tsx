@@ -16,7 +16,7 @@ import {
   Clock,
   Layers,
 } from "lucide-react";
-import { getAllAdmins } from "@/lib/api/ownerAdmin";
+import { getAllAdmins, getAdminComputedStatus } from "@/lib/api/ownerAdmin";
 import { getAdminById } from "@/lib/api/data_admin";
 
 const DEFAULT_SAMPLE_ADMINS: any[] = [
@@ -110,6 +110,18 @@ const AdminListPage: React.FC = () => {
 
   useEffect(() => {
     fetchAdmins();
+
+    const handleStatusUpdate = () => {
+      fetchAdmins();
+    };
+
+    window.addEventListener("admin_status_updated", handleStatusUpdate);
+    window.addEventListener("storage", handleStatusUpdate);
+
+    return () => {
+      window.removeEventListener("admin_status_updated", handleStatusUpdate);
+      window.removeEventListener("storage", handleStatusUpdate);
+    };
   }, []);
 
   async function fetchAdmins() {
@@ -117,12 +129,20 @@ const AdminListPage: React.FC = () => {
       setLoading(true);
       const res = await getAllAdmins();
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setAdmins(
-          res.data.map((item: any) => ({
-            ...item,
-            jenis: item.jenis || item.role || item.admin_type || "-",
-          }))
-        );
+        // Hanya tampilkan admin yang sudah terverifikasi (disetujui/ditolak)
+        const processed = res.data
+          .map((item: any) => {
+            const computed = getAdminComputedStatus(item);
+            return {
+              ...item,
+              status: computed.status,
+              jenis: computed.role || item.jenis || item.role || item.admin_type || "-",
+              isVerifiedOrRejected: computed.isVerifiedOrRejected,
+            };
+          })
+          .filter((item: any) => item.isVerifiedOrRejected);
+
+        setAdmins(processed);
       } else {
         setAdmins(DEFAULT_SAMPLE_ADMINS);
       }
@@ -138,10 +158,21 @@ const AdminListPage: React.FC = () => {
     setLoadingDetail(true);
     try {
       const data = await getAdminById(adminItem.admin_id);
-      setSelectedAdmin({ ...adminItem, ...(data || {}) });
+      const merged = { ...adminItem, ...(data || {}) };
+      const computed = getAdminComputedStatus(merged);
+      setSelectedAdmin({
+        ...merged,
+        status: computed.status,
+        jenis: computed.role || adminItem.jenis || merged.jenis || "-",
+      });
     } catch (error) {
       console.error("Gagal mengambil detail admin:", error);
-      setSelectedAdmin(adminItem);
+      const computed = getAdminComputedStatus(adminItem);
+      setSelectedAdmin({
+        ...adminItem,
+        status: computed.status,
+        jenis: computed.role || adminItem.jenis || "-",
+      });
     } finally {
       setLoadingDetail(false);
     }
@@ -162,7 +193,7 @@ const AdminListPage: React.FC = () => {
   return (
     <div className="flex min-h-[calc(100vh-80px)] bg-transparent w-full">
       <div className="flex flex-col flex-1 w-full px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        
+
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-teal-50 pb-5">
           <div>
@@ -171,7 +202,7 @@ const AdminListPage: React.FC = () => {
               Kelola dan pantau seluruh akun administrator yang terdaftar di platform PUSPA.
             </p>
           </div>
-          
+
           {/* Search Bar */}
           <div className="relative w-full sm:w-64 shrink-0">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -220,11 +251,11 @@ const AdminListPage: React.FC = () => {
                 <table className="w-full text-left border-collapse table-fixed">
                   <colgroup>
                     <col className="w-[5%]" />
-                    <col className="w-[18%]" />
                     <col className="w-[16%]" />
-                    <col className="w-[13%]" />
-                    <col className="w-[20%]" />
-                    <col className="w-[13%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[11%]" />
                     <col className="w-[9%]" />
                     <col className="w-[6%]" />
                   </colgroup>
@@ -285,7 +316,9 @@ const AdminListPage: React.FC = () => {
                             className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10.5px] font-bold ${
                               admin.status === "Terverifikasi"
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                                : "bg-rose-50 text-rose-700 border border-rose-100"
+                                : admin.status === "Ditolak"
+                                ? "bg-rose-50 text-rose-700 border border-rose-100"
+                                : "bg-amber-50 text-amber-700 border border-amber-100"
                             }`}
                           >
                             {admin.status}
@@ -324,7 +357,9 @@ const AdminListPage: React.FC = () => {
                           className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
                             admin.status === "Terverifikasi"
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                              : "bg-rose-50 text-rose-700 border border-rose-100"
+                              : admin.status === "Ditolak"
+                              ? "bg-rose-50 text-rose-700 border border-rose-100"
+                              : "bg-amber-50 text-amber-700 border border-amber-100"
                           }`}
                         >
                           {admin.status}
@@ -486,11 +521,10 @@ function DetailItem({ icon: Icon, label, value, isBadge = false, badgeType = "su
         </span>
         {isBadge ? (
           <span
-            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold mt-1 ${
-              badgeType === "success"
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                : "bg-rose-50 text-rose-700 border border-rose-100"
-            }`}
+            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold mt-1 ${badgeType === "success"
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+              : "bg-rose-50 text-rose-700 border border-rose-100"
+              }`}
           >
             {value}
           </span>

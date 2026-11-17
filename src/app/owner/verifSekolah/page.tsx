@@ -101,7 +101,6 @@ export default function VerifikasiSekolahPage() {
     setSearch("");
     showToast("Data antrean sekolah berhasil diperbarui.");
   };
-
   const filteredSekolah = sekolahList.filter(
     (item) =>
       item.namaSekolah.toLowerCase().includes(search.toLowerCase()) ||

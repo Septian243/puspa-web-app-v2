@@ -17,7 +17,6 @@ import {
   UserCircle2,
   Stethoscope,
   BriefcaseMedical,
-  School,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -206,7 +205,6 @@ export default function DataTerapisPage() {
     email: string;
     telepon: string;
     password: string;
-    school_id?: string | null;
   }) => {
     try {
       const res = await addTerapis(data);
@@ -229,7 +227,6 @@ export default function DataTerapisPage() {
     username: string;
     email: string;
     telepon: string;
-    school_id?: string | null;
   }) => {
     if (!selectedTerapis) return;
     try {

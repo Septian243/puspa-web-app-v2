@@ -44,10 +44,10 @@ interface SekolahData {
 // =========================================
 const JENJANG_LABEL: Record<string, string> = {
   PAUD: "Pendidikan Anak Usia Dini",
-  SD:   "Sekolah Dasar",
-  SMP:  "Sekolah Menengah Pertama",
-  SMA:  "Sekolah Menengah Atas",
-  SMK:  "Sekolah Menengah Kejuruan",
+  SD: "Sekolah Dasar",
+  SMP: "Sekolah Menengah Pertama",
+  SMA: "Sekolah Menengah Atas",
+  SMK: "Sekolah Menengah Kejuruan",
 };
 
 // =========================================
@@ -84,10 +84,10 @@ function StatusBadge({ status }: { status: SekolahData["status"] }) {
 function JenjangBadge({ kode }: { kode: string }) {
   const colorMap: Record<string, string> = {
     PAUD: "bg-purple-50 text-purple-700 border-purple-200/60",
-    SD:   "bg-blue-50 text-blue-700 border-blue-200/60",
-    SMP:  "bg-amber-50 text-amber-700 border-amber-200/60",
-    SMA:  "bg-teal-50 text-teal-700 border-teal-200/60",
-    SMK:  "bg-orange-50 text-orange-700 border-orange-200/60",
+    SD: "bg-blue-50 text-blue-700 border-blue-200/60",
+    SMP: "bg-amber-50 text-amber-700 border-amber-200/60",
+    SMA: "bg-teal-50 text-teal-700 border-teal-200/60",
+    SMK: "bg-orange-50 text-orange-700 border-orange-200/60",
   };
   const cls = colorMap[kode] ?? "bg-gray-50 text-gray-700 border-gray-200/60";
   return (
@@ -108,9 +108,9 @@ function DetailModal({
   onClose: () => void;
 }) {
   const rows: { icon: React.ElementType; label: string; value: React.ReactNode }[] = [
-    { icon: School,   label: "NAMA SEKOLAH",        value: sekolah.namaSekolah },
-    { icon: BookOpen, label: "JENJANG",              value: sekolah.jenjangLabel },
-    { icon: MapPin,   label: "ALAMAT",               value: sekolah.alamat },
+    { icon: School, label: "NAMA SEKOLAH", value: sekolah.namaSekolah },
+    { icon: BookOpen, label: "JENJANG", value: sekolah.jenjangLabel },
+    { icon: MapPin, label: "ALAMAT", value: sekolah.alamat },
     {
       icon: BadgeCheck,
       label: "PERAN / JABATAN",
@@ -157,14 +157,14 @@ function DetailModal({
           </div>
           <button
             onClick={onClose}
-            className="cursor-pointer w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors cursor-pointer rounded-xl hover:bg-gray-100 hover:text-gray-600"
           >
             <X size={17} strokeWidth={2.5} />
           </button>
         </div>
 
         {/* ── Modal Body (scrollable) ── */}
-        <div className="overflow-y-auto flex-1 px-6 pb-6">
+        <div className="flex-1 px-6 pb-6 overflow-y-auto">
           <div className="divide-y divide-gray-100">
             {rows.map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-4 py-4">
@@ -178,7 +178,7 @@ function DetailModal({
                     {label}
                   </p>
                   {typeof value === "string" ? (
-                    <p className="text-sm font-bold text-gray-800 leading-snug break-all">
+                    <p className="text-sm font-bold leading-snug text-gray-800 break-all">
                       {value}
                     </p>
                   ) : (
@@ -253,10 +253,10 @@ export default function AllSekolahPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-80px)] bg-transparent w-full">
-      <div className="flex flex-col flex-1 w-full px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="flex flex-col flex-1 w-full px-4 py-8 space-y-6 sm:px-6 lg:px-8">
 
         {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-teal-50 pb-5">
+        <div className="flex flex-col gap-4 pb-5 border-b md:flex-row md:items-center md:justify-between border-teal-50">
           <div>
             <h1 className="text-xl font-extrabold text-[#1E5C58]">Daftar Sekolah Pasien</h1>
             <p className="text-xs text-gray-400 mt-1.5 font-medium">
@@ -266,7 +266,7 @@ export default function AllSekolahPage() {
 
           {/* Search Bar */}
           <div className="relative w-full sm:w-72 shrink-0">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
               <Search className="h-4 w-4 text-[#81B7A9]" />
             </div>
             <input
@@ -287,12 +287,12 @@ export default function AllSekolahPage() {
           className="bg-transparent md:bg-white md:rounded-3xl md:shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] md:border md:border-teal-50 overflow-hidden md:p-6 w-full"
         >
           {filteredSekolah.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-16 text-center bg-white rounded-3xl md:bg-transparent border border-teal-50 md:border-0 shadow-xs md:shadow-none">
-              <div className="w-20 h-20 bg-teal-50/50 rounded-full flex items-center justify-center mb-4 border border-teal-100/30">
+            <div className="flex flex-col items-center justify-center p-16 text-center bg-white border shadow-xs rounded-3xl md:bg-transparent border-teal-50 md:border-0 md:shadow-none">
+              <div className="flex items-center justify-center w-20 h-20 mb-4 border rounded-full bg-teal-50/50 border-teal-100/30">
                 <School className="w-10 h-10 text-[#2B7A75] opacity-50" />
               </div>
-              <h3 className="text-base font-bold text-gray-700 mb-1">Sekolah Tidak Ditemukan</h3>
-              <p className="text-gray-400 text-xs max-w-xs font-semibold leading-relaxed">
+              <h3 className="mb-1 text-base font-bold text-gray-700">Sekolah Tidak Ditemukan</h3>
+              <p className="max-w-xs text-xs font-semibold leading-relaxed text-gray-400">
                 {search
                   ? `Tidak ada hasil yang cocok dengan pencarian "${search}".`
                   : "Belum ada data sekolah yang terdaftar di platform PUSPA."}
@@ -301,7 +301,7 @@ export default function AllSekolahPage() {
           ) : (
             <>
               {/* Desktop Table */}
-              <div className="hidden md:block w-full">
+              <div className="hidden w-full md:block">
                 <table className="w-full text-left border-collapse table-fixed">
                   <colgroup>
                     <col className="w-[4%]" />
@@ -314,7 +314,7 @@ export default function AllSekolahPage() {
                     <col className="w-[7%]" />
                   </colgroup>
                   <thead>
-                    <tr className="border-b border-gray-55 text-gray-400">
+                    <tr className="text-gray-400 border-b border-gray-55">
                       <th className="py-4 px-3 text-[10px] font-bold uppercase tracking-wider">No</th>
                       <th className="py-4 px-3 text-[10px] font-bold uppercase tracking-wider">Nama Sekolah</th>
                       <th className="py-4 px-3 text-[10px] font-bold uppercase tracking-wider">Jenjang</th>
@@ -331,18 +331,18 @@ export default function AllSekolahPage() {
                         key={sekolah.id}
                         className="border-b border-gray-55 last:border-0 hover:bg-[#F4F9F8]/50 transition-colors"
                       >
-                        <td className="py-4 px-3 text-xs font-bold text-gray-700">{idx + 1}</td>
-                        <td className="py-4 px-3 text-xs font-bold text-gray-800 truncate">{sekolah.namaSekolah}</td>
-                        <td className="py-4 px-3">
+                        <td className="px-3 py-4 text-xs font-bold text-gray-700">{idx + 1}</td>
+                        <td className="px-3 py-4 text-xs font-bold text-gray-800 truncate">{sekolah.namaSekolah}</td>
+                        <td className="px-3 py-4">
                           <JenjangBadge kode={sekolah.jenjangKode} />
                         </td>
-                        <td className="py-4 px-3 text-xs font-medium text-gray-600 truncate">{sekolah.username}</td>
-                        <td className="py-4 px-3 text-xs font-medium text-gray-500 truncate">{sekolah.email}</td>
-                        <td className="py-4 px-3 text-xs font-medium text-gray-600">{sekolah.noTelepon}</td>
-                        <td className="py-4 px-3">
+                        <td className="px-3 py-4 text-xs font-medium text-gray-600 truncate">{sekolah.username}</td>
+                        <td className="px-3 py-4 text-xs font-medium text-gray-500 truncate">{sekolah.email}</td>
+                        <td className="px-3 py-4 text-xs font-medium text-gray-600">{sekolah.noTelepon}</td>
+                        <td className="px-3 py-4">
                           <StatusBadge status={sekolah.status} />
                         </td>
-                        <td className="py-4 px-3 text-center">
+                        <td className="px-3 py-4 text-center">
                           <button
                             onClick={() => setSelectedSekolah(sekolah)}
                             className="cursor-pointer inline-flex items-center justify-center w-8 h-8 rounded-xl bg-[#EAF4F2] hover:bg-[#2B7A75] text-[#2B7A75] hover:text-white border border-teal-100/50 transition-all shadow-xs hover:-translate-y-0.5 active:translate-y-0"
@@ -358,13 +358,13 @@ export default function AllSekolahPage() {
               </div>
 
               {/* Mobile Card View */}
-              <div className="block md:hidden space-y-4">
+              <div className="block space-y-4 md:hidden">
                 {filteredSekolah.map((sekolah, idx) => (
                   <div
                     key={sekolah.id}
                     className="bg-white border border-teal-50 rounded-2xl p-4 space-y-3.5 shadow-xs"
                   >
-                    <div className="flex justify-between items-start">
+                    <div className="flex items-start justify-between">
                       <div className="flex items-start gap-2.5">
                         <span className="text-[10px] font-bold text-[#1E5C58] bg-teal-50 px-2 py-1 rounded-lg border border-teal-100/30 shrink-0 mt-0.5">
                           {idx + 1}
@@ -379,7 +379,7 @@ export default function AllSekolahPage() {
                       <StatusBadge status={sekolah.status} />
                     </div>
 
-                    <div className="pt-3 border-t border-gray-100 space-y-2">
+                    <div className="pt-3 space-y-2 border-t border-gray-100">
                       <div className="flex items-center gap-2 text-xs text-gray-500">
                         <User size={12} className="text-[#81B7A9]" />
                         <span>{sekolah.username}</span>
@@ -410,7 +410,7 @@ export default function AllSekolahPage() {
 
         {/* Result count */}
         {filteredSekolah.length > 0 && (
-          <p className="text-xs text-gray-400 font-medium -mt-2">
+          <p className="-mt-2 text-xs font-medium text-gray-400">
             Menampilkan{" "}
             <span className="font-bold text-[#1E5C58]">{filteredSekolah.length}</span>{" "}
             dari {sekolahList.length} sekolah terdaftar

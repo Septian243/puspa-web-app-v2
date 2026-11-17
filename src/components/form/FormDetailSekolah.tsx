@@ -162,7 +162,7 @@ export default function FormDetailSekolah({
                   <Clock className="w-3.5 h-3.5" /> Terakhir Ubah
                 </div>
                 <p className="text-xs font-bold text-gray-700">
-                  {sekolah.updated_at || sekolah.created_at || "-"}
+                  {sekolah.updated_at || sekolah.tanggalPendaftaran || sekolah.created_at || "-"}
                 </p>
               </div>
             </div>
