@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import api from "@/lib/axios";
 import { normalizeBidangKey, BidangKey, PetugasOption } from "@/components/form/FormAturAsesmen";
+import { getTherapists } from "@/lib/api/jadwal_terapi";
 
 export interface Jadwal {
   observation_id: number;
@@ -380,93 +381,115 @@ export async function createObservationAgreement(
       scheduled_time: formattedTime,
     };
 
+    // 1. Petakan pilihan terapis per bidang pengguna
+    const chosenMap: Record<string, { id: string; name: string }> = {};
+    if (petugasByBidang) {
+      for (const [k, v] of Object.entries(petugasByBidang)) {
+        const normK = normalizeBidangKey(k) || k.toLowerCase().trim();
+        if (!normK || !v || v === "-") continue;
+        let tId = "";
+        let tName = "";
+        const colonIdx = v.indexOf(":");
+        if (colonIdx > 0) {
+          tId = v.slice(0, colonIdx).trim();
+          tName = v.slice(colonIdx + 1).trim();
+        } else if (/^[0-9A-Za-z]{20,30}$/.test(v.trim())) {
+          tId = v.trim();
+        } else {
+          tName = v.trim();
+        }
+        chosenMap[normK] = { id: tId, name: tName };
+      }
+    }
+
     // Ambil opsi terapis langsung dari endpoint REST API untuk mapping assessment_detail_id & therapist_id
     const options = await getObservationTherapistOptions(observation_id);
-    const therapistsPayload: Array<{ assessment_detail_id: number; therapist_id: number | string }> = [];
+    const therapistsPayload: Array<{
+      assessment_detail_id?: number;
+      therapist_id: string;
+      type: string;
+    }> = [];
 
+    // Jika options dari backend ada (mengembalikan assessment_detail_id atau list assessor)
     if (Array.isArray(options) && options.length > 0) {
       for (const opt of options) {
         const normOptType = normalizeBidangKey(opt.type) || (opt.type || "").toLowerCase().trim();
-        let matchedTherapist: any = null;
+        const chosen = chosenMap[normOptType];
 
-        if (petugasByBidang) {
-          let targetName = "";
-          let targetId = "";
-          for (const [k, v] of Object.entries(petugasByBidang)) {
-            const normK = normalizeBidangKey(k) || k.toLowerCase().trim();
-            if (normK === normOptType || k.toLowerCase().trim() === (opt.type || "").toLowerCase().trim()) {
-              // Support format "id:name" (dari FormAturAsesmen) atau hanya "name"
-              const val = v || "";
-              const colonIdx = val.indexOf(":");
-              if (colonIdx > 0) {
-                targetId = val.slice(0, colonIdx).trim();
-                targetName = val.slice(colonIdx + 1).trim().toLowerCase();
-              } else {
-                targetName = val.toLowerCase().trim();
-              }
-              break;
-            }
-          }
-          if (targetId) {
-            // Prioritaskan match by ID (paling akurat)
-            matchedTherapist = (opt.therapists || []).find(
-              (t: any) => String(t.id || t.therapist_id) === targetId
-            );
-          }
-          if (!matchedTherapist && targetName) {
-            matchedTherapist = (opt.therapists || []).find(
-              (t: any) =>
-                (t.name || t.therapist_name || t.nama || "").toLowerCase().trim() === targetName ||
-                String(t.id || t.therapist_id) === String(targetName)
-            );
-          }
+        // 1. Utamakan ID yang dipilih user
+        let therapistId = chosen?.id || "";
+
+        // 2. Jika user hanya punya nama, cari ID di opt.therapists
+        if (!therapistId && chosen?.name) {
+          const matched = (opt.therapists || []).find(
+            (t: any) =>
+              (t.name || t.therapist_name || t.nama || "").toLowerCase().trim() === chosen.name.toLowerCase()
+          );
+          if (matched) therapistId = String(matched.id || matched.therapist_id || "");
         }
 
-        // Fallback 1: cari dari current_therapist (object { id, name } atau id string)
-        if (!matchedTherapist) {
+        // 3. Fallback jika belum matched
+        if (!therapistId) {
           const ctId = opt.current_therapist?.id ?? opt.current_therapist_id;
-          if (ctId) {
-            matchedTherapist = (opt.therapists || []).find(
-              (t: any) => String(t.id || t.therapist_id) === String(ctId)
-            );
-            // Jika current_therapist tidak ada di daftar therapists (mungkin bukan assessor),
-            // gunakan langsung object current_therapist sebagai fallback terakhir
-            if (!matchedTherapist && opt.current_therapist?.id) {
-              matchedTherapist = opt.current_therapist;
-            }
-          }
-        }
-
-        // Fallback 2: ambil therapist pertama dari daftar assessor tervalidasi
-        if (!matchedTherapist && Array.isArray(opt.therapists) && opt.therapists.length > 0) {
-          if (petugas) {
-            matchedTherapist = opt.therapists.find((t: any) => String(t.id || t.therapist_id) === String(petugas));
-          }
-          if (!matchedTherapist) {
-            matchedTherapist = opt.therapists[0];
+          if (ctId) therapistId = String(ctId);
+          else if (Array.isArray(opt.therapists) && opt.therapists.length > 0) {
+            therapistId = String(opt.therapists[0].id || opt.therapists[0].therapist_id || "");
           }
         }
 
         const detailId = opt.assessment_detail_id || opt.id;
-        // therapist_id HARUS berupa string (ULID) sesuai validasi backend
-        const therapistId: string | null =
-          String(matchedTherapist?.id ?? matchedTherapist?.therapist_id ?? "").trim() ||
-          String(opt.current_therapist?.id ?? opt.current_therapist_id ?? "").trim() ||
-          String(opt.therapists?.[0]?.id ?? "").trim() ||
-          String(opt.therapists?.[0]?.therapist_id ?? "").trim() ||
-          (typeof petugas === "string" && petugas.trim() !== "" ? petugas.trim() : null);
-
-        if (detailId && therapistId) {
+        if (therapistId) {
           therapistsPayload.push({
-            assessment_detail_id: Number(detailId),
-            therapist_id: String(therapistId), // selalu string (ULID)
+            assessment_detail_id: detailId ? Number(detailId) : undefined,
+            therapist_id: String(therapistId),
+            type: normOptType,
           });
         }
       }
     }
 
+    // Tambahkan bidang yang dipilih pengguna tetapi belum ada di therapistsPayload
+    for (const [normK, chosen] of Object.entries(chosenMap)) {
+      const alreadyAdded = therapistsPayload.some((item) => item.type === normK);
+      if (!alreadyAdded) {
+        let tId = chosen.id;
+        if (!tId && chosen.name) {
+          try {
+            const allT = await getTherapists();
+            const found = allT.find(
+              (t: any) =>
+                (t.name || t.therapist_name || t.nama || "").toLowerCase().trim() === chosen.name.toLowerCase()
+            );
+            if (found) tId = String(found.id || found.therapist_id || "");
+          } catch {
+            // ignore
+          }
+        }
+        if (tId) {
+          therapistsPayload.push({
+            therapist_id: String(tId),
+            type: normK,
+          });
+        }
+      }
+    }
+
+    // Fallback single petugas jika therapistsPayload masih kosong
+    if (therapistsPayload.length === 0 && petugas && String(petugas).trim() !== "" && String(petugas) !== "-") {
+      therapistsPayload.push({
+        therapist_id: String(petugas).trim(),
+        type: "wicara",
+      });
+    }
+
     if (therapistsPayload.length > 0) {
-      payload.therapists = therapistsPayload;
+      payload.therapists = therapistsPayload.map((item) => {
+        const clean: any = { therapist_id: item.therapist_id, type: item.type };
+        if (item.assessment_detail_id !== undefined && item.assessment_detail_id !== null) {
+          clean.assessment_detail_id = item.assessment_detail_id;
+        }
+        return clean;
+      });
     }
 
     const resolvedTherapistId =
@@ -498,12 +521,13 @@ export async function createObservationAgreement(
         { headers: { Authorization: `Bearer ${token}` } }
       );
     } catch (putErr: any) {
-      if (putErr.response?.status === 405 || putErr.response?.status === 404) {
-        console.warn("PUT failed, retrying with POST and _method=PUT:", putErr);
-        payload._method = "PUT";
+      if (putErr.response?.status === 405) {
+        console.warn("PUT failed with 405 Method Not Allowed, retrying with pure POST:", putErr);
+        const postPayload = { ...payload };
+        delete postPayload._method;
         res = await api.post(
           `/observations/${observation_id}/agreement`,
-          payload,
+          postPayload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {

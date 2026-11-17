@@ -374,43 +374,11 @@ export default function JadwalPage() {
         if (options) {
           const parsedOptions = parseTherapistOptionsByBidang(options);
           // Selalu set parsedOptions agar FormAturAsesmen tahu data sudah dimuat
-          // (tidak fallback ke allTherapists saat parsedOptions kosong)
           setBidangTherapistOptions(parsedOptions);
-
-          if (Array.isArray(options) && options.length > 0) {
-            const prefilled: Record<string, string> = {};
-            for (const opt of options) {
-              const normType = normalizeBidangKey(opt.type);
-              if (!normType) continue;
-
-              let matchedName = "";
-              if (opt.current_therapist_name) {
-                matchedName = opt.current_therapist_name;
-              } else if (opt.current_therapist?.name || opt.current_therapist?.therapist_name) {
-                matchedName = opt.current_therapist.name || opt.current_therapist.therapist_name;
-              } else if (opt.current_therapist_id && Array.isArray(opt.therapists)) {
-                const matched = opt.therapists.find(
-                  (t: any) => String(t.id || t.therapist_id) === String(opt.current_therapist_id)
-                );
-                if (matched) {
-                  matchedName = matched.name || matched.therapist_name || matched.nama || "";
-                }
-              }
-              if (matchedName) {
-                prefilled[normType] = matchedName;
-              }
-            }
-            if (Object.keys(prefilled).length > 0) {
-              setAsesmenPetugasByBidang(prefilled);
-            }
-          }
         }
 
-        // Fallback dari local storage jika belum ada dari backend
-        const localSaved = getAssessmentAsessorByBidangLocal(pasien.observation_id, pasien.nama);
-        if (localSaved && Object.keys(localSaved).length > 0) {
-          setAsesmenPetugasByBidang((prev) => ({ ...localSaved, ...prev }));
-        }
+        // Untuk pembuatan jadwal asesmen baru (tab selesai), pastikan pilihan awal selalu KOSONG
+        setAsesmenPetugasByBidang(undefined);
       } catch (err) {
         console.warn("Gagal memuat opsi bidang asesmen:", err);
       }
@@ -1141,21 +1109,23 @@ export default function JadwalPage() {
                 : "Buat Jadwal Asesmen"
           }
           pasienName={selectedPasien.nama}
-          initialDate={selectedPasien.tanggalObservasi || ""}
-          initialTime={selectedPasien.waktu || ""}
+          initialDate={tab === "selesai" ? "" : (selectedPasien.tanggalObservasi || "")}
+          initialTime={tab === "selesai" ? "" : (selectedPasien.waktu || "")}
           initialPetugas={
-            selectedPasien.observer && selectedPasien.observer !== "-"
-              ? selectedPasien.observer
-              : ""
+            tab === "selesai"
+              ? ""
+              : selectedPasien.observer && selectedPasien.observer !== "-"
+                ? selectedPasien.observer
+                : ""
           }
-          initialPetugasId={selectedPasien.therapist_id || undefined}
+          initialPetugasId={tab === "selesai" ? undefined : (selectedPasien.therapist_id || undefined)}
           petugasList={therapists.map((t: any) => ({
             id: t.therapist_id || t.id,
             name: t.therapist_name || t.name || "",
             section: t.therapist_section || t.section || "",
             role: t.role || "",
           }))}
-          initialPetugasByBidang={tab === "selesai" ? asesmenPetugasByBidang : undefined}
+          initialPetugasByBidang={undefined}
           allowedBidang={tab === "selesai" ? allowedBidang : undefined}
           bidangTherapistOptions={tab === "selesai" ? bidangTherapistOptions : undefined}
           observationId={tab === "selesai" ? selectedPasien.observation_id : undefined}
@@ -1177,14 +1147,6 @@ export default function JadwalPage() {
                   petugas,
                   petugasByBidang
                 );
-                if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
-                  saveAssessmentAsessorByBidangLocal(
-                    selectedPasien.observation_id,
-                    petugasByBidang,
-                    selectedPasien.nama
-                  );
-                  setAsesmenPetugasByBidang(petugasByBidang);
-                }
                 showSuccessToast("Asesmen berhasil dijadwalkan!");
               } else {
                 await updateObservationSchedule(

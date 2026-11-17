@@ -130,7 +130,13 @@ function BidangCombobox({
   // Sync display value when selected changes externally
   useEffect(() => {
     if (!isSearching) {
-      setSearchTerm(selected?.name || "");
+      const displayName = selected?.name || "";
+      // Cegah menampilkan ULID mentah di kotak pencarian/input
+      if (/^[0-9A-Za-z]{20,30}$/.test(displayName.trim())) {
+        setSearchTerm("");
+      } else {
+        setSearchTerm(displayName);
+      }
     }
   }, [selected, isSearching]);
 
@@ -505,7 +511,21 @@ export default function FormAturAsesmen({
       for (const [rawKey, nameVal] of Object.entries(initialPetugasByBidang)) {
         const normKey = normalizeBidangKey(rawKey);
         if (normKey && nameVal && nameVal !== "-") {
-          initial[normKey] = { id: "", name: nameVal };
+          let cleanName = "";
+          let id = "";
+          if (nameVal.includes(":")) {
+            id = nameVal.slice(0, nameVal.indexOf(":")).trim();
+            cleanName = nameVal.slice(nameVal.indexOf(":") + 1).trim();
+          } else if (/^[0-9A-Za-z]{20,30}$/.test(nameVal.trim())) {
+            id = nameVal.trim();
+          } else {
+            cleanName = nameVal.trim();
+          }
+          if (cleanName && !/^[0-9A-Za-z]{20,30}$/.test(cleanName)) {
+            initial[normKey] = { id: id || "", name: cleanName };
+          } else if (id) {
+            initial[normKey] = { id, name: "" };
+          }
         }
       }
     }
@@ -662,16 +682,37 @@ export default function FormAturAsesmen({
       const normKey = normalizeBidangKey(rawKey);
       if (!normKey || !nameVal || nameVal === "-") continue;
 
+      let idPart = "";
+      let namePart = "";
+      if (nameVal.includes(":")) {
+        idPart = nameVal.slice(0, nameVal.indexOf(":")).trim();
+        namePart = nameVal.slice(nameVal.indexOf(":") + 1).trim();
+      } else if (/^[0-9A-Za-z]{20,30}$/.test(nameVal.trim())) {
+        idPart = nameVal.trim();
+      } else {
+        namePart = nameVal.trim();
+      }
+
       // Cari di optionsByBidang bidang terkait terlebih dahulu (daftar asesor resmi), lalu allTherapists
       const specificOpts = optionsByBidang[normKey] || [];
-      const matched =
-        specificOpts.find(
-          (t) => t.name.toLowerCase() === nameVal.toLowerCase()
-        ) ||
-        allTherapists.find(
-          (t) => t.name.toLowerCase() === nameVal.toLowerCase()
-        );
-      updates[normKey] = matched ?? { id: "", name: nameVal };
+      const combined = [...specificOpts, ...allTherapists];
+
+      let matched: PetugasOption | undefined;
+      // 1. Cocokkan berdasarkan ID (termasuk ULID)
+      if (idPart) {
+        matched = combined.find((t) => String(t.id) === String(idPart));
+      }
+      // 2. Cocokkan berdasarkan nama jika belum ditemukan
+      if (!matched && namePart && !/^[0-9A-Za-z]{20,30}$/.test(namePart)) {
+        const lowerName = namePart.toLowerCase();
+        matched = combined.find((t) => t.name.toLowerCase() === lowerName);
+      }
+
+      if (matched) {
+        updates[normKey] = matched;
+      } else if (namePart && !/^[0-9A-Za-z]{20,30}$/.test(namePart)) {
+        updates[normKey] = { id: idPart || "", name: namePart };
+      }
     }
 
     if (Object.keys(updates).length > 0) {
@@ -711,6 +752,19 @@ export default function FormAturAsesmen({
       return;
     }
 
+    if (isAsesmenMode) {
+      const unselectedBidang = activeBidangList.filter((b) => {
+        const opt = selectedByBidang[b.key];
+        return !opt || (!opt.id && !opt.name);
+      });
+
+      if (unselectedBidang.length > 0) {
+        const labels = unselectedBidang.map((b) => b.label).join(", ");
+        handleApiError(null, `Mohon pilih petugas asesor untuk bidang: ${labels}`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       if (isAsesmenMode) {
@@ -723,9 +777,17 @@ export default function FormAturAsesmen({
         const byBidang: Record<string, string> = {};
         for (const b of activeBidangList) {
           const opt = selectedByBidang[b.key];
-          if (opt && opt.name) {
-            // Format: "id:name" jika ada id, atau hanya "name" jika tidak ada id
-            byBidang[b.key] = opt.id ? `${opt.id}:${opt.name}` : opt.name;
+          if (opt && (opt.id || opt.name)) {
+            const hasCleanName = opt.name && !/^[0-9A-Za-z]{20,30}$/.test(opt.name.trim());
+            const tId = opt.id || (/^[0-9A-Za-z]{20,30}$/.test(opt.name.trim()) ? opt.name.trim() : "");
+            const tName = hasCleanName ? opt.name.trim() : "";
+            if (tId && tName) {
+              byBidang[b.key] = `${tId}:${tName}`;
+            } else if (tId) {
+              byBidang[b.key] = String(tId);
+            } else if (tName) {
+              byBidang[b.key] = tName;
+            }
           }
         }
 

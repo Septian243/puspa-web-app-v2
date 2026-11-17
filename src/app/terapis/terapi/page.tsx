@@ -846,9 +846,9 @@ function JadwalContent() {
 
       setItems(mapped);
       setTotalItems(res.meta.total);
-    } catch (err) {
+    } catch (err: any) {
       if (requestId !== activeRequestIdRef.current) return;
-      console.error("Gagal memuat jadwal terapi:", err);
+      console.warn("Gagal memuat jadwal terapi:", err?.message || err);
       setItems([]);
       setTotalItems(0);
     } finally {

@@ -195,7 +195,16 @@ export async function getRescheduledSessionInfo(
   }
 
   try {
-    const res = await axiosInstance.get(`/therapy_sessions/${newSessionId}`);
+    let res;
+    try {
+      res = await axiosInstance.get(`/therapy_sessions/${newSessionId}`);
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        res = await axiosInstance.get(`/therapy-sessions/${newSessionId}`);
+      } else {
+        throw err;
+      }
+    }
     const detail = res.data?.data;
     if (!detail) return null;
 
@@ -229,8 +238,8 @@ export async function getRescheduledSessionInfo(
     }
 
     return null;
-  } catch (err) {
-    console.error("Gagal mengambil waktu sesi baru reschedule:", err);
+  } catch (err: any) {
+    console.warn("Gagal mengambil waktu sesi baru reschedule:", err?.message || err);
     return null;
   }
 }
@@ -247,9 +256,25 @@ export async function getTherapySessions(
       params.my_sessions = filters.my_sessions ? 1 : 0;
     }
 
-    const res = await axiosInstance.get("/therapy_sessions", {
-      params,
-    });
+    let res;
+    try {
+      res = await axiosInstance.get("/therapy_sessions", {
+        params,
+      });
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        // Fallback jika backend menggunakan format kebab-case /therapy-sessions
+        try {
+          res = await axiosInstance.get("/therapy-sessions", {
+            params,
+          });
+        } catch {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
 
     const data = res.data?.data;
     const rawItems = (data?.items || []) as TherapySessionItem[];
@@ -292,8 +317,12 @@ export async function getTherapySessions(
         total: 0,
       },
     };
-  } catch (error) {
-    console.error("Gagal mengambil data therapy_sessions:", error);
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      console.warn("Endpoint /therapy_sessions belum tersedia atau 404 di server backend saat ini.");
+    } else {
+      console.warn("Gagal mengambil data therapy_sessions:", error?.message || error);
+    }
     return {
       items: [],
       meta: {
@@ -328,7 +357,16 @@ export async function getTherapySessionDetail(
   sessionId: string
 ): Promise<TherapySessionDetail | null> {
   try {
-    const res = await axiosInstance.get(`/therapy_sessions/${sessionId}`);
+    let res;
+    try {
+      res = await axiosInstance.get(`/therapy_sessions/${sessionId}`);
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        res = await axiosInstance.get(`/therapy-sessions/${sessionId}`);
+      } else {
+        throw err;
+      }
+    }
     const sessionDetail: TherapySessionDetail | null = res.data?.data || null;
     if (!sessionDetail) return null;
 
@@ -365,8 +403,8 @@ export async function getTherapySessionDetail(
     }
 
     return sessionDetail;
-  } catch (error) {
-    console.error(`Gagal mengambil detail sesi terapi (${sessionId}):`, error);
+  } catch (error: any) {
+    console.warn(`Gagal mengambil detail sesi terapi (${sessionId}):`, error?.message || error);
     return null;
   }
 }
