@@ -190,7 +190,7 @@ export async function getTherapists(section?: string) {
   }
 }
 
-export async function getChildren(hasCompletedAssessment?: number) {
+export async function getChildren(hasCompletedAssessment?: boolean) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const params: Record<string, any> = {};
