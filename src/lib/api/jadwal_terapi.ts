@@ -155,8 +155,6 @@ export async function updateSchedule(
   }
 }
 
-
-
 export async function deleteSchedule(id: string) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -192,11 +190,17 @@ export async function getTherapists(section?: string) {
   }
 }
 
-export async function getChildren() {
+export async function getChildren(hasCompletedAssessment?: number) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const params: Record<string, any> = {};
+
+    if (typeof hasCompletedAssessment === "boolean") {
+      params.has_completed_assessment = hasCompletedAssessment;
+    }
 
     const res = await api.get("/children", {
+      params,
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -208,5 +212,3 @@ export async function getChildren() {
     return [];
   }
 }
-
-
