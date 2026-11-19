@@ -81,6 +81,10 @@ export default function JadwalPage() {
   const [openDetail, setOpenDetail] = useState(false);
   const [allowedBidang, setAllowedBidang] = useState<string[] | undefined>(undefined);
   const [asesmenPetugasByBidang, setAsesmenPetugasByBidang] = useState<Record<string, string> | undefined>(undefined);
+  const [selectedAssessmentDetailId, setSelectedAssessmentDetailId] = useState<number | undefined>(undefined);
+  const [assessmentDetailsByBidang, setAssessmentDetailsByBidang] = useState<Record<string, number>>({});
+  const [assessmentDataMissing, setAssessmentDataMissing] = useState(false);
+  const [therapistOptionsRaw, setTherapistOptionsRaw] = useState<any[]>([]);
   const [bidangTherapistOptions, setBidangTherapistOptions] = useState<
     Partial<Record<BidangKey, PetugasOption[]>> | undefined
   >(undefined);
@@ -253,6 +257,8 @@ export default function JadwalPage() {
     setAllowedBidang(undefined);
     setAsesmenPetugasByBidang(undefined);
     setBidangTherapistOptions(undefined);
+    setTherapistOptionsRaw([]);
+    setAssessmentDataMissing(false);
     setOpenDropdown(null);
 
     // For scheduled tab: fetch detail to ensure latest therapist & schedule are prefilled
@@ -371,10 +377,33 @@ export default function JadwalPage() {
 
         // 2. Ambil therapist-options (hanya terapis tervalidasi sebagai assessor) dari endpoint resmi
         const options = await getObservationTherapistOptions(pasien.observation_id);
-        if (options) {
+        if (options && Array.isArray(options) && options.length > 0) {
+          setTherapistOptionsRaw(options);
+          const detailMap: Record<string, number> = {};
+          for (const opt of options) {
+            const normKey = normalizeBidangKey(opt.type) || (opt.type || "").toLowerCase().trim();
+            const dId = opt.assessment_detail_id ?? opt.id;
+            if (normKey && dId) {
+              detailMap[normKey] = Number(dId);
+            }
+          }
+          setAssessmentDetailsByBidang(detailMap);
+          const firstDetailId = options[0]?.assessment_detail_id ?? options[0]?.id;
+          setSelectedAssessmentDetailId(
+            pasien.assessment_detail_id ? Number(pasien.assessment_detail_id) : (firstDetailId ? Number(firstDetailId) : undefined)
+          );
+
           const parsedOptions = parseTherapistOptionsByBidang(options);
           // Selalu set parsedOptions agar FormAturAsesmen tahu data sudah dimuat
           setBidangTherapistOptions(parsedOptions);
+          setAssessmentDataMissing(false);
+        } else {
+          // therapist-options kosong → observation belum memiliki Assessment/AssessmentDetail di DB
+          // Admin tidak bisa membuat jadwal asesmen sebelum backend menyediakan data ini
+          setTherapistOptionsRaw([]);
+          setAssessmentDetailsByBidang({});
+          setSelectedAssessmentDetailId(pasien.assessment_detail_id ? Number(pasien.assessment_detail_id) : undefined);
+          setAssessmentDataMissing(true);
         }
 
         // Untuk pembuatan jadwal asesmen baru (tab selesai), pastikan pilihan awal selalu KOSONG
@@ -437,8 +466,8 @@ export default function JadwalPage() {
                       value={
                         selectedDate
                           ? new Date(
-                              selectedDate.split("/").reverse().join("-"),
-                            )
+                            selectedDate.split("/").reverse().join("-"),
+                          )
                           : new Date()
                       }
                       className="border-none shadow-sm rounded-xl font-sans! text-sm"
@@ -736,17 +765,16 @@ export default function JadwalPage() {
                           <td className="py-4 px-6">
                             <span
                               className={`inline-flex px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider
-                              ${
-                                j.assessment_status
+                              ${j.assessment_status
                                   ?.toLowerCase()
                                   .includes("selesai")
                                   ? "bg-green-100 text-green-700"
                                   : j.assessment_status
-                                        ?.toLowerCase()
-                                        .includes("menunggu")
+                                    ?.toLowerCase()
+                                    .includes("menunggu")
                                     ? "bg-amber-100 text-amber-700"
                                     : "bg-gray-100 text-gray-600"
-                              }`}
+                                }`}
                             >
                               {j.assessment_status || "Terdata"}
                             </span>
@@ -937,17 +965,16 @@ export default function JadwalPage() {
                       {tab === "selesai" && (
                         <span
                           className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest
-                          ${
-                            j.assessment_status
+                          ${j.assessment_status
                               ?.toLowerCase()
                               .includes("selesai")
                               ? "bg-green-100 text-green-700 border border-green-200"
                               : j.assessment_status
-                                    ?.toLowerCase()
-                                    .includes("menunggu")
+                                ?.toLowerCase()
+                                .includes("menunggu")
                                 ? "bg-amber-100 text-amber-700 border border-amber-200"
                                 : "bg-gray-100 text-gray-600 border border-gray-200"
-                          }`}
+                            }`}
                         >
                           {j.assessment_status || "Terdata"}
                         </span>
@@ -1128,24 +1155,37 @@ export default function JadwalPage() {
           initialPetugasByBidang={undefined}
           allowedBidang={tab === "selesai" ? allowedBidang : undefined}
           bidangTherapistOptions={tab === "selesai" ? bidangTherapistOptions : undefined}
+          therapistOptionsRaw={tab === "selesai" ? therapistOptionsRaw : undefined}
           observationId={tab === "selesai" ? selectedPasien.observation_id : undefined}
+          warningMessage={
+            tab === "selesai" && assessmentDataMissing
+              ? "Data assessment untuk observasi ini belum tersedia di sistem (endpoint therapist-options kosong). Pastikan asesor telah mengirimkan hasil observasi dengan benar, lalu minta tim backend untuk memverifikasi data AssessmentDetail di database."
+              : undefined
+          }
           onClose={() => {
             setOpenAsesmen(false);
             setSelectedPasien(null);
             setAsesmenPetugasByBidang(undefined);
             setBidangTherapistOptions(undefined);
+            setSelectedAssessmentDetailId(undefined);
+            setAssessmentDetailsByBidang({});
+            setTherapistOptionsRaw([]);
+            setAssessmentDataMissing(false);
           }}
-          onSave={async (date, time, petugas, petugasId, petugasByBidang) => {
+          onSave={async (date, time, petugas, petugasId, petugasByBidang, therapistsPayload) => {
             if (!selectedPasien) return;
+            // Blokir submit jika data assessment belum siap di backend
+            if (tab === "selesai" && assessmentDataMissing) {
+              handleApiError(null, "Data assessment untuk pasien ini belum tersedia. Hubungi tim backend.");
+              return;
+            }
             try {
               if (tab === "selesai") {
                 await createObservationAgreement(
                   selectedPasien.observation_id,
                   date,
                   time,
-                  petugasId || petugas,
-                  petugas,
-                  petugasByBidang
+                  therapistsPayload || []
                 );
                 showSuccessToast("Asesmen berhasil dijadwalkan!");
               } else {
@@ -1160,6 +1200,10 @@ export default function JadwalPage() {
               }
               setOpenAsesmen(false);
               setSelectedPasien(null);
+              setSelectedAssessmentDetailId(undefined);
+              setAssessmentDetailsByBidang({});
+              setTherapistOptionsRaw([]);
+              setAssessmentDataMissing(false);
               fetchJadwal();
             } catch (err: any) {
               console.warn("Gagal simpan jadwal observasi / agreement:", err?.response?.data || err?.message || err);

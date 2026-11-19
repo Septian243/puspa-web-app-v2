@@ -18,6 +18,8 @@ export interface Jadwal {
   therapist_name?: string | null;
   administrator?: string | null;
   assessment_status: string;
+  assessment_detail_id?: number | null;
+  assessment_id?: number | null;
 }
 
 // ========================================================
@@ -257,6 +259,8 @@ export async function getObservations(
         administrator: item.administrator || item.admin_name || null,
 
         assessment_status: item.assessment_status || "-",
+        assessment_detail_id: item.assessment_detail_id ?? item.assessment_details?.[0]?.id ?? null,
+        assessment_id: item.assessment_id ?? null,
       };
     });
 
@@ -349,170 +353,55 @@ export async function updateObservationSchedule(
 
 // ========================================================
 // CREATE OBSERVATION AGREEMENT → JADWAL ASESMEN
-// POST /observations/{id}/agreement
+// PUT /observations/{id}/agreement
+// Spec backend AgreeToAssessmentRequest:
+//   scheduled_date: string (Y-m-d)
+//   scheduled_time: string (H:i)
+//   therapists: [{ assessment_detail_id: int, therapist_id: string }]
 // ========================================================
+export interface TherapistAssignment {
+  assessment_detail_id: number;
+  therapist_id: string | number;
+}
+
 export async function createObservationAgreement(
   observation_id: number,
   scheduled_date: string,
   scheduled_time: string,
-  petugas?: string | number,
-  petugasName?: string,
-  petugasByBidang?: Record<string, string>
+  therapists: TherapistAssignment[]
 ) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-    // 1. Format scheduled_time to HH:mm (H:i with colon for Carbon)
-    let formattedTime = (scheduled_time || "").trim().replace(".", ":");
-    if (/^\d{1,2}:\d{2}/.test(formattedTime)) {
-      const [h, m] = formattedTime.split(":");
-      formattedTime = `${h.padStart(2, "0")}:${m}`;
-    }
-
-    // 2. Format scheduled_date to YYYY-MM-DD
+    // ── 1. Format tanggal → YYYY-MM-DD ─────────────────────────────────
     let formattedDate = (scheduled_date || "").trim();
     if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(formattedDate)) {
       const [d, m, y] = formattedDate.split(/[\/\-]/);
       formattedDate = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
     }
 
-    const payload: any = {
+    // ── 2. Format waktu → HH:mm (H:i) ──────────────────────────────────
+    let formattedTime = (scheduled_time || "").trim().replace(".", ":");
+    if (/^\d{1,2}:\d{2}/.test(formattedTime)) {
+      const [h, m] = formattedTime.split(":");
+      formattedTime = `${h.padStart(2, "0")}:${m.substring(0, 2)}`;
+    }
+
+    // ── 3. Format therapists: assessment_detail_id (integer), therapist_id (string)
+    const formattedTherapists = (therapists || [])
+      .filter((t) => t && t.assessment_detail_id && t.therapist_id)
+      .map((t) => ({
+        assessment_detail_id: Number(t.assessment_detail_id),
+        therapist_id: String(t.therapist_id).trim(),
+      }));
+
+    const payload = {
       scheduled_date: formattedDate,
       scheduled_time: formattedTime,
+      therapists: formattedTherapists,
     };
 
-    // 1. Petakan pilihan terapis per bidang pengguna
-    const chosenMap: Record<string, { id: string; name: string }> = {};
-    if (petugasByBidang) {
-      for (const [k, v] of Object.entries(petugasByBidang)) {
-        const normK = normalizeBidangKey(k) || k.toLowerCase().trim();
-        if (!normK || !v || v === "-") continue;
-        let tId = "";
-        let tName = "";
-        const colonIdx = v.indexOf(":");
-        if (colonIdx > 0) {
-          tId = v.slice(0, colonIdx).trim();
-          tName = v.slice(colonIdx + 1).trim();
-        } else if (/^[0-9A-Za-z]{20,30}$/.test(v.trim())) {
-          tId = v.trim();
-        } else {
-          tName = v.trim();
-        }
-        chosenMap[normK] = { id: tId, name: tName };
-      }
-    }
-
-    // Ambil opsi terapis langsung dari endpoint REST API untuk mapping assessment_detail_id & therapist_id
-    const options = await getObservationTherapistOptions(observation_id);
-    const therapistsPayload: Array<{
-      assessment_detail_id?: number;
-      therapist_id: string;
-      type: string;
-    }> = [];
-
-    // Jika options dari backend ada (mengembalikan assessment_detail_id atau list assessor)
-    if (Array.isArray(options) && options.length > 0) {
-      for (const opt of options) {
-        const normOptType = normalizeBidangKey(opt.type) || (opt.type || "").toLowerCase().trim();
-        const chosen = chosenMap[normOptType];
-
-        // 1. Utamakan ID yang dipilih user
-        let therapistId = chosen?.id || "";
-
-        // 2. Jika user hanya punya nama, cari ID di opt.therapists
-        if (!therapistId && chosen?.name) {
-          const matched = (opt.therapists || []).find(
-            (t: any) =>
-              (t.name || t.therapist_name || t.nama || "").toLowerCase().trim() === chosen.name.toLowerCase()
-          );
-          if (matched) therapistId = String(matched.id || matched.therapist_id || "");
-        }
-
-        // 3. Fallback jika belum matched
-        if (!therapistId) {
-          const ctId = opt.current_therapist?.id ?? opt.current_therapist_id;
-          if (ctId) therapistId = String(ctId);
-          else if (Array.isArray(opt.therapists) && opt.therapists.length > 0) {
-            therapistId = String(opt.therapists[0].id || opt.therapists[0].therapist_id || "");
-          }
-        }
-
-        const detailId = opt.assessment_detail_id || opt.id;
-        if (therapistId) {
-          therapistsPayload.push({
-            assessment_detail_id: detailId ? Number(detailId) : undefined,
-            therapist_id: String(therapistId),
-            type: normOptType,
-          });
-        }
-      }
-    }
-
-    // Tambahkan bidang yang dipilih pengguna tetapi belum ada di therapistsPayload
-    for (const [normK, chosen] of Object.entries(chosenMap)) {
-      const alreadyAdded = therapistsPayload.some((item) => item.type === normK);
-      if (!alreadyAdded) {
-        let tId = chosen.id;
-        if (!tId && chosen.name) {
-          try {
-            const allT = await getTherapists();
-            const found = allT.find(
-              (t: any) =>
-                (t.name || t.therapist_name || t.nama || "").toLowerCase().trim() === chosen.name.toLowerCase()
-            );
-            if (found) tId = String(found.id || found.therapist_id || "");
-          } catch {
-            // ignore
-          }
-        }
-        if (tId) {
-          therapistsPayload.push({
-            therapist_id: String(tId),
-            type: normK,
-          });
-        }
-      }
-    }
-
-    // Fallback single petugas jika therapistsPayload masih kosong
-    if (therapistsPayload.length === 0 && petugas && String(petugas).trim() !== "" && String(petugas) !== "-") {
-      therapistsPayload.push({
-        therapist_id: String(petugas).trim(),
-        type: "wicara",
-      });
-    }
-
-    if (therapistsPayload.length > 0) {
-      payload.therapists = therapistsPayload.map((item) => {
-        const clean: any = { therapist_id: item.therapist_id, type: item.type };
-        if (item.assessment_detail_id !== undefined && item.assessment_detail_id !== null) {
-          clean.assessment_detail_id = item.assessment_detail_id;
-        }
-        return clean;
-      });
-    }
-
-    const resolvedTherapistId =
-      petugas !== undefined && petugas !== null && String(petugas).trim() !== "" && String(petugas) !== "-"
-        ? (!isNaN(Number(petugas)) ? Number(petugas) : String(petugas).trim())
-        : therapistsPayload[0]?.therapist_id ?? undefined;
-
-    if (resolvedTherapistId !== undefined) {
-      payload.therapist_id = resolvedTherapistId;
-      payload.observer_id = resolvedTherapistId;
-      payload.terapis_id = resolvedTherapistId;
-    }
-
-    if (petugasName && String(petugasName).trim() !== "" && String(petugasName) !== "-") {
-      payload.observer = String(petugasName).trim();
-      payload.therapist_name = String(petugasName).trim();
-      payload.nama_terapis = String(petugasName).trim();
-    }
-
-    if (petugasByBidang && Object.keys(petugasByBidang).length > 0) {
-      saveAssessmentAsessorByBidangLocal(observation_id, petugasByBidang);
-    }
-
+    // ── 4. Kirim ke backend ──────────────────────────────────────────────
     let res: any;
     try {
       res = await api.put(
@@ -522,12 +411,10 @@ export async function createObservationAgreement(
       );
     } catch (putErr: any) {
       if (putErr.response?.status === 405) {
-        console.warn("PUT failed with 405 Method Not Allowed, retrying with pure POST:", putErr);
-        const postPayload = { ...payload };
-        delete postPayload._method;
+        // Fallback jika backend tidak support method PUT
         res = await api.post(
           `/observations/${observation_id}/agreement`,
-          postPayload,
+          payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
@@ -535,10 +422,6 @@ export async function createObservationAgreement(
       }
     }
 
-    
-    if (res.data?.data?.assessment_id && petugasByBidang) {
-      saveAssessmentAsessorByBidangLocal(res.data.data.assessment_id, petugasByBidang);
-    }
     return res.data;
   } catch (error: any) {
     console.warn("createObservationAgreement failed:", error?.response?.data || error?.message || error);
@@ -583,8 +466,12 @@ export async function getObservationTherapistOptions(
     else if (raw && raw.data && Array.isArray(raw.data.data)) result = raw.data.data;
 
     return result;
-  } catch (err) {
-    console.warn("getObservationTherapistOptions:", err);
+  } catch (err: any) {
+    console.warn(
+      `[getObservationTherapistOptions] Gagal fetch untuk observation_id=${observation_id}:`,
+      err?.response?.status,
+      err?.response?.data || err?.message || err
+    );
     return [];
   }
 }
