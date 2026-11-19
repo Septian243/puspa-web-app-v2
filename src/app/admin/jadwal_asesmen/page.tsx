@@ -601,9 +601,11 @@ export default function JadwalAsesmenPage() {
                               )}
                             </div>
                             <p className="text-xs text-[#2B7A75] font-semibold mt-1">
-                              {j.administrator
+                              {j.administrator && j.administrator !== "-"
                                 ? `Admin: ${j.administrator}`
-                                : `Asesor: ${j.asessor}`}
+                                : j.asessor && j.asessor !== "-"
+                                ? `Asesor: ${j.asessor}`
+                                : "Admin: -"}
                             </p>
                           </td>
 

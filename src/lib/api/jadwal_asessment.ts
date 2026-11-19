@@ -64,7 +64,7 @@ export async function getAssessmentsAdmin(
         tipe: Array.isArray(item.type) && item.type.length > 0
           ? item.type.join(", ")
           : item.type || "-",
-        administrator: item.administrator || "-",
+        administrator: item.administrator || item.admin_name || "-",
         asessor: item.assessor || "-",
         assessorsByBidang: Object.keys(assessorsByBidang).length > 0 ? assessorsByBidang : undefined,
         tanggalObservasi: item.scheduled_date || "-",
