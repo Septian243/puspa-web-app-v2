@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -14,8 +14,11 @@ import {
   Users,
   BriefcaseMedical,
   HeartPulse,
+  Search,
+  Loader2,
+  UserCheck,
 } from "lucide-react";
-import { addPatient } from "@/lib/api/data_patient";
+import { addPatient, searchGuardians, GuardianOptionItem } from "@/lib/api/data_patient";
 import SelectSekolahPasien from "./SelectSekolahPasien";
 
 interface FormTambahPasienProps {
@@ -27,6 +30,12 @@ export default function FormTambahPasien({
   open,
   onClose,
 }: FormTambahPasienProps) {
+  const [parentMode, setParentMode] = useState<"new" | "existing">("new");
+  const [guardianQuery, setGuardianQuery] = useState("");
+  const [guardianResults, setGuardianResults] = useState<GuardianOptionItem[]>([]);
+  const [isSearchingGuardian, setIsSearchingGuardian] = useState(false);
+  const [selectedGuardian, setSelectedGuardian] = useState<GuardianOptionItem | null>(null);
+
   const [form, setForm] = useState({
     child_name: "",
     child_gender: "",
@@ -46,6 +55,75 @@ export default function FormTambahPasien({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const REQUIRED_MESSAGE = "Wajib diisi";
+
+  // Debounced search for existing guardians
+  useEffect(() => {
+    if (parentMode !== "existing" || selectedGuardian) return;
+    if (!guardianQuery.trim() || guardianQuery.trim().length < 2) {
+      setGuardianResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingGuardian(true);
+      try {
+        const results = await searchGuardians(guardianQuery.trim());
+        setGuardianResults(results);
+      } catch (err) {
+        console.error("Gagal mencari orang tua:", err);
+      } finally {
+        setIsSearchingGuardian(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [guardianQuery, parentMode, selectedGuardian]);
+
+  const handleSelectGuardian = (guardian: GuardianOptionItem) => {
+    setSelectedGuardian(guardian);
+    setForm((prev) => ({
+      ...prev,
+      guardian_name: guardian.guardian_name,
+      guardian_phone: guardian.guardian_phone || "",
+      email: guardian.parent_email || "",
+      guardian_type: guardian.guardian_type || "ayah",
+    }));
+    setGuardianQuery("");
+    setGuardianResults([]);
+    setErrors((prev) => ({
+      ...prev,
+      guardian_name: "",
+      guardian_phone: "",
+      email: "",
+    }));
+  };
+
+  const handleClearSelectedGuardian = () => {
+    setSelectedGuardian(null);
+    setForm((prev) => ({
+      ...prev,
+      guardian_name: "",
+      guardian_phone: "",
+      email: "",
+      guardian_type: "ayah",
+    }));
+  };
+
+  const handleSwitchParentMode = (mode: "new" | "existing") => {
+    setParentMode(mode);
+    setSelectedGuardian(null);
+    setGuardianQuery("");
+    setGuardianResults([]);
+    if (mode === "new") {
+      setForm((prev) => ({
+        ...prev,
+        guardian_name: "",
+        guardian_phone: "",
+        email: "",
+        guardian_type: "ayah",
+      }));
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -77,6 +155,9 @@ export default function FormTambahPasien({
     if (!form.child_address.trim()) newErrors.child_address = REQUIRED_MESSAGE;
     if (!form.child_complaint.trim())
       newErrors.child_complaint = REQUIRED_MESSAGE;
+    if (parentMode === "existing" && !selectedGuardian) {
+      newErrors.guardian_search = "Pilih orang tua yang sudah terdaftar terlebih dahulu";
+    }
     if (!form.guardian_name.trim()) newErrors.guardian_name = REQUIRED_MESSAGE;
     if (!form.guardian_phone.trim())
       newErrors.guardian_phone = REQUIRED_MESSAGE;
@@ -93,6 +174,10 @@ export default function FormTambahPasien({
     if (!validate()) return;
 
     const payload = {
+      family_id:
+        parentMode === "existing" && selectedGuardian
+          ? selectedGuardian.family_id
+          : null,
       child_name: form.child_name,
       child_gender: form.child_gender,
       child_birth_place: form.child_birth_place,
@@ -290,12 +375,166 @@ export default function FormTambahPasien({
 
               {/* Seksi Orang Tua */}
               <div>
-                <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
-                  <Users className="w-4 h-4 text-[#2B7A75]" />
-                  <h3 className="font-bold text-[#1E5C58] text-sm uppercase tracking-wider">
-                    Informasi Pendaftar / Orangtua
-                  </h3>
+                <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[#2B7A75]" />
+                    <h3 className="font-bold text-[#1E5C58] text-sm uppercase tracking-wider">
+                      Informasi Pendaftar / Orangtua
+                    </h3>
+                  </div>
+
+                  {/* Mode Selector Tabs */}
+                  <div className="flex bg-gray-100 p-0.5 rounded-xl text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchParentMode("new")}
+                      className={`px-3 py-1 rounded-lg transition-all ${
+                        parentMode === "new"
+                          ? "bg-white text-[#1E5C58] shadow-xs"
+                          : "text-gray-500 hover:text-gray-800"
+                      }`}
+                    >
+                      Orang Tua Baru
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchParentMode("existing")}
+                      className={`px-3 py-1 rounded-lg transition-all ${
+                        parentMode === "existing"
+                          ? "bg-[#1E5C58] text-white shadow-xs"
+                          : "text-gray-500 hover:text-gray-800"
+                      }`}
+                    >
+                      Pilih Yang Sudah Terdaftar
+                    </button>
+                  </div>
                 </div>
+
+                {/* Existing Parent Search / Selected Card */}
+                {parentMode === "existing" && (
+                  <div className="mb-4 bg-[#F4F9F8] border border-[#2B7A75]/20 rounded-2xl p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#1E5C58] flex items-center gap-1.5">
+                        <Search className="w-3.5 h-3.5 text-[#2B7A75]" />
+                        Cari Orang Tua / Keluarga Terdaftar
+                      </span>
+                      {selectedGuardian && (
+                        <button
+                          type="button"
+                          onClick={handleClearSelectedGuardian}
+                          className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
+                        >
+                          Ganti Pilihan
+                        </button>
+                      )}
+                    </div>
+
+                    {!selectedGuardian ? (
+                      <div className="relative">
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            placeholder="Cari nama orang tua, anak terdaftar, no WA, atau email..."
+                            value={guardianQuery}
+                            onChange={(e) => setGuardianQuery(e.target.value)}
+                            className="w-full p-2.5 pr-9 bg-white border border-gray-200 rounded-xl outline-none text-xs transition-all focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75]"
+                          />
+                          <div className="absolute right-3 text-gray-400">
+                            {isSearchingGuardian ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-[#2B7A75]" />
+                            ) : (
+                              <Search className="w-4 h-4 text-gray-400" />
+                            )}
+                          </div>
+                        </div>
+
+                        {errors.guardian_search && (
+                          <p className="text-[10px] text-red-500 mt-1 font-medium">
+                            {errors.guardian_search}
+                          </p>
+                        )}
+
+                        {/* Search Result Dropdown */}
+                        {guardianQuery.trim().length >= 2 && (
+                          <div className="mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-gray-100 z-10">
+                            {guardianResults.length > 0 ? (
+                              guardianResults.map((item) => (
+                                <div
+                                  key={item.guardian_id}
+                                  onClick={() => handleSelectGuardian(item)}
+                                  className="p-2.5 hover:bg-[#F4F9F8] cursor-pointer transition-colors text-xs"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-gray-800">
+                                      {item.guardian_name}{" "}
+                                      <span className="capitalize text-gray-500 font-normal">
+                                        ({item.guardian_type || "wali"})
+                                      </span>
+                                    </span>
+                                    <span className="text-[10px] text-gray-500">
+                                      {item.guardian_phone || "-"}
+                                    </span>
+                                  </div>
+                                  {item.parent_email && (
+                                    <div className="text-[10px] text-gray-500 mt-0.5">
+                                      {item.parent_email}
+                                    </div>
+                                  )}
+                                  {item.existing_children &&
+                                    item.existing_children.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        <span className="text-[10px] text-[#1E5C58] bg-[#1E5C58]/10 px-1.5 py-0.5 rounded-md font-medium">
+                                          👶 Anak sebelumnya:{" "}
+                                          {item.existing_children
+                                            .map((c) => c.child_name)
+                                            .join(", ")}
+                                        </span>
+                                      </div>
+                                    )}
+                                </div>
+                              ))
+                            ) : (
+                              !isSearchingGuardian && (
+                                <div className="p-3 text-center text-xs text-gray-500">
+                                  Tidak ada data orang tua yang cocok.
+                                </div>
+                              )
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-white p-3 rounded-xl border border-emerald-200 flex items-start justify-between">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                            <UserCheck className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                              {selectedGuardian.guardian_name}
+                              <span className="text-[10px] font-normal uppercase px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                {selectedGuardian.guardian_type || "wali"}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 mt-0.5">
+                              WA: {selectedGuardian.guardian_phone || "-"} • Email:{" "}
+                              {selectedGuardian.parent_email || "-"}
+                            </div>
+                            {selectedGuardian.existing_children &&
+                              selectedGuardian.existing_children.length > 0 && (
+                                <div className="mt-1 text-[10px] text-emerald-800 font-medium">
+                                  👶 Saudara kandung (terdaftar):{" "}
+                                  {selectedGuardian.existing_children
+                                    .map((c) => c.child_name)
+                                    .join(", ")}
+                                </div>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="col-span-1 md:col-span-2">
@@ -306,12 +545,19 @@ export default function FormTambahPasien({
                       {["ayah", "ibu", "wali"].map((type) => (
                         <label
                           key={type}
-                          className="flex items-center gap-2 text-sm cursor-pointer"
+                          className={`flex items-center gap-2 text-sm ${
+                            parentMode === "existing" && selectedGuardian
+                              ? "cursor-not-allowed opacity-70"
+                              : "cursor-pointer"
+                          }`}
                         >
                           <input
                             type="radio"
                             name="guardian_type"
                             value={type}
+                            disabled={
+                              parentMode === "existing" && !!selectedGuardian
+                            }
                             checked={form.guardian_type === type}
                             onChange={handleChange}
                             className="accent-[#2B7A75] w-4 h-4"
@@ -331,8 +577,17 @@ export default function FormTambahPasien({
                       name="guardian_name"
                       placeholder="Nama lengkap wali"
                       value={form.guardian_name}
+                      readOnly={parentMode === "existing" && !!selectedGuardian}
                       onChange={handleChange}
-                      className={`w-full p-2.5 bg-gray-50 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] ${errors.guardian_name ? "border-red-300" : "border-gray-200"}`}
+                      className={`w-full p-2.5 rounded-xl outline-none text-sm transition-all ${
+                        parentMode === "existing" && !!selectedGuardian
+                          ? "bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200"
+                          : `bg-gray-50 border focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] ${
+                              errors.guardian_name
+                                ? "border-red-300"
+                                : "border-gray-200"
+                            }`
+                      }`}
                     />
                     {errors.guardian_name && (
                       <p className="text-[10px] text-red-500 mt-1">
@@ -350,8 +605,17 @@ export default function FormTambahPasien({
                       name="guardian_phone"
                       placeholder="0812xxxxxx"
                       value={form.guardian_phone}
+                      readOnly={parentMode === "existing" && !!selectedGuardian}
                       onChange={handleChange}
-                      className={`w-full p-2.5 bg-gray-50 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] ${errors.guardian_phone ? "border-red-300" : "border-gray-200"}`}
+                      className={`w-full p-2.5 rounded-xl outline-none text-sm transition-all ${
+                        parentMode === "existing" && !!selectedGuardian
+                          ? "bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200"
+                          : `bg-gray-50 border focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] ${
+                              errors.guardian_phone
+                                ? "border-red-300"
+                                : "border-gray-200"
+                            }`
+                      }`}
                     />
                     {errors.guardian_phone && (
                       <p className="text-[10px] text-red-500 mt-1">
@@ -369,8 +633,17 @@ export default function FormTambahPasien({
                       name="email"
                       placeholder="email@contoh.com"
                       value={form.email}
+                      readOnly={parentMode === "existing" && !!selectedGuardian}
                       onChange={handleChange}
-                      className={`w-full p-2.5 bg-gray-50 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] ${errors.email ? "border-red-300" : "border-gray-200"}`}
+                      className={`w-full p-2.5 rounded-xl outline-none text-sm transition-all ${
+                        parentMode === "existing" && !!selectedGuardian
+                          ? "bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200"
+                          : `bg-gray-50 border focus:ring-2 focus:ring-[#2B7A75]/20 focus:border-[#2B7A75] ${
+                              errors.email
+                                ? "border-red-300"
+                                : "border-gray-200"
+                            }`
+                      }`}
                     />
                     {errors.email && (
                       <p className="text-[10px] text-red-500 mt-1">

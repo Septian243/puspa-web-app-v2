@@ -197,7 +197,23 @@ export async function deletePatient(id: string) {
 /* =========================
    CREATE PATIENT (POST /children)
 ========================= */
+export interface ExistingChildOption {
+  child_id: string;
+  child_name: string;
+}
+
+export interface GuardianOptionItem {
+  family_id: string;
+  guardian_id: string;
+  guardian_name: string;
+  guardian_type: "ayah" | "ibu" | "wali";
+  guardian_phone: string;
+  parent_email: string;
+  existing_children: ExistingChildOption[];
+}
+
 export interface PatientCreatePayload {
+  family_id?: string | null;
   child_name: string;
   child_gender: string;
   child_birth_place: string;
@@ -220,6 +236,12 @@ export interface PatientCreatePayload {
 export async function addPatient(data: PatientCreatePayload) {
   const res = await api.post("/children", data);
   return res.data ?? null;
+}
+
+export async function searchGuardians(search: string): Promise<GuardianOptionItem[]> {
+  if (!search || search.trim().length < 2) return [];
+  const res = await api.get("/guardians/search", { params: { search: search.trim() } });
+  return res.data?.data ?? [];
 }
 
 const INDO_MONTH_MAP: Record<string, string> = {
