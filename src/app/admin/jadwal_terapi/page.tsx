@@ -195,7 +195,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
 
   useEffect(() => {
     if (open) {
-      getChildren().then((res) => {
+      getChildren(true).then((res) => {
         if (Array.isArray(res)) {
           setChildrenList(
             res.map((c: any) => ({
