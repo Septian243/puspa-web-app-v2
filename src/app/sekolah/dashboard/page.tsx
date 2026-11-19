@@ -31,13 +31,33 @@ export default function SekolahDashboardPage() {
     queryFn: getSchoolDashboard,
   });
 
-  // 2. Query Siswa Terbaru Sekolah (GET /api/v1/school/students?per_page=3)
+  // 2. Query Laporan Asesmen Terbaru yang Sudah Dikirim Admin
   const { data: recentStudentsData, isLoading: loadingRecent } = useQuery({
-    queryKey: queryKeys.school.students({ per_page: 3 }),
-    queryFn: () => getSchoolStudents({ per_page: 3 }),
+    queryKey: queryKeys.school.students({ per_page: 50 }),
+    queryFn: () => getSchoolStudents({ per_page: 50 }),
   });
 
-  const recentItems = Array.isArray(recentStudentsData?.items) ? recentStudentsData.items : [];
+  const recentItems = (Array.isArray(recentStudentsData?.items) ? recentStudentsData.items : [])
+    .filter((student: SchoolStudentItem) => student.has_report === true)
+    .sort((a: SchoolStudentItem, b: SchoolStudentItem) => {
+      const timeA = a.sent_to_school_at ? new Date(a.sent_to_school_at.replace(" ", "T")).getTime() : 0;
+      const timeB = b.sent_to_school_at ? new Date(b.sent_to_school_at.replace(" ", "T")).getTime() : 0;
+      return timeB - timeA;
+    })
+    .slice(0, 3);
+
+  const formatSentDate = (sentAt?: string | null) => {
+    if (!sentAt) return "Laporan Siap Diunduh";
+    const parsed = new Date(sentAt.replace(" ", "T"));
+    if (isNaN(parsed.getTime())) return `Dikirim ${sentAt}`;
+    const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    const d = parsed.getDate();
+    const m = months[parsed.getMonth()];
+    const y = parsed.getFullYear();
+    const hh = String(parsed.getHours()).padStart(2, "0");
+    const mm = String(parsed.getMinutes()).padStart(2, "0");
+    return `Dikirim ${d} ${m} ${y}, ${hh}.${mm}`;
+  };
 
   // Handler Unduh Laporan Asesmen (GET /school/students/{child}/assessment-report)
   const handleDownloadReport = async (childId: string, studentName: string) => {
@@ -293,21 +313,21 @@ export default function SekolahDashboardPage() {
                 </Link>
               </div>
 
-              {/* List Siswa Terdaftar */}
+              {/* List Asesmen Terbaru Terkirim */}
               <div className="mt-2 divide-y divide-gray-50">
                 {loadingRecent ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-8 text-gray-400">
                     <div className="w-6 h-6 border-2 border-teal-100 border-t-[#1E5C58] rounded-full animate-spin" />
-                    <span className="text-xs">Memuat daftar siswa terbaru...</span>
+                    <span className="text-xs">Memuat laporan asesmen terbaru...</span>
                   </div>
                 ) : recentItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center text-gray-400">
                     <div className="w-12 h-12 rounded-2xl bg-teal-50 text-[#1E5C58] flex items-center justify-center mb-3">
-                      <Users className="w-6 h-6" />
+                      <FileText className="w-6 h-6" />
                     </div>
-                    <p className="text-sm font-bold text-gray-700">Belum Ada Siswa Terdaftar</p>
+                    <p className="text-sm font-bold text-gray-700">Belum Ada Laporan Asesmen</p>
                     <p className="max-w-xs mt-1 text-xs text-gray-400">
-                      Siswa dari sekolah Anda yang terdaftar di Puspa akan tampil di sini.
+                      Laporan asesmen yang dikirimkan oleh Admin Puspa akan tampil di sini.
                     </p>
                   </div>
                 ) : (
@@ -317,16 +337,7 @@ export default function SekolahDashboardPage() {
                     const initialBg = isFemale
                       ? "bg-rose-100 text-rose-600"
                       : "bg-blue-100 text-blue-600";
-                    const hasAssessment = Boolean(
-                      student.assessment_status &&
-                      (student.assessment_status.toLowerCase() === "completed" ||
-                        student.assessment_status.toLowerCase() === "selesai")
-                    );
-                    const statusText = student.assessment_status
-                      ? `Asesmen: ${student.assessment_status}`
-                      : student.observation_status
-                        ? `Observasi: ${student.observation_status}`
-                        : "Terdaftar";
+                    const statusText = formatSentDate(student.sent_to_school_at);
 
                     return (
                       <motion.div
@@ -352,38 +363,26 @@ export default function SekolahDashboardPage() {
                           </div>
                         </div>
 
-                        {/* Tombol Unduh Laporan Asesmen: Hanya bisa diklik jika anak sudah selesai asesmen */}
-                        {hasAssessment ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadReport(student.id, student.child_name)}
-                            disabled={downloadingId === student.id}
-                            className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-blue-200/90 bg-blue-50/80 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 transition-all duration-200 active:scale-95 shrink-0 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Unduh Laporan Asesmen (Dapat diunduh berkali-kali tanpa batas)"
-                          >
-                            {downloadingId === student.id ? (
-                              <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                                <span>Mengunduh...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Download className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Unduh Laporan</span>
-                              </>
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="px-3.5 py-1.5 rounded-xl border border-gray-200/80 bg-gray-100/70 text-gray-400 text-xs font-bold flex items-center gap-1.5 cursor-not-allowed shrink-0 opacity-50"
-                            title="Laporan belum tersedia: Siswa belum melakukan asesmen"
-                          >
-                            <Download className="w-3.5 h-3.5 text-gray-400" />
-                            <span>Unduh Laporan</span>
-                          </button>
-                        )}
+                        {/* Tombol Unduh Laporan Asesmen */}
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadReport(student.id, student.child_name)}
+                          disabled={downloadingId === student.id}
+                          className="cursor-pointer px-3.5 py-1.5 rounded-xl border border-blue-200/90 bg-blue-50/80 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 transition-all duration-200 active:scale-95 shrink-0 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Unduh Laporan Asesmen (Dapat diunduh berkali-kali tanpa batas)"
+                        >
+                          {downloadingId === student.id ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                              <span>Mengunduh...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Unduh Laporan</span>
+                            </>
+                          )}
+                        </button>
                       </motion.div>
                     );
                   })

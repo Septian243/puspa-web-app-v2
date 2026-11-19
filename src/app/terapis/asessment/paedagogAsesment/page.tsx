@@ -4,10 +4,11 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, AlertCircle } from "lucide-react";
 
-import { submitAssessment, getAssessmentQuestions } from "@/lib/api/asesment";
+import { submitAssessment, getAssessmentQuestions, checkAssessmentAccess } from "@/lib/api/asesment";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
+import { useTherapistProfile } from "@/context/ProfileTerapisContext";
 
 // ==========================================================
 // API INTERFACES
@@ -98,12 +99,14 @@ const mapAnswersToPayloadBE = (
 export default function PLBAssessmentPage() {
   const params = useSearchParams();
   const router = useRouter();
+  const { profile } = useTherapistProfile();
 
   const assessmentId = params.get("assessment_id");
   const type = "paedagog";
 
   const [allQuestions, setAllQuestions] = useState<QuestionsData>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   const [activeAspek, setActiveAspek] = useState<string>("");
   const [answers, setAnswers] = useState<AnswersState>({});
@@ -115,6 +118,16 @@ export default function PLBAssessmentPage() {
     const fetchQuestions = async () => {
       try {
         setLoadingQuestions(true);
+
+        if (assessmentId) {
+          const access = await checkAssessmentAccess(assessmentId, "paedagog", profile);
+          if (!access.allowed) {
+            setAccessError(access.message || "Akses ke asesmen ini dibatasi.");
+            setLoadingQuestions(false);
+            return;
+          }
+        }
+
         const res = await getAssessmentQuestions("paedagog");
         const groups: Group[] = res?.groups ?? [];
 
@@ -246,7 +259,8 @@ export default function PLBAssessmentPage() {
         "Terjadi kesalahan";
 
       if (status === 403) {
-        handleApiError(err, "Anda tidak memiliki izin untuk menyimpan penilaian ini. Pastikan Anda login sebagai Asesor sesuai jenis terapi dan assessment ini memang milik Anda.");
+        const serverMsg = err?.response?.data?.message || "Anda bukan asesor yang ditugaskan untuk bidang pedagog / PLB.";
+        handleApiError(err, serverMsg);
         return;
       }
 
@@ -262,6 +276,26 @@ export default function PLBAssessmentPage() {
     }
   };
 
+  if (accessError) {
+    return (
+      <div className="p-6 md:p-8 space-y-6 text-[#1E5C58] bg-[#F8FBFB] min-h-screen flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-8 border border-amber-200 shadow-sm max-w-lg w-full text-center space-y-4">
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800">Akses Pengisian Asesmen Dibatasi</h2>
+          <p className="text-sm text-gray-600 leading-relaxed">{accessError}</p>
+          <button
+            onClick={() => router.push("/terapis/asessment")}
+            className="cursor-pointer bg-[#1E5C58] hover:bg-[#2E8B83] text-white font-semibold px-5 py-2.5 rounded-xl text-xs transition-all shadow-sm"
+          >
+            Kembali ke Daftar Asesmen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loadingQuestions) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-gray-400">
@@ -270,10 +304,10 @@ export default function PLBAssessmentPage() {
       </div>
     );
   }
-  
+
   if (!allQuestions.length) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen text-red-500 font-bold">
+      <div className="flex flex-col items-center justify-center min-h-screen font-bold text-red-500">
         ❌ Tidak ada pertanyaan tersedia.
       </div>
     );
@@ -282,12 +316,12 @@ export default function PLBAssessmentPage() {
   return (
     <div className="p-6 md:p-8 space-y-8 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">
       {/* ================= HEADER ================= */}
-      <div className="flex justify-between items-center border-b border-teal-100/50 pb-5">
+      <div className="flex items-center justify-between pb-5 border-b border-teal-100/50">
         <div>
           <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#1E5C58]">
             Form Asesmen PLB / Paedagog
           </h1>
-          <p className="text-xs md:text-sm text-gray-400 mt-1">
+          <p className="mt-1 text-xs text-gray-400 md:text-sm">
             Lengkapi penilaian aspek tumbuh kembang anak secara berkala.
           </p>
         </div>
@@ -308,13 +342,12 @@ export default function PLBAssessmentPage() {
             <button
               key={tab}
               onClick={() => setActiveAspek(tab)}
-              className={`cursor-pointer px-4 py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-all duration-300 flex items-center gap-2 ${
-                isActive
+              className={`cursor-pointer px-4 py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-all duration-300 flex items-center gap-2 ${isActive
                   ? "bg-[#1E5C58] text-white shadow-sm"
                   : isDone
-                  ? "bg-[#81B7A9] text-white"
-                  : "text-[#1E5C58]/80 hover:bg-white/60 hover:text-[#1E5C58]"
-              }`}
+                    ? "bg-[#81B7A9] text-white"
+                    : "text-[#1E5C58]/80 hover:bg-white/60 hover:text-[#1E5C58]"
+                }`}
             >
               {isDone && <Check className="w-3.5 h-3.5" />}
               <span>{idx + 1}. {allQuestions.find((x) => x.key === tab)?.title}</span>
@@ -337,9 +370,9 @@ export default function PLBAssessmentPage() {
               return (
                 <div
                   key={i}
-                  className="p-3 bg-teal-50/20 rounded-xl border border-teal-100/60 flex flex-col gap-2"
+                  className="flex flex-col gap-2 p-3 border bg-teal-50/20 rounded-xl border-teal-100/60"
                 >
-                  <p className="font-bold text-gray-700 text-xs sm:text-sm leading-relaxed">
+                  <p className="text-xs font-bold leading-relaxed text-gray-700 sm:text-sm">
                     {i + 1}. {q.label}
                   </p>
                   <input
@@ -355,9 +388,9 @@ export default function PLBAssessmentPage() {
             return (
               <div
                 key={i}
-                className="p-3 bg-teal-50/20 rounded-xl border border-teal-100/60 flex flex-col gap-2 text-xs sm:text-sm"
+                className="flex flex-col gap-2 p-3 text-xs border bg-teal-50/20 rounded-xl border-teal-100/60 sm:text-sm"
               >
-                <p className="font-bold text-gray-700 leading-relaxed">
+                <p className="font-bold leading-relaxed text-gray-700">
                   {i + 1}. {q.label}
                 </p>
                 <div className="flex items-center gap-2">
@@ -377,11 +410,10 @@ export default function PLBAssessmentPage() {
                             key={opt}
                             type="button"
                             onClick={() => handleScoreSelect(i, opt)}
-                            className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-bold transition-all duration-200 ${
-                              isSelected
+                            className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-bold transition-all duration-200 ${isSelected
                                 ? "bg-[#1E5C58] text-white shadow-sm"
                                 : "bg-transparent text-gray-500 hover:bg-teal-50/30"
-                            }`}
+                              }`}
                           >
                             {opt}
                           </button>
@@ -397,8 +429,8 @@ export default function PLBAssessmentPage() {
 
         {/* ================= LEGEND / METADATA ================= */}
         {isLast && (
-          <div className="bg-teal-50/60 border border-teal-100 rounded-xl p-4 space-y-2">
-            <span className="block text-xs font-bold text-teal-800 uppercase tracking-wider">Keterangan Penilaian:</span>
+          <div className="p-4 space-y-2 border border-teal-100 bg-teal-50/60 rounded-xl">
+            <span className="block text-xs font-bold tracking-wider text-teal-800 uppercase">Keterangan Penilaian:</span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] font-semibold text-[#1E5C58]/80 leading-relaxed">
               <p><span className="text-[#1E5C58] font-bold">Nilai 0 :</span> Buruk / Anak belum menguasai aspek</p>
               <p><span className="text-[#1E5C58] font-bold">Nilai 1 :</span> Kurang baik / Anak menguasai aspek namun tidak konsisten dan butuh bantuan dalam mengerjakannya</p>
@@ -409,7 +441,7 @@ export default function PLBAssessmentPage() {
         )}
 
         {/* ================= ACTION NAVIGATION ================= */}
-        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
           <button
             disabled={isFirst}
             onClick={() => setActiveAspek(aspekTabs[aspekTabs.indexOf(activeAspek) - 1])}
@@ -417,7 +449,7 @@ export default function PLBAssessmentPage() {
           >
             <span>← Sebelumnya</span>
           </button>
-          
+
           {isLast ? (
             <button
               onClick={handleSubmit}

@@ -104,6 +104,35 @@ export default function DetailAssessmentPage() {
             </div>
           </div>
 
+          {/* ================= PETUGAS / ASSESSOR ================= */}
+          <div className="bg-white rounded-2xl p-6 border border-teal-100/70 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 font-extrabold text-sm text-[#1E5C58]">
+              <Users className="w-4 h-4 text-[#81B7A9]" />
+              <span>Petugas / Assessor Terjadwal</span>
+            </div>
+
+            {Array.isArray(detail.assessors) && detail.assessors.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {detail.assessors.map((item: any, idx: number) => (
+                  <div key={idx} className="bg-[#EAF4F2]/40 border border-teal-50 rounded-xl p-3.5 space-y-1">
+                    <span className="block text-[10px] text-teal-600 font-extrabold uppercase tracking-wider">
+                      Bidang {item.type}
+                    </span>
+                    <span className="text-xs font-bold text-gray-700 block">
+                      {item.therapist_name && item.therapist_name !== "Belum ditentukan"
+                        ? item.therapist_name
+                        : "Belum ditugaskan Admin"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-gray-500 font-medium">
+                {detail.assessor_names || "Belum ada petugas yang ditugaskan."}
+              </div>
+            )}
+          </div>
+
           {/* ================= KELUHAN ================= */}
           {detail.complaint && (
             <div className="bg-teal-50/40 border border-teal-100 rounded-xl p-5 space-y-2 shadow-sm">

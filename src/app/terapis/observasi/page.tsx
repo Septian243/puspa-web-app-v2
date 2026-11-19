@@ -22,6 +22,7 @@ import {
   getScheduledObservationDetail,
 } from "@/lib/api/observasiTerapis";
 import { handleApiError } from "@/lib/api-error";
+import { useTherapistProfile } from "@/context/ProfileTerapisContext";
 
 interface Anak {
   observation_id: string | number;
@@ -30,6 +31,8 @@ interface Anak {
   guardian_name?: string;
   guardian_phone?: string;
   admin_name?: string;
+  therapist_id?: string | null;
+  observer?: string | null;
   scheduled_date?: string;
   scheduled_time?: string;
   child_birth_date?: string;
@@ -44,41 +47,50 @@ interface Anak {
   parent_phone?: string;
 }
 
-interface Kategori {
-  title: string;
-  filter: (data: Anak) => boolean;
+function parseAgeYears(childAge?: string): number | null {
+  if (!childAge) return null;
+  const match = childAge.match(/(\d+)\s*Tahun/i);
+  if (match) return parseInt(match[1], 10);
+  const num = parseInt(childAge, 10);
+  return isNaN(num) ? null : num;
 }
 
-function getTahun(usiaStr?: string): number {
-  if (!usiaStr) return 0;
-  const match = usiaStr.match(/(\d+)\s*Tahun/i);
-  if (match) {
-    return parseInt(match[1], 10);
+const matchCategory = (d: Anak, categoryIdx: number): boolean => {
+  const cat = String(d.age_category || "").toLowerCase().trim();
+  const years = parseAgeYears(d.child_age);
+
+  switch (categoryIdx) {
+    case 0: // Usia 0-5 Tahun (Balita)
+      if (cat === "balita") return true;
+      if (years !== null) return years >= 0 && years <= 5;
+      return false;
+    case 1: // Usia 6-12 Tahun (Anak-anak)
+      if (cat === "anak-anak" || cat === "anak") return true;
+      if (years !== null) return years >= 6 && years <= 12;
+      return false;
+    case 2: // Usia 13-17 Tahun (Remaja)
+      if (cat === "remaja") return true;
+      if (years !== null) return years >= 13 && years <= 17;
+      return false;
+    case 3: // Usia 17+ Tahun (Lainnya)
+      if (cat === "lainya" || cat === "lainnya" || cat === "dewasa") return true;
+      if (years !== null) return years > 17;
+      return false;
+    default:
+      return false;
   }
-  return 0;
-}
+};
 
-const kategori: Kategori[] = [
-  { title: "Usia 0-5 Tahun", filter: (d) => getTahun(d.child_age) <= 5 },
-  {
-    title: "Usia 6-12 Tahun",
-    filter: (d) => {
-      const t = getTahun(d.child_age);
-      return t >= 6 && t <= 12;
-    },
-  },
-  {
-    title: "Usia 13-17 Tahun",
-    filter: (d) => {
-      const t = getTahun(d.child_age);
-      return t >= 13 && t <= 17;
-    },
-  },
-  { title: "Usia 17+ Tahun", filter: (d) => getTahun(d.child_age) > 17 },
+const kategoriTitles = [
+  "Usia 0-5 Tahun",
+  "Usia 6-12 Tahun",
+  "Usia 13-17 Tahun",
+  "Usia 17+ Tahun",
 ];
 
 export default function ObservasiPage() {
   const router = useRouter();
+  const { profile } = useTherapistProfile();
   const [selected, setSelected] = useState<Anak | null>(null);
   const [activeKategori, setActiveKategori] = useState<number>(0);
   const [detailObservasi, setDetailObservasi] = useState<any | null>(null);
@@ -91,10 +103,13 @@ export default function ObservasiPage() {
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["observations", filterDate, searchName],
     queryFn: () => getScheduledObservations(filterDate, searchName),
   });
+
+  const isProfileLoading = !profile?.therapist_id;
+  const isPageLoading = isLoading || isProfileLoading;
 
   const children: Anak[] = Array.isArray(data?.data)
     ? data.data.map((d: any, i: number) => ({
@@ -104,6 +119,8 @@ export default function ObservasiPage() {
         guardian_name: d.guardian_name ?? d.parent_name ?? "-",
         guardian_phone: d.guardian_phone ?? d.parent_phone ?? "-",
         admin_name: d.administrator ?? d.admin_name ?? "-",
+        therapist_id: d.therapist_id ?? null,
+        observer: d.observer ?? d.therapist_name ?? "-",
         scheduled_date: d.scheduled_date ?? "-",
         scheduled_time: d.scheduled_time ?? d.time ?? "-",
         child_birth_date: d.child_birth_date,
@@ -119,28 +136,48 @@ export default function ObservasiPage() {
       }))
     : [];
 
-  // Filter hanya berdasarkan kategori aktif
-  const filteredByKategori = children.filter((d) =>
-    kategori[activeKategori].filter(d)
-  );
-
-  // Filter pencarian nama anak / wali (case insensitive)
-  const filtered = filteredByKategori.filter((d) => {
-    const q = searchName.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      String(d.child_name || "").toLowerCase().includes(q) ||
-      String(d.guardian_name || "").toLowerCase().includes(q)
+  // Filter defensif: terapis login HANYA melihat jadwal yang ditugaskan kepada dirinya
+  const myChildren = useMemo(() => {
+    if (!profile?.therapist_id) return [];
+    return children.filter((d) =>
+      Boolean(d.therapist_id && String(d.therapist_id) === String(profile.therapist_id))
     );
-  });
+  }, [children, profile?.therapist_id]);
+
+  const canStartObservation = (item: Anak) =>
+    Boolean(
+      item.therapist_id &&
+      profile?.therapist_id &&
+      String(item.therapist_id) === String(profile.therapist_id)
+    );
+
+  // Filter berdasarkan kategori usia aktif & pencarian nama
+  const filtered = useMemo(() => {
+    const q = searchName.trim().toLowerCase();
+    return myChildren
+      .filter((d) => matchCategory(d, activeKategori))
+      .filter((d) => {
+        if (!q) return true;
+        return (
+          String(d.child_name || "").toLowerCase().includes(q) ||
+          String(d.guardian_name || "").toLowerCase().includes(q)
+        );
+      });
+  }, [myChildren, activeKategori, searchName]);
+
+  const handleCategoryChange = (idx: number) => {
+    if (idx === activeKategori) return;
+    setActiveKategori(idx);
+    setPage(1);
+  };
 
   // Pagination logic
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
-  // Reset page ke 1 jika filterDate, searchName atau kategori berubah
+  // Reset page ke 1 jika filterDate atau searchName berubah
   useEffect(() => {
     setPage(1);
-  }, [filterDate, searchName, activeKategori]);
+  }, [filterDate, searchName]);
 
   const paginatedData = useMemo(() => {
     const start = (page - 1) * itemsPerPage;
@@ -172,11 +209,6 @@ export default function ObservasiPage() {
       setLoadingDetail(false);
     }
   };
-
-  useEffect(() => {
-    refetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterDate, searchName]);
 
   return (
     <div className="p-6 md:p-8 space-y-8 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">
@@ -219,35 +251,35 @@ export default function ObservasiPage() {
 
       {/* ================= CATEGORY NAVIGATION ================= */}
       <div className="grid grid-cols-2 lg:flex lg:flex-wrap gap-2 p-1.5 bg-[#EAF4F2]/50 border border-teal-50/50 rounded-xl w-full lg:w-fit">
-        {kategori.map((kat, idx) => {
+        {kategoriTitles.map((title, idx) => {
           const isActive = activeKategori === idx;
           return (
             <button
               key={idx}
-              onClick={() => setActiveKategori(idx)}
+              onClick={() => handleCategoryChange(idx)}
               className={`cursor-pointer px-3 py-2 text-[11px] lg:text-sm font-semibold rounded-lg text-center transition-all duration-300 w-full lg:w-auto ${
                 isActive
                   ? "bg-[#1E5C58] text-white shadow-sm"
                   : "text-[#1E5C58]/80 hover:bg-white/60 hover:text-[#1E5C58]"
               }`}
             >
-              {kat.title}
+              {title}
             </button>
           );
         })}
       </div>
 
       {/* ================= TABLE LIST ================= */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         <motion.div
           key={`${activeKategori}|${filterDate}|${searchName}|${page}`}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.15 }}
           className="bg-white rounded-2xl p-6 md:p-8 border border-teal-50/60 shadow-[0_4px_24px_rgba(30,92,88,0.03)] hover:shadow-[0_8px_32px_rgba(30,92,88,0.06)] transition-shadow duration-300"
         >
-          {isLoading ? (
+          {isPageLoading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-400">
               <div className="w-8 h-8 border-4 border-[#81B7A9] border-t-transparent rounded-full animate-spin"></div>
               <span className="text-sm font-medium">Memuat data anak...</span>
@@ -259,7 +291,7 @@ export default function ObservasiPage() {
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
               <ClipboardList className="w-10 h-10 text-gray-300" />
-              <span className="text-sm font-medium">Tidak ada data observasi terjadwal</span>
+              <span className="text-sm font-medium">Tidak ada data observasi yang ditugaskan untuk Anda</span>
             </div>
           ) : (
             <div className="space-y-6">
@@ -272,6 +304,7 @@ export default function ObservasiPage() {
                       <th className="py-3 px-4 text-left font-semibold text-xs uppercase tracking-wider">Orang Tua / Wali</th>
                       <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Telepon</th>
                       <th className="py-3 px-4 text-left font-semibold text-xs uppercase tracking-wider">Administrator</th>
+                      <th className="py-3 px-4 text-left font-semibold text-xs uppercase tracking-wider">Observer</th>
                       <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Tanggal</th>
                       <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Waktu</th>
                       <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Aksi</th>
@@ -291,16 +324,23 @@ export default function ObservasiPage() {
                         <td className="py-4 px-4 text-gray-600 font-medium">{d.guardian_name}</td>
                         <td className="py-4 px-4 text-center text-gray-600 font-mono text-xs">{d.guardian_phone}</td>
                         <td className="py-4 px-4 text-gray-600 font-medium">{d.admin_name}</td>
+                        <td className="py-4 px-4 text-gray-600 font-medium">{d.observer || "-"}</td>
                         <td className="py-4 px-4 text-center text-gray-500 font-medium">{d.scheduled_date || "-"}</td>
                         <td className="py-4 px-4 text-center text-gray-500 font-medium">{d.scheduled_time || "-"}</td>
                         <td className="py-4 px-4">
                           <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => handleStartObservasi(d)}
-                              className="cursor-pointer bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-sm hover:shadow transition-all"
-                            >
-                              Mulai
-                            </button>
+                            {canStartObservation(d) ? (
+                              <button
+                                onClick={() => handleStartObservasi(d)}
+                                className="cursor-pointer bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-sm hover:shadow transition-all"
+                              >
+                                Mulai
+                              </button>
+                            ) : (
+                              <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                                {d.therapist_id ? "Read-only" : "Belum ditugaskan"}
+                              </span>
+                            )}
                             <button
                               onClick={() => handleViewDetail(d.observation_id!)}
                               className="cursor-pointer p-1.5 text-gray-400 hover:text-[#1E5C58] hover:bg-gray-100 rounded-lg transition-colors"
@@ -333,12 +373,14 @@ export default function ObservasiPage() {
                         <p className="text-xs text-gray-400 mt-0.5">Wali: {d.guardian_name}</p>
                       </div>
                       <div className="flex gap-1.5">
-                        <button
-                          onClick={() => handleStartObservasi(d)}
-                          className="cursor-pointer bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm"
-                        >
-                          Mulai
-                        </button>
+                        {canStartObservation(d) && (
+                          <button
+                            onClick={() => handleStartObservasi(d)}
+                            className="cursor-pointer bg-[#1E5C58] hover:bg-[#2E8B83] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm"
+                          >
+                            Mulai
+                          </button>
+                        )}
                         <button
                           onClick={() => handleViewDetail(d.observation_id!)}
                           className="cursor-pointer p-1.5 text-gray-400 hover:text-[#1E5C58] hover:bg-gray-100 rounded-lg transition-colors"
@@ -352,6 +394,10 @@ export default function ObservasiPage() {
                       <div>
                         <span className="block text-[10px] text-gray-400 uppercase">WhatsApp</span>
                         <span className="font-mono text-gray-600">{d.guardian_phone || "-"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-gray-400 uppercase">Observer</span>
+                        <span className="text-gray-700 font-semibold">{d.observer || "-"}</span>
                       </div>
                       <div>
                         <span className="block text-[10px] text-gray-400 uppercase">Administrator</span>
@@ -528,10 +574,17 @@ export default function ObservasiPage() {
                         </p>
                       </div>
 
-                      <div className="col-span-2 bg-white border border-teal-100 rounded-xl p-3.5 space-y-1">
+                      <div className="bg-white border border-teal-100 rounded-xl p-3.5 space-y-1">
                         <span className="block text-[10px] text-gray-400 uppercase font-bold">Administrator Pendaftar</span>
                         <span className="text-xs font-bold text-gray-700">
                           {detailObservasi?.admin_name ?? detailObservasi?.admin ?? detailObservasi?.administrator ?? "-"}
+                        </span>
+                      </div>
+
+                      <div className="bg-white border border-teal-100 rounded-xl p-3.5 space-y-1">
+                        <span className="block text-[10px] text-gray-400 uppercase font-bold">Observer / Petugas</span>
+                        <span className="text-xs font-bold text-gray-700">
+                          {detailObservasi?.observer ?? detailObservasi?.therapist_name ?? "-"}
                         </span>
                       </div>
                     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Calendar, Download, ChevronLeft, ChevronRight, ChevronDown, FileText } from "lucide-react";
+import { Search, Calendar, Download, ChevronLeft, ChevronRight, ChevronDown, FileText, Loader2 } from "lucide-react";
 import { getCredits, getTransactions } from "@/lib/api/keuangan";
 
 export interface RiwayatPembayaran {
@@ -50,7 +50,8 @@ export default function TabPembayaran({
   const [search, setSearch] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [transactions, setTransactions] = useState<RiwayatPembayaran[]>([]);
-
+  const [isLoadingCredits, setIsLoadingCredits] = useState(true);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
 
   const activeList = (riwayatList && riwayatList.length > 0) ? riwayatList : transactions;
   const currentYear = new Date().getFullYear();
@@ -92,53 +93,67 @@ export default function TabPembayaran({
 
   // Fetch Credits
   const fetchCreditsData = async () => {
-    const res = await getCredits();
-    if (res && res.items) {
-      setCredits(res.items.map((i: any) => ({
-        id: i.id,
-        anak: i.anak,
-        wali: i.wali,
-        jumlah: i.jumlah,
-        child_id: i.child_id,
-        guardian_id: i.guardian_id,
-      })));
+    setIsLoadingCredits(true);
+    try {
+      const res = await getCredits();
+      if (res && res.items) {
+        setCredits(res.items.map((i: any) => ({
+          id: i.id,
+          anak: i.anak,
+          wali: i.wali,
+          jumlah: i.jumlah,
+          child_id: i.child_id,
+          guardian_id: i.guardian_id,
+        })));
+      }
+    } catch (err) {
+      console.warn("Gagal memuat potongan tagihan:", err);
+    } finally {
+      setIsLoadingCredits(false);
     }
   };
 
   // Fetch Transactions
   const fetchTransactionsData = async () => {
-    const res = await getTransactions({
-      metode: filterMetode,
-      tahun: filterTahun,
-      bulan: filterBulan,
-      search: riwayatSearch,
-      page: riwayatPage,
-      per_page: itemsPerPage,
-    });
+    setIsLoadingTransactions(true);
+    try {
+      const res = await getTransactions({
+        metode: filterMetode,
+        tahun: filterTahun,
+        bulan: filterBulan,
+        search: riwayatSearch,
+        page: riwayatPage,
+        per_page: itemsPerPage,
+      });
 
-    if (res) {
-      if (res.summary) {
-        setSummaryData(res.summary);
+      if (res) {
+        if (res.summary) {
+          setSummaryData(res.summary);
+        }
+        if (res.transactions) {
+          const mapped = (res.transactions.data || []).map((t: any) => ({
+            id: t.id,
+            tanggal: t.payment_date ? new Date(t.payment_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : t.created_at,
+            noInvoice: t.invoice?.no_invoice || "—",
+            anak: t.child?.child_name || "—",
+            wali: t.guardian?.guardian_name || "—",
+            status: t.transaction_type,
+            metode: t.payment_method,
+            bukti: t.proof_file_path || "-",
+            jumlah: parseFloat(t.amount || 0),
+          }));
+          setTransactions(mapped);
+          setTrxMeta({
+            current_page: res.transactions.current_page || 1,
+            last_page: res.transactions.last_page || 1,
+            total: res.transactions.total || 0,
+          });
+        }
       }
-      if (res.transactions) {
-        const mapped = (res.transactions.data || []).map((t: any) => ({
-          id: t.id,
-          tanggal: t.payment_date ? new Date(t.payment_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : t.created_at,
-          noInvoice: t.invoice?.no_invoice || "—",
-          anak: t.child?.child_name || "—",
-          wali: t.guardian?.guardian_name || "—",
-          status: t.transaction_type,
-          metode: t.payment_method,
-          bukti: t.proof_file_path || "-",
-          jumlah: parseFloat(t.amount || 0),
-        }));
-        setTransactions(mapped);
-        setTrxMeta({
-          current_page: res.transactions.current_page || 1,
-          last_page: res.transactions.last_page || 1,
-          total: res.transactions.total || 0,
-        });
-      }
+    } catch (err) {
+      console.warn("Gagal memuat riwayat transaksi:", err);
+    } finally {
+      setIsLoadingTransactions(false);
     }
   };
 
@@ -205,42 +220,51 @@ export default function TabPembayaran({
 
       {/* List */}
       <div className={`space-y-0 overflow-y-auto [scrollbar-gutter:stable] pr-2 ${isExpanded ? "max-h-[350px]" : ""}`}>
-        <AnimatePresence initial={false}>
-          {displayedItems.map((item) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ opacity: { duration: 0.2, delay: 0.05 }, height: { type: "spring", bounce: 0, duration: 0.5 } }}
-              className="overflow-hidden"
-            >
-              <div className="flex flex-col justify-between gap-3 py-2.5 transition-colors border-b sm:flex-row sm:items-center border-gray-100/80 hover:bg-gray-50/50 group">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-24 text-xs font-bold text-gray-800">{item.anak}</span>
-                  <span className="inline-flex rounded-md border border-orange-200 bg-[#FFF7ED] px-1.5 py-0.5 text-[9px] font-extrabold text-orange-600">
-                    Wali: {item.wali}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between w-full gap-4 sm:justify-end sm:w-auto">
-                  <span className="text-xs font-bold text-right text-gray-800 w-24">
-                    {formatRupiah(item.jumlah)}
-                  </span>
-                  <button
-                    onClick={() => onBuatTagihan(item.anak, item.wali)}
-                    className="cursor-pointer px-3 py-1.5 bg-[#1E5C58] text-white rounded-xl text-[11px] font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors whitespace-nowrap"
-                  >
-                    Buat tagihan
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        {filteredCredits.length === 0 && (
-          <div className="py-6 text-xs font-semibold text-center text-gray-400">
-            Tidak ada data potongan ditemukan.
+        {isLoadingCredits ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-gray-400">
+            <Loader2 className="w-5 h-5 animate-spin text-[#2B7A75]" />
+            <p className="text-xs font-medium">Memuat data potongan...</p>
           </div>
+        ) : (
+          <>
+            <AnimatePresence initial={false}>
+              {displayedItems.map((item) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ opacity: { duration: 0.2, delay: 0.05 }, height: { type: "spring", bounce: 0, duration: 0.5 } }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex flex-col justify-between gap-3 py-2.5 transition-colors border-b sm:flex-row sm:items-center border-gray-100/80 hover:bg-gray-50/50 group">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-24 text-xs font-bold text-gray-800">{item.anak}</span>
+                      <span className="inline-flex rounded-md border border-orange-200 bg-[#FFF7ED] px-1.5 py-0.5 text-[9px] font-extrabold text-orange-600">
+                        Wali: {item.wali}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between w-full gap-4 sm:justify-end sm:w-auto">
+                      <span className="text-xs font-bold text-right text-gray-800 w-24">
+                        {formatRupiah(item.jumlah)}
+                      </span>
+                      <button
+                        onClick={() => onBuatTagihan(item.anak, item.wali)}
+                        className="cursor-pointer px-3 py-1.5 bg-[#1E5C58] text-white rounded-xl text-[11px] font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors whitespace-nowrap"
+                      >
+                        Buat tagihan
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {filteredCredits.length === 0 && (
+              <div className="py-6 text-xs font-semibold text-center text-gray-400">
+                Tidak ada data potongan ditemukan.
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -336,7 +360,16 @@ export default function TabPembayaran({
               </tr>
             </thead>
             <tbody>
-              {paginatedTransactions.length === 0 ? (
+              {isLoadingTransactions ? (
+                <tr>
+                  <td colSpan={7} className="py-20 text-center text-gray-400">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin text-[#2B7A75]" />
+                      <p className="text-sm font-medium">Memuat data riwayat transaksi...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-sm font-semibold text-gray-400">
                     Belum ada riwayat transaksi.
@@ -448,13 +481,19 @@ export default function TabPembayaran({
                 return (
                   <>
                     <span className="text-xs text-gray-500 font-medium hidden sm:inline-block">
-                      Menampilkan <span className="font-extrabold text-[#1E5C58]">{totalData === 0 ? 0 : startIndex + 1} - {endIndex}</span> dari <span className="font-extrabold text-[#1E5C58]">{totalData}</span> data
+                      {isLoadingTransactions ? (
+                        <span className="text-gray-400">Memuat data...</span>
+                      ) : (
+                        <>
+                          Menampilkan <span className="font-extrabold text-[#1E5C58]">{totalData === 0 ? 0 : startIndex + 1} - {endIndex}</span> dari <span className="font-extrabold text-[#1E5C58]">{totalData}</span> data
+                        </>
+                      )}
                     </span>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setRiwayatPage(p => Math.max(1, p - 1))}
-                        disabled={riwayatPage === 1}
-                        className="px-2 py-1 text-xs font-bold border border-gray-200 rounded-lg text-gray-400 disabled:opacity-50 hover:bg-gray-50 transition-colors"
+                        disabled={isLoadingTransactions || riwayatPage === 1}
+                        className="px-2 py-1 text-xs font-bold border border-gray-200 rounded-lg text-gray-400 disabled:opacity-50 hover:bg-gray-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
                       >
                         Prev
                       </button>
@@ -463,8 +502,8 @@ export default function TabPembayaran({
                       </div>
                       <button
                         onClick={() => setRiwayatPage(p => Math.min(totalPages, p + 1))}
-                        disabled={riwayatPage === totalPages}
-                        className="px-2 py-1 text-xs font-bold border border-gray-200 rounded-lg text-gray-500 disabled:opacity-50 hover:bg-gray-50 transition-colors"
+                        disabled={isLoadingTransactions || riwayatPage === totalPages}
+                        className="px-2 py-1 text-xs font-bold border border-gray-200 rounded-lg text-gray-500 disabled:opacity-50 hover:bg-gray-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
                       >
                         Next
                       </button>

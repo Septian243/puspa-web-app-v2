@@ -168,9 +168,8 @@ export default function LaporanAsesmenPage() {
         await downloadSchoolAssessmentReport(childId, studentName);
         showSuccessToast(`Laporan asesmen ${studentName} berhasil diunduh.`, "Unduhan Selesai");
       } catch (err: any) {
-        setUnavailableReportIds((prev) => new Set(prev).add(childId));
-        const msg = err?.message || `Laporan asesmen untuk ${studentName} belum dikirimkan oleh Admin.`;
-        showErrorToast(msg, "Belum Dikirim Admin");
+        const msg = err?.message || `Gagal mengunduh laporan asesmen untuk ${studentName}.`;
+        showErrorToast(msg, "Gagal Mengunduh Laporan");
       } finally {
         setDownloadingId(null);
       }
@@ -269,8 +268,7 @@ export default function LaporanAsesmenPage() {
                         (student.assessment_status.toLowerCase() === "completed" ||
                           student.assessment_status.toLowerCase() === "selesai")
                       );
-                      const hasReport =
-                        student.has_report === true || Boolean(student.sent_to_school_at);
+                      const hasReport = student.has_report === true;
                       const isExplicitlyNotSent = student.has_report === false;
                       const canDownload =
                         !unavailableReportIds.has(student.id) &&
@@ -422,8 +420,6 @@ export default function LaporanAsesmenPage() {
           isOpen={Boolean(selectedChildId)}
           open={Boolean(selectedChildId)}
           childId={selectedChildId}
-          fallbackGuardianPhone={studentList.find((s) => s.id === selectedChildId)?.guardian_phone}
-          fallbackGuardianName={studentList.find((s) => s.id === selectedChildId)?.guardian_name}
           onClose={() => setSelectedChildId(null)}
         />
       </div>

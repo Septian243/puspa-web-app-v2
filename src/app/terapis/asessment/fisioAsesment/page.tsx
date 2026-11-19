@@ -3,14 +3,16 @@
 
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, AlertCircle } from "lucide-react";
 
-import { getAssessmentQuestions, submitAssessment } from "@/lib/api/asesment";
+import { getAssessmentQuestions, submitAssessment, checkAssessmentAccess } from "@/lib/api/asesment";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
+import { useTherapistProfile } from "@/context/ProfileTerapisContext";
 
 export default function Page() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { profile } = useTherapistProfile();
   const assessmentId = searchParams.get("assessment_id");
 
   const [step, setStep] = useState(1);
@@ -18,6 +20,7 @@ export default function Page() {
 
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   const [responses, setResponses] = useState<{ [key: string]: any }>({});
 
@@ -60,6 +63,13 @@ export default function Page() {
 
     const load = async () => {
       setLoading(true);
+
+      const access = await checkAssessmentAccess(assessmentId, "fisio", profile);
+      if (!access.allowed) {
+        setAccessError(access.message || "Akses ke asesmen ini dibatasi.");
+        setLoading(false);
+        return;
+      }
 
       const data = await getAssessmentQuestions("fisio");
       const allGroups = data.groups || [];
@@ -181,7 +191,8 @@ export default function Page() {
         "Terjadi kesalahan";
 
       if (status === 403) {
-        handleApiError(err, "Anda tidak memiliki izin untuk menyimpan assessment ini. Pastikan Anda login sebagai Asesor sesuai jenis terapi.");
+        const serverMsg = err?.response?.data?.message || "Anda bukan asesor yang ditugaskan untuk bidang fisioterapi.";
+        handleApiError(err, serverMsg);
         return;
       }
 
@@ -194,6 +205,26 @@ export default function Page() {
       handleApiError(err, "Gagal menyimpan: " + message);
     }
   };
+
+  if (accessError) {
+    return (
+      <div className="p-6 md:p-8 space-y-6 text-[#1E5C58] bg-[#F8FBFB] min-h-screen flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-8 border border-amber-200 shadow-sm max-w-lg w-full text-center space-y-4">
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800">Akses Pengisian Asesmen Dibatasi</h2>
+          <p className="text-sm text-gray-600 leading-relaxed">{accessError}</p>
+          <button
+            onClick={() => router.push("/terapis/asessment")}
+            className="cursor-pointer bg-[#1E5C58] hover:bg-[#2E8B83] text-white font-semibold px-5 py-2.5 rounded-xl text-xs transition-all shadow-sm"
+          >
+            Kembali ke Daftar Asesmen
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

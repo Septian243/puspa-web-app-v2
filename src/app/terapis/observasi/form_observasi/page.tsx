@@ -17,7 +17,9 @@ import {
   submitObservation,
   getObservationQuestions,
 } from "@/lib/api/observasiSubmit";
+import { getScheduledObservationDetail } from "@/lib/api/observasiTerapis";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
+import { useTherapistProfile } from "@/context/ProfileTerapisContext";
 
 type Question = {
   question_id: number;
@@ -55,6 +57,7 @@ const kategoriMap: Record<string, string> = {
 
 export default function FormObservasiPage() {
   const searchParams = useSearchParams();
+  const { profile } = useTherapistProfile();
 
   const pasien = {
     nama: searchParams.get("nama") || "",
@@ -76,8 +79,9 @@ export default function FormObservasiPage() {
   const [rekomendasiAssessment, setRekomendasiAssessment] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [blockError, setBlockError] = useState<string | null>(null);
 
-  // Load questions
+  // Load questions & verify assignment
   useEffect(() => {
     const fetchData = async () => {
       if (!pasien.observation_id) {
@@ -88,6 +92,28 @@ export default function FormObservasiPage() {
 
       try {
         setLoading(true);
+
+        // Validasi penugasan terapis sebelum mengisi form
+        try {
+          const detail = await getScheduledObservationDetail(pasien.observation_id);
+          if (detail && !detail.therapist_id) {
+            setBlockError("Observasi ini belum memiliki petugas. Hubungi Admin untuk menugaskan petugas terlebih dahulu.");
+            setLoading(false);
+            return;
+          }
+          if (detail && profile?.therapist_id && String(detail.therapist_id) !== String(profile.therapist_id)) {
+            setBlockError(`Anda bukan terapis yang ditugaskan untuk observasi ini (Petugas tertunjuk: ${detail.observer || detail.therapist_name || "Terapis Lain"}).`);
+            setLoading(false);
+            return;
+          }
+        } catch (detailErr: any) {
+          if (detailErr?.response?.status === 403) {
+            setBlockError(detailErr?.response?.data?.message || "Anda tidak memiliki otorisasi untuk mengakses observasi ini.");
+            setLoading(false);
+            return;
+          }
+        }
+
         const data = await getObservationQuestions(pasien.observation_id);
         if (Array.isArray(data) && data.length > 0) {
           setQuestionsData(data);
@@ -105,7 +131,7 @@ export default function FormObservasiPage() {
     };
 
     fetchData();
-  }, [pasien.observation_id]);
+  }, [pasien.observation_id, profile?.therapist_id]);
 
   // Group questions by category
   const groupedQuestions = questionsData.reduce(
@@ -189,13 +215,34 @@ export default function FormObservasiPage() {
       } else {
         handleApiError(res, `Gagal menyimpan: ${res?.message || "Unknown error"} ❌`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saat menyimpan:", err);
-      handleApiError(err, "Terjadi kesalahan saat menyimpan data.");
+      const serverMsg = err?.response?.data?.message || "Terjadi kesalahan saat menyimpan data.";
+      handleApiError(err, serverMsg);
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (blockError) {
+    return (
+      <div className="p-6 md:p-8 space-y-6 text-[#1E5C58] bg-[#F8FBFB] min-h-screen flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-8 border border-amber-200 shadow-sm max-w-lg w-full text-center space-y-4">
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800">Akses Observasi Dibatasi</h2>
+          <p className="text-sm text-gray-600 leading-relaxed">{blockError}</p>
+          <button
+            onClick={() => (window.location.href = "/terapis/observasi")}
+            className="cursor-pointer bg-[#1E5C58] hover:bg-[#2E8B83] text-white font-semibold px-5 py-2.5 rounded-xl text-xs transition-all shadow-sm"
+          >
+            Kembali ke Daftar Observasi
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">

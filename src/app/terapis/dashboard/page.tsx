@@ -472,10 +472,10 @@ export default function DashboardPage() {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="font-bold text-lg text-[#1E5C58]">
-              Jadwal Mendatang
+              Jadwal Tugas Anda Mendatang
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              Daftar agenda janji temu pasien yang akan datang
+              Daftar agenda tugas observasi, asesmen, dan terapi yang ditugaskan kepada Anda
             </p>
           </div>
 
@@ -544,7 +544,7 @@ export default function DashboardPage() {
                     <div className="flex flex-col items-center gap-2">
                       <Calendar className="w-8 h-8 text-gray-300" />
                       <span className="text-sm font-medium">
-                        Tidak ada jadwal mendatang untuk saat ini
+                        Tidak ada agenda tugas mendatang untuk saat ini
                       </span>
                     </div>
                   </td>
@@ -615,7 +615,7 @@ export default function DashboardPage() {
               <div className="flex flex-col items-center gap-2">
                 <Calendar className="w-8 h-8 text-gray-300" />
                 <span className="text-sm font-medium">
-                  Tidak ada jadwal mendatang untuk saat ini
+                  Tidak ada agenda tugas mendatang untuk saat ini
                 </span>
               </div>
             </div>

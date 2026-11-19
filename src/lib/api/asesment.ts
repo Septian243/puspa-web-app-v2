@@ -11,6 +11,7 @@ export interface Assessment {
   type: string; // wicara, okupasi, paedagog, fisio
   administrator: string;
   assessor: string | null;
+  therapist_id?: string | null;
   scheduled_date?: string;
   scheduled_time?: string;
   status: string;
@@ -21,7 +22,8 @@ export const getAssessments = async (
   type: "paedagog" | "okupasi" | "wicara" | "fisio",
   status: "scheduled" | "completed",
   date?: string,
-  search?: string
+  search?: string,
+  myAssessments?: boolean
 ): Promise<Assessment[]> => {
   try {
     const params: Record<string, string> = {
@@ -30,6 +32,9 @@ export const getAssessments = async (
     };
 
     if (date) params.date = date;
+    if (typeof myAssessments === "boolean") {
+      params.my_assessments = myAssessments ? "1" : "0";
+    }
 
     // SESUAIKAN DENGAN BE
     const endpoint =
@@ -68,6 +73,12 @@ export interface AssessmentDetail {
   parent_phone: string;
   admin_name: string;
   type: string;
+  assessors?: Array<{
+    type: string;
+    therapist_id: string | null;
+    therapist_name: string | null;
+  }>;
+  assessor_names?: string | null;
 }
 
 // ================== GET ASSESSMENT DETAIL (DATA PASIEN) ==================
@@ -88,6 +99,86 @@ export const getAssessmentDetail = async (assessmentId: string) => {
     return {};
   }
 };
+
+export interface AssessmentAccessCheckResult {
+  allowed: boolean;
+  message?: string;
+  detail?: any;
+}
+
+export async function checkAssessmentAccess(
+  assessmentId: string,
+  formType: "fisio" | "okupasi" | "paedagog" | "wicara",
+  profile?: {
+    therapist_id?: string | number;
+    therapist_section?: string;
+  } | null
+): Promise<AssessmentAccessCheckResult> {
+  if (!assessmentId) {
+    return {
+      allowed: false,
+      message: "Assessment ID tidak ditemukan di URL.",
+    };
+  }
+
+  // 1. Cek kesesuaian spesialisasi terapis
+  if (profile?.therapist_section) {
+    if (profile.therapist_section.toLowerCase() !== formType.toLowerCase()) {
+      return {
+        allowed: false,
+        message: `Bidang keahlian Anda (${profile.therapist_section}) tidak sesuai dengan form asesmen ini (${formType.toUpperCase()}).`,
+      };
+    }
+  }
+
+  // 2. Ambil detail asesmen dan cek penugasan petugas
+  try {
+    const detail = await getAssessmentDetail(assessmentId);
+    if (!detail) {
+      return {
+        allowed: false,
+        message: "Data detail asesmen tidak ditemukan.",
+      };
+    }
+
+    if (Array.isArray(detail.assessors)) {
+      const assigned = detail.assessors.find(
+        (a: any) => (a.type || "").toLowerCase() === formType.toLowerCase()
+      );
+
+      if (!assigned || !assigned.therapist_id) {
+        return {
+          allowed: false,
+          message: `Asesmen bidang ${formType.toUpperCase()} ini belum memiliki petugas yang ditugaskan. Hubungi Admin terlebih dahulu.`,
+          detail,
+        };
+      }
+
+      if (profile?.therapist_id && String(assigned.therapist_id) !== String(profile.therapist_id)) {
+        return {
+          allowed: false,
+          message: `Asesmen bidang ${formType.toUpperCase()} ini ditugaskan kepada ${assigned.therapist_name || "terapis lain"}. Pengisian hanya dapat dilakukan oleh petugas yang ditugaskan.`,
+          detail,
+        };
+      }
+    }
+
+    return {
+      allowed: true,
+      detail,
+    };
+  } catch (err: any) {
+    if (err?.response?.status === 403) {
+      return {
+        allowed: false,
+        message: err?.response?.data?.message || "Anda tidak memiliki otorisasi untuk mengakses asesmen ini.",
+      };
+    }
+    return {
+      allowed: true,
+    };
+  }
+}
 
 
 

@@ -156,7 +156,7 @@ export default function AdminPage() {
     if (s === "aktif" || s === "terverifikasi") {
       return "bg-emerald-50 text-emerald-700 border border-emerald-100";
     }
-    if (s === "tidak terverifikasi" || s === "nonaktif" || s === "tidak_aktif") {
+    if (s === "ditolak" || s === "nonaktif" || s === "tidak_aktif") {
       return "bg-rose-50 text-rose-700 border border-rose-100";
     }
     return "bg-amber-50 text-amber-700 border border-amber-100";
@@ -180,17 +180,15 @@ export default function AdminPage() {
     setIsFetching(true);
     try {
       const res = await getAdmins();
-      // Hanya tampilkan admin yang sudah terverifikasi (disetujui/ditolak)
-      const processed = res
-        .map((item: any) => {
-          const computed = getAdminComputedStatus(item);
-          return {
-            ...item,
-            status: computed.status,
-            isVerifiedOrRejected: computed.isVerifiedOrRejected,
-          };
-        })
-        .filter((item: any) => item.isVerifiedOrRejected);
+      // Tampilkan seluruh data admin (termasuk yang belum diverifikasi)
+      const processed = res.map((item: any) => {
+        const computed = getAdminComputedStatus(item);
+        return {
+          ...item,
+          status: computed.status,
+          isVerifiedOrRejected: computed.isVerifiedOrRejected,
+        };
+      });
 
       setAdmins(processed);
     } catch (error) {
@@ -244,8 +242,32 @@ export default function AdminPage() {
       registerNewUnverifiedAdmin(data);
       setShowTambah(false);
       fetchAdmins();
-    } catch (error) {
-      console.error("Gagal menambah admin:", error);
+      return { success: true };
+    } catch (error: any) {
+      const resData = error.response?.data;
+      const backendErrors: Record<string, string> = {};
+
+      if (resData?.errors && typeof resData.errors === "object") {
+        for (const [key, val] of Object.entries(resData.errors)) {
+          if (Array.isArray(val) && val.length > 0) {
+            backendErrors[key] = val[0] as string;
+          } else if (typeof val === "string") {
+            backendErrors[key] = val;
+          }
+        }
+      }
+
+      const message =
+        resData?.message ||
+        (Object.values(backendErrors)[0] ?? "Gagal menyimpan data admin. Silakan periksa kembali input Anda.");
+
+      console.warn("Validasi tambah admin gagal:", message, backendErrors);
+
+      return {
+        success: false,
+        message,
+        errors: backendErrors,
+      };
     }
   };
 
@@ -262,7 +284,7 @@ export default function AdminPage() {
       setSelectedAdmin(null);
       fetchAdmins();
     } catch (error) {
-      console.error("Gagal mengubah admin:", error);
+      console.warn("Gagal mengubah admin:", error);
     }
   };
 
@@ -273,7 +295,7 @@ export default function AdminPage() {
       setDeleteId(null);
       fetchAdmins();
     } catch (error) {
-      console.error("Gagal menghapus admin:", error);
+      console.warn("Gagal menghapus admin:", error);
     }
   };
 
@@ -389,14 +411,14 @@ export default function AdminPage() {
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-[#E6F3F0] text-[#2B7A75] flex items-center justify-center font-bold text-sm shrink-0">
-                            {admin.admin_name.charAt(0).toUpperCase()}
+                            {(admin.admin_name || "?").charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <p className="text-sm font-bold text-[#1E5C58]">
-                              {admin.admin_name}
+                              {admin.admin_name || "-"}
                             </p>
                             <p className="text-xs text-gray-500 font-medium mt-0.5">
-                              @{admin.username}
+                              @{admin.username || "-"}
                             </p>
                           </div>
                         </div>
@@ -405,7 +427,7 @@ export default function AdminPage() {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-1.5 text-xs text-gray-600 font-medium whitespace-nowrap">
                             <Mail className="w-3.5 h-3.5 text-gray-400" />
-                            {admin.email}
+                            {admin.email || "-"}
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium whitespace-nowrap">
                             <Phone className="w-3.5 h-3.5 text-gray-400" />
@@ -481,14 +503,14 @@ export default function AdminPage() {
                   <div className="flex justify-between items-start gap-2 mb-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-100/50 text-[#2B7A75] flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
-                        {admin.admin_name.charAt(0).toUpperCase()}
+                        {(admin.admin_name || "?").charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-sm font-bold text-[#1E5C58] truncate leading-snug">
-                          {admin.admin_name}
+                          {admin.admin_name || "-"}
                         </h3>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider truncate mt-0.5">
-                          @{admin.username}
+                          @{admin.username || "-"}
                         </p>
                         <div className="mt-1">
                           <span className="capitalize px-2 py-0.5 rounded bg-teal-50 border border-teal-100/50 text-[9px] font-bold text-[#2B7A75]">
@@ -497,7 +519,7 @@ export default function AdminPage() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <span
                       className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 shadow-2xs ${getStatusBadgeClass(admin.status)}`}
                     >
@@ -508,7 +530,7 @@ export default function AdminPage() {
                   <div className="space-y-2 mb-4 px-1 bg-[#F4F9F8]/60 p-3.5 rounded-2xl border border-teal-50/50">
                     <div className="flex items-center gap-2.5 text-xs text-gray-600 font-medium min-w-0">
                       <Mail className="w-3.5 h-3.5 text-[#2B7A75] shrink-0" />
-                      <span className="truncate">{admin.email}</span>
+                      <span className="truncate">{admin.email || "-"}</span>
                     </div>
                     <div className="flex items-center gap-2.5 text-xs text-gray-600 font-medium">
                       <Phone className="w-3.5 h-3.5 text-[#2B7A75] shrink-0" />
@@ -587,11 +609,10 @@ export default function AdminPage() {
                     <button
                       key={i}
                       onClick={() => setCurrentPage(i + 1)}
-                      className={`cursor-pointer shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition-all ${
-                        currentPage === i + 1
+                      className={`cursor-pointer shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition-all ${currentPage === i + 1
                           ? "bg-[#2B7A75] text-white shadow-sm scale-110"
                           : "text-gray-400 hover:bg-gray-50"
-                      }`}
+                        }`}
                     >
                       {i + 1}
                     </button>

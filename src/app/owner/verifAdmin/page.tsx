@@ -18,10 +18,8 @@ import {
 } from "lucide-react";
 import {
   getUnverifiedAdmins,
-  getAllAdmins,
   activateAdmin,
   deactivateAdmin,
-  getAdminComputedStatus,
   markAdminVerified,
   markAdminRejected,
 } from "@/lib/api/ownerAdmin";
@@ -149,61 +147,21 @@ const VerifikasiAdminPage: React.FC = () => {
   const fetchUnverifiedAdmins = async () => {
     setLoading(true);
     try {
-      const [unverifiedRes, allAdminsRes] = await Promise.all([
-        getUnverifiedAdmins(),
-        getAllAdmins(),
-      ]);
+      const unverifiedRes = await getUnverifiedAdmins();
 
-      const list: AdminData[] = [];
-      const seen = new Set<string>();
-
-      // 1. Ambil dari getUnverifiedAdmins()
       if (unverifiedRes.success && Array.isArray(unverifiedRes.data)) {
-        unverifiedRes.data.forEach((item: any) => {
-          const computed = getAdminComputedStatus(item);
-          if (!computed.isVerifiedOrRejected) {
-            const userId = String(item.user_id || item.id || item.admin_id || "");
-            const email = item.email || "-";
-            const key = (userId || email).toLowerCase();
-            if (!seen.has(key)) {
-              seen.add(key);
-              list.push({
-                user_id: userId,
-                admin_id: String(item.admin_id || item.id || item.user_id || ""),
-                admin_name: item.admin_name || item.name || item.username || "Admin",
-                email,
-                admin_phone: item.admin_phone || item.phone || item.phone_number || item.noTelepon || "-",
-                createdAt: item.createdAt || item.created_at || item.tanggalPendaftaran || "-",
-              });
-            }
-          }
-        });
+        const list: AdminData[] = unverifiedRes.data.map((item: any) => ({
+          user_id: String(item.user_id || item.id || item.admin_id || ""),
+          admin_id: String(item.admin_id || item.id || item.user_id || ""),
+          admin_name: item.admin_name || item.name || item.username || "Admin",
+          email: item.email || "-",
+          admin_phone: item.admin_phone || item.phone || item.phone_number || item.noTelepon || "-",
+          createdAt: item.createdAt || item.created_at || item.tanggalPendaftaran || "-",
+        }));
+        setAdmins(list);
+      } else {
+        setAdmins([]);
       }
-
-      // 2. Gabungkan dengan admin dari getAllAdmins() yang belum terverifikasi (misal Nawaitu dan Fedric)
-      if (allAdminsRes.success && Array.isArray(allAdminsRes.data)) {
-        allAdminsRes.data.forEach((item: any) => {
-          const computed = getAdminComputedStatus(item);
-          if (!computed.isVerifiedOrRejected) {
-            const userId = String(item.user_id || item.id || item.admin_id || "");
-            const email = item.email || "-";
-            const key = (userId || email).toLowerCase();
-            if (!seen.has(key)) {
-              seen.add(key);
-              list.push({
-                user_id: userId,
-                admin_id: String(item.admin_id || item.id || item.user_id || ""),
-                admin_name: item.admin_name || item.name || item.username || "Admin",
-                email,
-                admin_phone: item.admin_phone || item.phone || item.phone_number || item.noTelepon || "-",
-                createdAt: item.createdAt || item.created_at || item.tanggalPendaftaran || "-",
-              });
-            }
-          }
-        });
-      }
-
-      setAdmins(list);
     } catch (err) {
       console.error(err);
       setAdmins([]);

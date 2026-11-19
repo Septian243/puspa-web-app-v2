@@ -39,8 +39,8 @@ export const getObservations = async (
 ): Promise<any[]> => {
   try {
     const params: Record<string, string> = {};
-    if (date) params.scheduled_date = date;
-    if (nama) params.child_name = nama;
+    if (date) params.date = date;
+    if (nama) params.search = nama;
 
     const res = await axiosInstance.get(`/observations/${status}`, {
       headers: getAuthHeaders(),

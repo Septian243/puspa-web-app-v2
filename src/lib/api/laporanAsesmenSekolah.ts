@@ -155,13 +155,11 @@ export async function downloadSchoolAssessmentReport(
     link.remove();
     window.URL.revokeObjectURL(url);
   } catch (error: any) {
-    console.error("ERROR downloadSchoolAssessmentReport:", error);
-
     if (error.response?.data instanceof Blob) {
       try {
         const errorText = await error.response.data.text();
         const json = JSON.parse(errorText);
-        throw new Error(json.message || "Laporan asesmen belum dikirimkan oleh Admin.");
+        throw new Error(json.message || "Laporan asesmen belum tersedia untuk siswa ini.");
       } catch (parseErr: any) {
         if (parseErr.message && !parseErr.message.includes("JSON")) {
           throw parseErr;
@@ -170,7 +168,10 @@ export async function downloadSchoolAssessmentReport(
     }
 
     if (error.response?.status === 404) {
-      throw new Error("Laporan asesmen belum dikirimkan oleh Admin untuk siswa ini.");
+      throw new Error(
+        error.response?.data?.message ||
+          "Berkas laporan asesmen tidak ditemukan di server."
+      );
     }
 
     throw error;

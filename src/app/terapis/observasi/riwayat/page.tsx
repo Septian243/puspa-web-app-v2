@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getObservations } from "@/lib/api/observasiSubmit";
 import { handleApiError } from "@/lib/api-error";
+import { useTherapistProfile } from "@/context/ProfileTerapisContext";
 
 // ==================== Interface ====================
 interface Anak {
@@ -23,35 +24,59 @@ interface Anak {
   orangTua: string;
   telepon: string;
   observer: string;
+  therapist_id?: string | null;
   kategoriUsia: string;
   tglObservasi: string;
   waktu: string;
   child_age: string;
 }
 
-interface Kategori {
-  title: string;
-  filter: (d: Anak) => boolean;
+// ==================== Parsing usia & Kategori ====================
+function parseAgeYears(childAge?: string): number | null {
+  if (!childAge) return null;
+  const match = childAge.match(/(\d+)\s*Tahun/i);
+  if (match) return parseInt(match[1], 10);
+  const num = parseInt(childAge, 10);
+  return isNaN(num) ? null : num;
 }
 
-// ==================== Parsing usia dari child_age ====================
-const parseChildAge = (ageText: string): number => {
-  if (!ageText) return 0;
-  const match = ageText.match(/(\d+)\s*Tahun/);
-  return match ? parseInt(match[1], 10) : 0;
+const matchRiwayatCategory = (d: Anak, categoryIdx: number): boolean => {
+  const cat = String(d.kategoriUsia || "").toLowerCase().trim();
+  const years = parseAgeYears(d.child_age);
+
+  switch (categoryIdx) {
+    case 0: // Usia 0-5 Tahun (Balita)
+      if (cat === "balita") return true;
+      if (years !== null) return years >= 0 && years <= 5;
+      return false;
+    case 1: // Usia 6-12 Tahun (Anak-anak)
+      if (cat === "anak-anak" || cat === "anak") return true;
+      if (years !== null) return years >= 6 && years <= 12;
+      return false;
+    case 2: // Usia 13-17 Tahun (Remaja)
+      if (cat === "remaja") return true;
+      if (years !== null) return years >= 13 && years <= 17;
+      return false;
+    case 3: // Usia 17+ Tahun (Lainnya)
+      if (cat === "lainya" || cat === "lainnya" || cat === "dewasa") return true;
+      if (years !== null) return years > 17;
+      return false;
+    default:
+      return false;
+  }
 };
 
-// ==================== Kategori ====================
-const kategori: Kategori[] = [
-  { title: "Usia 0–5 Tahun", filter: (d) => parseChildAge(d.child_age) >= 0 && parseChildAge(d.child_age) <= 5 },
-  { title: "Usia 6–12 Tahun", filter: (d) => parseChildAge(d.child_age) >= 6 && parseChildAge(d.child_age) <= 12 },
-  { title: "Usia 13–17 Tahun", filter: (d) => parseChildAge(d.child_age) >= 13 && parseChildAge(d.child_age) <= 17 },
-  { title: "Usia 17+ Tahun", filter: (d) => parseChildAge(d.child_age) > 17 },
+const kategoriTitles = [
+  "Usia 0–5 Tahun",
+  "Usia 6–12 Tahun",
+  "Usia 13–17 Tahun",
+  "Usia 17+ Tahun",
 ];
 
 // ==================== Komponen Utama ====================
 export default function RiwayatObservasiPage() {
   const router = useRouter();
+  const { profile } = useTherapistProfile();
 
   const [activeKategori, setActiveKategori] = useState(0);
   const [data, setData] = useState<Anak[]>([]);
@@ -86,6 +111,7 @@ export default function RiwayatObservasiPage() {
             orangTua: item.guardian_name || "-",
             telepon: item.guardian_phone || "-",
             observer: item.observer || "-",
+            therapist_id: item.therapist_id?.toString() || null,
             kategoriUsia: item.age_category || "-",
             child_age: item.child_age || "-",
             tglObservasi,
@@ -113,14 +139,28 @@ export default function RiwayatObservasiPage() {
     return () => window.removeEventListener("click", handleOutsideClick);
   }, []);
 
+  const isProfileLoading = !profile?.therapist_id;
+  const isPageLoading = loading || isProfileLoading;
+
+  const handleCategoryChange = (idx: number) => {
+    if (idx === activeKategori) return;
+    setActiveKategori(idx);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchName, filterDate]);
+
   // ==================== Filtering ====================
   const filtered = useMemo(() => {
-    setPage(1);
+    if (!profile?.therapist_id) return [];
     return data
-      .filter((d) => kategori[activeKategori].filter(d))
+      .filter((d) => Boolean(d.therapist_id && String(d.therapist_id) === String(profile.therapist_id)))
+      .filter((d) => matchRiwayatCategory(d, activeKategori))
       .filter((d) => (searchName ? d.nama.toLowerCase().includes(searchName.toLowerCase()) : true))
       .filter((d) => (filterDate ? d.tglObservasi === filterDate : true));
-  }, [data, activeKategori, searchName, filterDate]);
+  }, [data, activeKategori, searchName, filterDate, profile?.therapist_id]);
 
   // ==================== Pagination Logic ====================
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
@@ -142,8 +182,8 @@ export default function RiwayatObservasiPage() {
   return (
     <div className="p-6 md:p-8 space-y-8 text-[#1E5C58] bg-[#F8FBFB] min-h-screen">
       {/* ================= SEARCH, FILTER & ACTION ================= */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
-        <div className="flex flex-col sm:flex-row gap-4 items-center w-full md:w-auto">
+      <div className="flex flex-col items-start justify-between w-full gap-4 md:flex-row md:items-center">
+        <div className="flex flex-col items-center w-full gap-4 sm:flex-row md:w-auto">
           {/* Calendar Input */}
           <div className="relative w-full sm:w-64">
             <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#81B7A9]" />
@@ -179,64 +219,64 @@ export default function RiwayatObservasiPage() {
 
       {/* ================= CATEGORY NAVIGATION ================= */}
       <div className="flex flex-wrap gap-2 p-1.5 bg-[#EAF4F2]/50 border border-teal-50/50 rounded-xl w-fit">
-        {kategori.map((kat, idx) => {
+        {kategoriTitles.map((title, idx) => {
           const isActive = activeKategori === idx;
           return (
             <button
               key={idx}
-              onClick={() => setActiveKategori(idx)}
+              onClick={() => handleCategoryChange(idx)}
               className={`cursor-pointer px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all duration-300 ${
                 isActive
                   ? "bg-[#1E5C58] text-white shadow-sm"
                   : "text-[#1E5C58]/80 hover:bg-white/60 hover:text-[#1E5C58]"
               }`}
             >
-              {kat.title}
+              {title}
             </button>
           );
         })}
       </div>
 
       {/* ================= TABLE LIST ================= */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-400">
+      {isPageLoading ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-12 text-gray-400">
           <div className="w-8 h-8 border-4 border-[#81B7A9] border-t-transparent rounded-full animate-spin"></div>
           <span className="text-sm font-medium">Memuat riwayat observasi...</span>
         </div>
       ) : (
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           <motion.div
             key={`${activeKategori}|${filterDate}|${searchName}|${page}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.15 }}
             className="bg-white rounded-2xl p-6 md:p-8 border border-teal-50/60 shadow-[0_4px_24px_rgba(30,92,88,0.03)] hover:shadow-[0_8px_32px_rgba(30,92,88,0.06)] transition-shadow duration-300"
           >
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 text-gray-400 font-semibold">
-                    <th className="py-3 px-4 text-left font-semibold text-xs uppercase tracking-wider">Nama Anak</th>
-                    <th className="py-3 px-4 text-left font-semibold text-xs uppercase tracking-wider">Orang Tua</th>
-                    <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Telepon</th>
-                    <th className="py-3 px-4 text-left font-semibold text-xs uppercase tracking-wider">Observer</th>
-                    <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Tanggal</th>
-                    <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Waktu</th>
-                    <th className="py-3 px-4 text-center font-semibold text-xs uppercase tracking-wider">Aksi</th>
+                  <tr className="font-semibold text-gray-400 border-b border-gray-100">
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left uppercase">Nama Anak</th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left uppercase">Orang Tua</th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-center uppercase">Telepon</th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left uppercase">Observer</th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-center uppercase">Tanggal</th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-center uppercase">Waktu</th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-center uppercase">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {paginatedData.length > 0 ? (
                     paginatedData.map((d, index) => (
                       <tr key={d.observation_id ?? `row-${index}`} className="hover:bg-[#EAF4F2]/20 transition-colors">
-                        <td className="py-4 px-4 font-bold text-gray-700">{d.nama}</td>
-                        <td className="py-4 px-4 text-gray-600 font-medium">{d.orangTua}</td>
-                        <td className="py-4 px-4 text-center text-gray-600 font-mono text-xs">{d.telepon}</td>
-                        <td className="py-4 px-4 text-gray-600 font-medium">{d.observer}</td>
-                        <td className="py-4 px-4 text-center text-gray-500 font-medium">{d.tglObservasi}</td>
-                        <td className="py-4 px-4 text-center text-gray-500 font-medium">{d.waktu}</td>
-                        <td className="py-4 px-4 text-center relative">
+                        <td className="px-4 py-4 font-bold text-gray-700">{d.nama}</td>
+                        <td className="px-4 py-4 font-medium text-gray-600">{d.orangTua}</td>
+                        <td className="px-4 py-4 font-mono text-xs text-center text-gray-600">{d.telepon}</td>
+                        <td className="px-4 py-4 font-medium text-gray-600">{d.observer}</td>
+                        <td className="px-4 py-4 font-medium text-center text-gray-500">{d.tglObservasi}</td>
+                        <td className="px-4 py-4 font-medium text-center text-gray-500">{d.waktu}</td>
+                        <td className="relative px-4 py-4 text-center">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -286,7 +326,7 @@ export default function RiwayatObservasiPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-gray-400">
+                      <td colSpan={7} className="py-12 text-center text-gray-400">
                         <div className="flex flex-col items-center gap-2">
                           <ClipboardList className="w-8 h-8 text-gray-300" />
                           <span className="text-sm font-medium">Tidak ada data riwayat observasi</span>
@@ -300,7 +340,7 @@ export default function RiwayatObservasiPage() {
 
             {/* ================= PAGINATION ================= */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-3 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-center gap-3 pt-4 border-t border-gray-100">
                 <button
                   disabled={page === 1}
                   onClick={() => setPage(page - 1)}

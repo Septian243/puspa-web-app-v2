@@ -1,13 +1,14 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2, Loader2 } from "lucide-react";
 
 interface FormHapusSekolahProps {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
   namaSekolah?: string;
+  loading?: boolean;
 }
 
 export default function FormHapusSekolah({
@@ -15,6 +16,7 @@ export default function FormHapusSekolah({
   onClose,
   onConfirm,
   namaSekolah,
+  loading = false,
 }: FormHapusSekolahProps) {
   if (!open) return null;
 
@@ -42,18 +44,29 @@ export default function FormHapusSekolah({
             <div className="flex gap-3">
               <button
                 type="button"
+                disabled={loading}
                 onClick={onClose}
-                className="cursor-pointer flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors"
+                className="cursor-pointer flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={loading}
                 onClick={onConfirm}
-                className="cursor-pointer flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 shadow-md shadow-red-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                className="cursor-pointer flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 shadow-md shadow-red-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Trash2 className="w-4 h-4" />
-                Ya, Hapus
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Menghapus...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Ya, Hapus
+                  </>
+                )}
               </button>
             </div>
           </div>

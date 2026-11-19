@@ -13,6 +13,8 @@ import {
   LockKeyhole,
   Eye,
   EyeOff,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 
 interface FormTambahAdminProps {
@@ -24,7 +26,7 @@ interface FormTambahAdminProps {
     admin_phone: string;
     username: string;
     password: string;
-  }) => void;
+  }) => Promise<{ success: boolean; message?: string; errors?: Record<string, string> } | void> | void;
 }
 
 type FormState = {
@@ -51,6 +53,8 @@ export default function FormTambahAdmin({
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   if (!open) return null;
@@ -61,6 +65,8 @@ export default function FormTambahAdmin({
 
     if (!form.admin_name.trim()) {
       newErrors.admin_name = "Nama lengkap wajib diisi";
+    } else if (form.admin_name.trim().length < 3) {
+      newErrors.admin_name = "Nama lengkap minimal 3 karakter";
     }
 
     if (!form.email.trim()) {
@@ -81,6 +87,10 @@ export default function FormTambahAdmin({
       newErrors.username = "Nama pengguna wajib diisi";
     } else if (/\s/.test(form.username)) {
       newErrors.username = "Nama pengguna tidak boleh mengandung spasi";
+    } else if (!/^[a-zA-Z0-9]+$/.test(form.username)) {
+      newErrors.username = "Nama pengguna hanya boleh huruf dan angka (tanpa simbol seperti @)";
+    } else if (form.username.length < 3) {
+      newErrors.username = "Nama pengguna minimal 3 karakter";
     }
 
     if (!form.password.trim()) {
@@ -88,34 +98,62 @@ export default function FormTambahAdmin({
     } else if (form.password.length < 8) {
       newErrors.password = "Password minimal 8 karakter";
     } else if (!/[A-Z]/.test(form.password)) {
-      newErrors.password = "Password harus mengandung 1 huruf kapital";
+      newErrors.password = "Password harus mengandung minimal 1 huruf kapital (A-Z)";
+    } else if (!/\d/.test(form.password)) {
+      newErrors.password = "Password harus mengandung minimal 1 angka (0-9)";
     } else if (!/[!@#$%^&*(),.?":{}|<>]/.test(form.password)) {
-      newErrors.password = "Password harus mengandung 1 simbol";
+      newErrors.password = "Password harus mengandung minimal 1 simbol (!@#$%^&*)";
     }
 
     return newErrors;
   };
 
   // ================= SUBMIT =================
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError(null);
 
     const validationErrors = validate();
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) return;
 
-    onSave(form);
+    setIsSubmitting(true);
+    try {
+      const res = await onSave(form);
+      if (res && res.success === false) {
+        if (res.errors && Object.keys(res.errors).length > 0) {
+          setErrors(res.errors as FormErrors);
+        }
+        if (res.message) {
+          setServerError(res.message);
+        }
+        return;
+      }
 
-    setForm({
-      admin_name: "",
-      email: "",
-      admin_phone: "",
-      username: "",
-      password: "",
-    });
+      setForm({
+        admin_name: "",
+        email: "",
+        admin_phone: "",
+        username: "",
+        password: "",
+      });
+      setErrors({});
+      setServerError(null);
+      setShowPassword(false);
+      onClose();
+    } catch {
+      setServerError("Terjadi kesalahan koneksi saat menyimpan data admin.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (isSubmitting) return;
     setErrors({});
-    setShowPassword(false);
+    setServerError(null);
+    onClose();
   };
 
   return (
@@ -144,8 +182,9 @@ export default function FormTambahAdmin({
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2 pointer-events-none z-0" />
 
             <button
-              onClick={onClose}
-              className="cursor-pointer absolute right-4 top-4 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-1.5 transition-colors z-20"
+              onClick={handleClose}
+              disabled={isSubmitting}
+              className="cursor-pointer absolute right-4 top-4 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-1.5 transition-colors z-20 disabled:opacity-50"
             >
               <X className="w-5 h-5" />
             </button>
@@ -164,6 +203,18 @@ export default function FormTambahAdmin({
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* Banner Error dari Server / Validasi */}
+            {serverError && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-red-700 text-xs font-semibold leading-relaxed"
+              >
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{serverError}</span>
+              </motion.div>
+            )}
+
             {/* Nama Lengkap */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-gray-700 ml-1">
@@ -179,9 +230,10 @@ export default function FormTambahAdmin({
                   type="text"
                   placeholder="Budi Santoso"
                   value={form.admin_name}
-                  onChange={(e) =>
-                    setForm({ ...form, admin_name: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setForm({ ...form, admin_name: e.target.value });
+                    if (errors.admin_name) setErrors({ ...errors, admin_name: undefined });
+                  }}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.admin_name ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
@@ -207,7 +259,10 @@ export default function FormTambahAdmin({
                   type="email"
                   placeholder="budi@email.com"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, email: e.target.value });
+                    if (errors.email) setErrors({ ...errors, email: undefined });
+                  }}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.email ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
@@ -233,9 +288,10 @@ export default function FormTambahAdmin({
                   type="text"
                   placeholder="08123456789"
                   value={form.admin_phone}
-                  onChange={(e) =>
-                    setForm({ ...form, admin_phone: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setForm({ ...form, admin_phone: e.target.value });
+                    if (errors.admin_phone) setErrors({ ...errors, admin_phone: undefined });
+                  }}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.admin_phone ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
@@ -261,15 +317,20 @@ export default function FormTambahAdmin({
                   type="text"
                   placeholder="adminBudi"
                   value={form.username}
-                  onChange={(e) =>
-                    setForm({ ...form, username: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setForm({ ...form, username: e.target.value });
+                    if (errors.username) setErrors({ ...errors, username: undefined });
+                  }}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.username ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
-              {errors.username && (
+              {errors.username ? (
                 <p className="text-xs text-red-500 mt-1 font-medium">
                   {errors.username}
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1 pl-1">
+                  Hanya huruf dan angka tanpa spasi/simbol (contoh: adminBudi1).
                 </p>
               )}
             </div>
@@ -289,9 +350,10 @@ export default function FormTambahAdmin({
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••••••"
                   value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setForm({ ...form, password: e.target.value });
+                    if (errors.password) setErrors({ ...errors, password: undefined });
+                  }}
                   className={`w-full pl-11 pr-12 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.password ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
                 <button
@@ -306,9 +368,13 @@ export default function FormTambahAdmin({
                   )}
                 </button>
               </div>
-              {errors.password && (
+              {errors.password ? (
                 <p className="text-xs text-red-500 mt-1 font-medium">
                   {errors.password}
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1 pl-1">
+                  Wajib: min. 8 karakter, 1 huruf kapital, 1 angka, dan 1 simbol (contoh: Puspa123!).
                 </p>
               )}
             </div>
@@ -317,17 +383,28 @@ export default function FormTambahAdmin({
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-2">
               <button
                 type="button"
-                onClick={onClose}
-                className="cursor-pointer px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors"
+                onClick={handleClose}
+                disabled={isSubmitting}
+                className="cursor-pointer px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="submit"
-                className="cursor-pointer px-5 py-2.5 rounded-xl bg-[#2B7A75] text-white font-bold hover:bg-[#1E5C58] shadow-md shadow-teal-500/20 active:scale-95 transition-all flex items-center gap-2"
+                disabled={isSubmitting}
+                className="cursor-pointer px-5 py-2.5 rounded-xl bg-[#2B7A75] text-white font-bold hover:bg-[#1E5C58] shadow-md shadow-teal-500/20 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                Simpan Admin
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Simpan Admin
+                  </>
+                )}
               </button>
             </div>
           </form>

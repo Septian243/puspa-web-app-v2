@@ -56,35 +56,58 @@ export async function getSchools(search?: string): Promise<Sekolah[]> {
   const res = await api.get("/schools", { params });
   const rawData = res.data?.data ?? [];
 
-  return rawData.map((item: any) => ({
-    id: item.id,
-    nama: item.namaSekolah || item.school_name || "-",
-    school_name: item.school_name || item.namaSekolah || "-",
-    npsn: item.npsn || null,
-    username: item.username || "-",
-    jenjang: item.jenjang || "-",
-    jenjangKode: item.jenjangKode || item.jenjang || "-",
-    jenjangLabel: item.jenjangLabel || item.jenjang || "-",
-    role: "Sekolah",
-    email: item.email || "-",
-    phone: item.noTelepon || item.school_phone || "-",
-    school_phone: item.school_phone || item.noTelepon || "-",
-    noTelepon: item.noTelepon || item.school_phone || "-",
-    alamat: item.alamat || item.school_address || "-",
-    school_address: item.school_address || item.alamat || "-",
-    pic_name: item.pic_name || "-",
-    status: item.status || (item.verification_status === "verified" ? "Terverifikasi" : "Tidak Terverifikasi"),
-    verification_status: item.verification_status,
-    students_count: item.students_count ?? 0,
-    created_at: item.created_at || item.tanggalPendaftaran || "-",
-    updated_at: item.updated_at || item.created_at || item.tanggalPendaftaran || "-",
-    tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
-  }));
+  return rawData.map((item: any) => {
+    const rawStatus = (item.status || "").toLowerCase().trim();
+    let displayStatus = "Tidak Terverifikasi";
+    if (rawStatus === "terverifikasi" || rawStatus === "verified" || rawStatus === "aktif") {
+      displayStatus = "Terverifikasi";
+    } else if (rawStatus === "ditolak" || rawStatus === "rejected") {
+      displayStatus = "Ditolak";
+    } else {
+      displayStatus = "Tidak Terverifikasi";
+    }
+
+    return {
+      id: item.id,
+      nama: item.namaSekolah || item.school_name || "-",
+      school_name: item.school_name || item.namaSekolah || "-",
+      npsn: item.npsn || null,
+      username: item.username || "-",
+      jenjang: item.jenjang || "-",
+      jenjangKode: item.jenjangKode || item.jenjang || "-",
+      jenjangLabel: item.jenjangLabel || item.jenjang || "-",
+      role: "Sekolah",
+      email: item.email || "-",
+      phone: item.noTelepon || item.school_phone || "-",
+      school_phone: item.school_phone || item.noTelepon || "-",
+      noTelepon: item.noTelepon || item.school_phone || "-",
+      alamat: item.alamat || item.school_address || "-",
+      school_address: item.school_address || item.alamat || "-",
+      pic_name: item.pic_name || "-",
+      status: displayStatus,
+      verification_status: item.verification_status,
+      students_count: item.students_count ?? 0,
+      created_at: item.created_at || item.tanggalPendaftaran || "-",
+      updated_at: item.updated_at || item.created_at || item.tanggalPendaftaran || "-",
+      tanggalPendaftaran: item.tanggalPendaftaran || item.created_at || "-",
+    };
+  });
 }
 
 export async function getSchoolById(id: string): Promise<Sekolah> {
   const res = await api.get(`/schools/${id}`);
   const item = res.data?.data;
+
+  const rawStatus = (item?.status || "").toLowerCase().trim();
+  let displayStatus = "Tidak Terverifikasi";
+  if (rawStatus === "terverifikasi" || rawStatus === "verified" || rawStatus === "aktif") {
+    displayStatus = "Terverifikasi";
+  } else if (rawStatus === "ditolak" || rawStatus === "rejected") {
+    displayStatus = "Ditolak";
+  } else {
+    displayStatus = "Tidak Terverifikasi";
+  }
+
   return {
     id: item.id,
     nama: item.namaSekolah || item.school_name || "-",
@@ -102,7 +125,7 @@ export async function getSchoolById(id: string): Promise<Sekolah> {
     alamat: item.alamat || item.school_address || "-",
     school_address: item.school_address || item.alamat || "-",
     pic_name: item.pic_name || "-",
-    status: item.status || (item.verification_status === "verified" ? "Terverifikasi" : "Tidak Terverifikasi"),
+    status: displayStatus,
     verification_status: item.verification_status,
     students_count: item.students_count ?? 0,
     created_at: item.created_at || item.tanggalPendaftaran || "-",

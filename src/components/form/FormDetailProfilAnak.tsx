@@ -59,8 +59,6 @@ interface FormDetailProfilAnakProps {
   isOpen?: boolean;
   onClose: () => void;
   childId?: string | null;
-  fallbackGuardianPhone?: string | null;
-  fallbackGuardianName?: string | null;
 }
 
 export default function FormDetailProfilAnak({
@@ -68,8 +66,6 @@ export default function FormDetailProfilAnak({
   isOpen,
   onClose,
   childId,
-  fallbackGuardianPhone,
-  fallbackGuardianName,
 }: FormDetailProfilAnakProps) {
   const isModalOpen = Boolean(open ?? isOpen);
 
@@ -86,15 +82,8 @@ export default function FormDetailProfilAnak({
   const primaryGuardian =
     student?.guardians?.find((g) => g.guardian_phone && g.guardian_phone !== "-") ||
     student?.guardians?.[0];
-  const guardianName = primaryGuardian?.guardian_name || fallbackGuardianName || "-";
-  const guardianPhone =
-    (primaryGuardian?.guardian_phone && primaryGuardian.guardian_phone !== "-"
-      ? primaryGuardian.guardian_phone
-      : null) ||
-    (fallbackGuardianPhone && fallbackGuardianPhone !== "-"
-      ? fallbackGuardianPhone
-      : null) ||
-    "-";
+  const guardianName = primaryGuardian?.guardian_name || "-";
+  const guardianPhone = primaryGuardian?.guardian_phone || "-";
   const religion = student?.child_religion || "-";
   const address = student?.child_address || "-";
   const formattedBirthDate = formatTanggal(student?.child_birth_date);

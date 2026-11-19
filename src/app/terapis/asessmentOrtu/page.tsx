@@ -35,6 +35,7 @@ export default function AssessmentPage() {
   const [activeFilter, setActiveFilter] = useState<StatusFilter>(
     statusParam === "Selesai" ? "Selesai" : "Terjadwal"
   );
+  const [patientScope, setPatientScope] = useState<"mine" | "all">("mine");
 
   useEffect(() => {
     if (statusParam === "Selesai") {
@@ -52,20 +53,50 @@ export default function AssessmentPage() {
 
   const [searchName, setSearchName] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const activeRequestIdRef = React.useRef(0);
 
   // Fetch data function
   const fetchData = async () => {
+    const requestId = ++activeRequestIdRef.current;
     setLoading(true);
     try {
+      const useMine = patientScope === "mine";
       const data =
         activeFilter === "Terjadwal"
-          ? await getPendingParents(dateFilter, searchName)
-          : await getCompletedParents(dateFilter, searchName);
+          ? await getPendingParents(dateFilter, searchName, useMine)
+          : await getCompletedParents(dateFilter, searchName, useMine);
+
+      if (requestId !== activeRequestIdRef.current) return;
       setPatients(data || []);
     } catch (err) {
+      if (requestId !== activeRequestIdRef.current) return;
       console.error("Gagal mengambil data:", err);
+      setPatients([]);
+    } finally {
+      if (requestId === activeRequestIdRef.current) {
+        setLoading(false);
+      }
     }
-    setLoading(false);
+  };
+
+  const handleFilterChange = (filter: StatusFilter) => {
+    if (filter === activeFilter) return;
+    activeRequestIdRef.current++;
+    setPatients([]);
+    setLoading(true);
+    setPage(1);
+    setActiveFilter(filter);
+    setOpenDropdownIndex(null);
+  };
+
+  const handleScopeChange = (scope: "mine" | "all") => {
+    if (scope === patientScope) return;
+    activeRequestIdRef.current++;
+    setPatients([]);
+    setLoading(true);
+    setPage(1);
+    setPatientScope(scope);
+    setOpenDropdownIndex(null);
   };
 
   useEffect(() => {
@@ -74,7 +105,7 @@ export default function AssessmentPage() {
       setPage(1);
     }, 300);
     return () => clearTimeout(delay);
-  }, [activeFilter, searchName, dateFilter]);
+  }, [activeFilter, searchName, dateFilter, patientScope]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -118,31 +149,58 @@ export default function AssessmentPage() {
         </div>
       </div>
 
-      {/* ================= STATUS FILTER ================= */}
-      <div className="flex border-b border-teal-100/50">
-        {(["Terjadwal", "Selesai"] as StatusFilter[]).map((filter) => {
-          const isActive = activeFilter === filter;
-          return (
-            <button
-              key={filter}
-              onClick={() => {
-                setActiveFilter(filter);
-                setOpenDropdownIndex(null);
-              }}
-              className={`cursor-pointer pb-3 px-6 text-sm font-bold transition-all relative ${isActive ? "text-[#1E5C58]" : "text-gray-400 hover:text-gray-600"
+      {/* ================= STATUS & SCOPE FILTER ================= */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-teal-100/50 pb-2">
+        {/* Status Tabs */}
+        <div className="flex">
+          {(["Terjadwal", "Selesai"] as StatusFilter[]).map((filter) => {
+            const isActive = activeFilter === filter;
+            return (
+              <button
+                key={filter}
+                onClick={() => handleFilterChange(filter)}
+                className={`cursor-pointer pb-3 px-6 text-sm font-bold transition-all relative ${
+                  isActive ? "text-[#1E5C58]" : "text-gray-400 hover:text-gray-600"
                 }`}
-            >
-              <span>{filter === "Terjadwal" ? "Belum Selesai" : "Selesai"}</span>
-              {isActive && (
-                <motion.div
-                  layoutId="activeStatusLine"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1E5C58]"
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                />
-              )}
-            </button>
-          );
-        })}
+              >
+                <span>{filter === "Terjadwal" ? "Belum Selesai" : "Selesai"}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="activeStatusLine"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1E5C58]"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Patient Scope Filter */}
+        <div className="flex items-center gap-1.5 p-1 bg-[#EAF4F2]/50 border border-teal-50 rounded-xl text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => handleScopeChange("mine")}
+            className={`cursor-pointer px-3 py-1.5 rounded-lg transition-all ${
+              patientScope === "mine"
+                ? "bg-[#1E5C58] text-white shadow-xs"
+                : "text-[#1E5C58]/70 hover:text-[#1E5C58]"
+            }`}
+          >
+            Pasien Saya
+          </button>
+          <button
+            type="button"
+            onClick={() => handleScopeChange("all")}
+            className={`cursor-pointer px-3 py-1.5 rounded-lg transition-all ${
+              patientScope === "all"
+                ? "bg-[#1E5C58] text-white shadow-xs"
+                : "text-[#1E5C58]/70 hover:text-[#1E5C58]"
+            }`}
+          >
+            Semua Pasien
+          </button>
+        </div>
       </div>
 
       {/* ================= TABLE LIST ================= */}

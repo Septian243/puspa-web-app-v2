@@ -142,7 +142,14 @@ export default function VerifikasiSekolahPage() {
           transition={{ duration: 0.3 }}
           className="bg-transparent md:bg-white md:rounded-3xl md:shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] md:border md:border-teal-50 overflow-hidden md:p-6 w-full"
         >
-          {filteredSekolah.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center p-16 bg-white rounded-3xl md:bg-transparent border border-teal-50 md:border-0 shadow-xs md:shadow-none">
+              <div className="w-10 h-10 border-4 border-teal-100 border-t-[#2B7A75] rounded-full animate-spin mb-4" />
+              <p className="text-gray-400 font-medium text-sm animate-pulse">
+                Memuat berkas verifikasi...
+              </p>
+            </div>
+          ) : filteredSekolah.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-16 text-center bg-white rounded-3xl md:bg-transparent border border-teal-50 md:border-0 shadow-xs md:shadow-none">
               <div className="w-20 h-20 bg-teal-50/50 rounded-full flex items-center justify-center mb-4 border border-teal-100/30">
                 <ShieldCheck className="w-10 h-10 text-[#2B7A75] opacity-50" />
