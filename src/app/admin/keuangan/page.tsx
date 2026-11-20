@@ -45,6 +45,12 @@ import {
   getCredits,
   getTransactions,
 } from "@/lib/api/keuangan";
+import {
+  getSchedules,
+  getScheduleDetail,
+  ScheduleItem,
+  ScheduleDetailItem,
+} from "@/lib/api/jadwal_terapi";
 import { showSuccessToast, showErrorToast, handleApiError } from "@/lib/toast";
 
 type InvoiceStatus =
@@ -90,6 +96,80 @@ const JENIS_TERAPI_OPTIONS = [
   "PLB (Paedagog)",
 ];
 
+const THERAPY_TYPE_LABEL_MAP: Record<string, string> = {
+  okupasi: "Terapi Okupasi",
+  wicara: "Terapi Wicara",
+  fisio: "Fisioterapi",
+  paedagog: "PLB (Paedagog)",
+};
+
+function normalizeTherapyType(rawType: string): string {
+  if (!rawType) return "";
+  const lower = rawType.toLowerCase().trim();
+  if (THERAPY_TYPE_LABEL_MAP[lower]) return THERAPY_TYPE_LABEL_MAP[lower];
+  const matched = JENIS_TERAPI_OPTIONS.find(
+    (opt) =>
+      opt.toLowerCase() === lower ||
+      opt.toLowerCase().includes(lower) ||
+      lower.includes(opt.toLowerCase()),
+  );
+  return matched || rawType;
+}
+
+function parseLocalDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2]))
+    return null;
+  return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+}
+
+function parseYearMonth(str: string): { year: number; month: number } | null {
+  if (!str) return null;
+  const trimmed = str.trim();
+  const yFirst = trimmed.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yFirst) {
+    const year = parseInt(yFirst[1], 10);
+    const month = parseInt(yFirst[2], 10);
+    if (month >= 1 && month <= 12) return { year, month };
+  }
+  const mFirst = trimmed.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (mFirst) {
+    const month = parseInt(mFirst[1], 10);
+    const year = parseInt(mFirst[2], 10);
+    if (month >= 1 && month <= 12) return { year, month };
+  }
+  return null;
+}
+
+function countDayOccurrences(
+  dayOfWeek: number,
+  startDateStr: string,
+  endDateStr: string,
+): number {
+  if (!startDateStr || !endDateStr || !dayOfWeek) return 0;
+  const start = parseLocalDate(startDateStr);
+  const end = parseLocalDate(endDateStr);
+  if (
+    !start ||
+    !end ||
+    isNaN(start.getTime()) ||
+    isNaN(end.getTime()) ||
+    start > end
+  )
+    return 0;
+
+  let count = 0;
+  const current = new Date(start);
+  while (current <= end) {
+    const jsDay = current.getDay();
+    const isoDay = jsDay === 0 ? 7 : jsDay;
+    if (isoDay === dayOfWeek) count++;
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatRupiah(amount: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -131,7 +211,8 @@ function isoToDisplayDate(iso: string): string {
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: InvoiceStatus | string }) {
-  if (status === "BELUM DIBAYAR") {
+  const norm = (status || "").toUpperCase();
+  if (norm === "BELUM DIBAYAR") {
     return (
       <span className="inline-flex items-center text-[11px] text-red-500 font-extrabold">
         Belum Dibayar
@@ -812,16 +893,16 @@ function LihatDetailModal({
   const statusLabelMap: Record<InvoiceStatus, string> = {
     LUNAS: "Lunas",
     "BELUM DIBAYAR": "Belum dibayar",
-    "PERIODE BERIKUTNYA": "Periode berikutnya",
-    DIKEMBALIKAN: "Dikembalikan",
-    BERJALAN: "Berjalan",
+    "PERIODE BERIKUTNYA": "Lunas",
+    DIKEMBALIKAN: "Lunas",
+    BERJALAN: "Lunas",
   };
   const statusClassMap: Record<InvoiceStatus, string> = {
     LUNAS: "bg-emerald-50 text-emerald-600 border-emerald-100",
     "BELUM DIBAYAR": "bg-red-50 text-red-500 border-red-100",
-    "PERIODE BERIKUTNYA": "bg-orange-50 text-orange-500 border-orange-100",
-    DIKEMBALIKAN: "bg-teal-50 text-[#2B7A75] border-teal-100",
-    BERJALAN: "bg-teal-50 text-teal-600 border-teal-100",
+    "PERIODE BERIKUTNYA": "bg-emerald-50 text-emerald-600 border-emerald-100",
+    DIKEMBALIKAN: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    BERJALAN: "bg-emerald-50 text-emerald-600 border-emerald-100",
   };
   const sudahDibayar = ["LUNAS", "DIKEMBALIKAN", "PERIODE BERIKUTNYA"].includes(invoice.status) ? invoice.total : 0;
   const rows = invoice.terapiRows ?? [];
@@ -1001,22 +1082,22 @@ function CetakInvoiceModal({
   const statusLabelMap: Record<InvoiceStatus, string> = {
     LUNAS: "Lunas",
     "BELUM DIBAYAR": "Belum dibayar",
-    "PERIODE BERIKUTNYA": "Periode berikutnya",
-    DIKEMBALIKAN: "Dikembalikan",
-    BERJALAN: "Berjalan",
+    "PERIODE BERIKUTNYA": "Lunas",
+    DIKEMBALIKAN: "Lunas",
+    BERJALAN: "Lunas",
   };
   const statusColorMap: Record<InvoiceStatus, string> = {
     LUNAS: "#059669", "BELUM DIBAYAR": "#ef4444",
-    "PERIODE BERIKUTNYA": "#f97316", DIKEMBALIKAN: "#2B7A75", BERJALAN: "#0d9488",
+    "PERIODE BERIKUTNYA": "#059669", DIKEMBALIKAN: "#059669", BERJALAN: "#059669",
   };
 
   const handleCetak = () => {
     const statusColor: Record<InvoiceStatus, string> = {
       LUNAS: "#059669",
       "BELUM DIBAYAR": "#ef4444",
-      "PERIODE BERIKUTNYA": "#f97316",
-      DIKEMBALIKAN: "#2B7A75",
-      BERJALAN: "#0d9488",
+      "PERIODE BERIKUTNYA": "#059669",
+      DIKEMBALIKAN: "#059669",
+      BERJALAN: "#059669",
     };
 
     // Build line items HTML
@@ -1249,7 +1330,9 @@ function CetakInvoiceModal({
               </div>
               <div className="flex justify-between items-center mt-1 text-[10px]">
                 <span className="text-gray-400">Status</span>
-                <span className="font-extrabold" style={{ color: statusColorMap[invoice.status] || "#1E5C58" }}>{invoice.status}</span>
+                <span className="font-extrabold" style={{ color: statusColorMap[invoice.status] || "#1E5C58" }}>
+                  {statusLabelMap[invoice.status] || (invoice.status === "BELUM DIBAYAR" ? "Belum dibayar" : "Lunas")}
+                </span>
               </div>
               {invoice.pembayaran && (
                 <>
@@ -1654,18 +1737,42 @@ function BuatTagihanForm({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  // Load children list from Backend API
+  // Load children list from Backend API (filter children with active schedules)
   useEffect(() => {
     let isMounted = true;
     const fetchList = async () => {
       setIsLoadingChildren(true);
       try {
-        const data = await getChildrenWithGuardians();
+        const [allChildren, schedulesRes] = await Promise.all([
+          getChildrenWithGuardians(),
+          getSchedules({ status: "aktif", per_page: 200 }).catch(() => null),
+        ]);
         if (!isMounted) return;
-        setChildrenList(data);
+
+        const activeSchedules: ScheduleItem[] = schedulesRes?.items || [];
+        const scheduledChildIds = new Set(
+          activeSchedules.map((s) => s.child_id).filter(Boolean)
+        );
+        const scheduledChildNames = new Set(
+          activeSchedules
+            .map((s) => s.child_name?.toLowerCase().trim())
+            .filter(Boolean)
+        );
+
+        let filtered = (allChildren || []).filter(
+          (c) =>
+            scheduledChildIds.has(c.child_id) ||
+            scheduledChildNames.has(c.child_name?.toLowerCase().trim()) ||
+            (initialData?.child_id && c.child_id === initialData.child_id)
+        );
+
+        if (filtered.length === 0 && allChildren.length > 0) {
+          filtered = allChildren;
+        }
+        setChildrenList(filtered);
 
         if (initialData?.child_id) {
-          const found = data.find((c) => c.child_id === initialData.child_id);
+          const found = filtered.find((c) => c.child_id === initialData.child_id);
           if (found) {
             setSelectedChildId(found.child_id);
             setSelectedGuardianId(found.guardian_id);
@@ -1673,9 +1780,10 @@ function BuatTagihanForm({
             setSelectedAnakName(found.child_name);
           }
         } else if (prefillData?.childId || prefillData?.anak) {
-          const found = data.find((c) =>
-            (prefillData.childId && c.child_id === prefillData.childId) ||
-            (prefillData.anak && c.child_name.toLowerCase() === prefillData.anak.toLowerCase())
+          const found = filtered.find(
+            (c) =>
+              (prefillData.childId && c.child_id === prefillData.childId) ||
+              (prefillData.anak && c.child_name.toLowerCase() === prefillData.anak.toLowerCase())
           );
           if (found) {
             setSelectedChildId(found.child_id);
@@ -1706,14 +1814,6 @@ function BuatTagihanForm({
     setSelectedWaliName(c.guardian_name);
     setErrors((prev) => ({ ...prev, anak: false, wali: false }));
     setIsChildDropdownOpen(false);
-    setChildSearchTerm("");
-  };
-
-  const handleClearChild = () => {
-    setSelectedChildId("");
-    setSelectedAnakName("");
-    setSelectedGuardianId("");
-    setSelectedWaliName("");
     setChildSearchTerm("");
   };
 
@@ -1751,6 +1851,12 @@ function BuatTagihanForm({
       : [{ id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" }]
   );
 
+  // Jadwal & Kalkulasi Otomatis Sesi Terapi
+  const [childSchedules, setChildSchedules] = useState<ScheduleItem[]>([]);
+  const [scheduleDetails, setScheduleDetails] = useState<Record<string, ScheduleDetailItem>>({});
+  const [autoFilledFromSchedule, setAutoFilledFromSchedule] = useState(false);
+  const lastAutoAppliedKey = useRef<string>("");
+
   // Harga & Pembayaran
   const [potongan, setPotongan] = useState<number | "">(
     initialData?.potongan ?? (prefillData?.potongan !== undefined ? prefillData.potongan : "")
@@ -1765,6 +1871,250 @@ function BuatTagihanForm({
     tanggalSelesai?: boolean;
     terapi?: { id: string; field: keyof TerapiRow }[];
   }>({});
+
+  // Reset helpers
+  const resetTerapiToDefault = () => {
+    setTerapiRows([{ id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" }]);
+    setAutoFilledFromSchedule(false);
+    lastAutoAppliedKey.current = "";
+    setErrors((prev) => ({ ...prev, terapi: [] }));
+  };
+
+  const handleClearPeriode = () => {
+    setPeriode("");
+    resetTerapiToDefault();
+    setErrors((prev) => ({ ...prev, periode: false }));
+  };
+
+  const handleClearChild = () => {
+    // 1. Reset Identitas Anak & Wali
+    setSelectedChildId("");
+    setSelectedAnakName("");
+    setSelectedGuardianId("");
+    setSelectedWaliName("");
+    setChildSearchTerm("");
+    setIsChildDropdownOpen(false);
+
+    // 2. Reset Periode & Tanggal
+    setPeriode("");
+    setTanggalMulai("");
+    setTanggalSelesai("");
+
+    // 3. Reset Jadwal Anak
+    setChildSchedules([]);
+    setScheduleDetails({});
+
+    // 4. Reset Terapi & Jumlah Sesi ke setelan awal (1 baris kosong)
+    resetTerapiToDefault();
+
+    // 5. Reset Potongan & Catatan
+    setPotongan("");
+    setCatatan("");
+
+    // 6. Reset semua error formulir
+    setErrors({ terapi: [] });
+  };
+
+  const applySchedulesToRows = (
+    schedules: ScheduleItem[],
+    tipe: "Bulanan" | "Paket Durasi",
+    existingRows: TerapiRow[] = [],
+    customPeriode?: string,
+    customStart?: string,
+    customEnd?: string,
+    detailsMapOverride?: Record<string, ScheduleDetailItem>
+  ) => {
+    if (!schedules || schedules.length === 0) {
+      setAutoFilledFromSchedule(false);
+      return;
+    }
+
+    const currentDetailsMap = detailsMapOverride || scheduleDetails;
+    const activePeriode = customPeriode !== undefined ? customPeriode : periode;
+    const activeStart = customStart !== undefined ? customStart : tanggalMulai;
+    const activeEnd = customEnd !== undefined ? customEnd : tanggalSelesai;
+
+    let targetRangeStart = "";
+    let targetRangeEnd = "";
+
+    if (tipe === "Bulanan") {
+      const ym = parseYearMonth(activePeriode);
+      if (ym) {
+        targetRangeStart = `${ym.year}-${String(ym.month).padStart(2, "0")}-01`;
+        const lastDay = new Date(ym.year, ym.month, 0).getDate();
+        targetRangeEnd = `${ym.year}-${String(ym.month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      } else {
+        return;
+      }
+    } else if (tipe === "Paket Durasi") {
+      targetRangeStart = activeStart;
+      targetRangeEnd = activeEnd;
+      if (!targetRangeStart || !targetRangeEnd) return;
+    }
+
+    const grouped: Record<
+      string,
+      { jenis: string; totalSessions: number; schedules: ScheduleItem[] }
+    > = {};
+
+    schedules.forEach((sch) => {
+      const jenis = normalizeTherapyType(sch.therapy_type);
+      if (!grouped[jenis]) {
+        grouped[jenis] = { jenis, totalSessions: 0, schedules: [] };
+      }
+      grouped[jenis].schedules.push(sch);
+
+      let schCount = 0;
+      const detail = currentDetailsMap[sch.id];
+
+      const schStart = sch.period_start || targetRangeStart;
+      const schEnd = sch.period_end || targetRangeEnd;
+      const effStart = schStart > targetRangeStart ? schStart : targetRangeStart;
+      const effEnd = schEnd < targetRangeEnd ? schEnd : targetRangeEnd;
+
+      if (effStart > effEnd) return;
+
+      // A. Cek sesi faktual jika detail sudah ada
+      if (
+        detail?.sessions &&
+        Array.isArray(detail.sessions) &&
+        detail.sessions.length > 0
+      ) {
+        const inRange = detail.sessions.filter((sess) => {
+          if (!sess.session_date) return false;
+          // PENTING: Filter keluar sesi yang merupakan limpahan reschedule dari bulan sebelumnya!
+          // Sesi reschedule sudah dibayar lunas di invoice periode asalnya sehingga TIDAK boleh ditagihkan lagi.
+          if (
+            (sess as any).reschedule_replacement ||
+            (sess as any).rescheduleReplacement ||
+            (sess.notes && sess.notes.includes("Reschedule dari"))
+          ) {
+            return false;
+          }
+          return sess.session_date >= effStart && sess.session_date <= effEnd;
+        });
+        schCount = inRange.length;
+      }
+
+      // B. Cek berdasarkan kemunculan hari kalender reguler
+      if (schCount === 0 && sch.day_of_week) {
+        schCount = countDayOccurrences(sch.day_of_week, effStart, effEnd);
+      }
+
+      // C. Fallback default
+      if (schCount === 0 && (!sch.day_of_week || sch.day_of_week < 1)) {
+        schCount = Number(sch.total_meetings) || 4;
+      }
+
+      grouped[jenis].totalSessions += schCount;
+    });
+
+    const activeEntries = Object.values(grouped).filter(
+      (g) => g.totalSessions > 0
+    );
+    if (activeEntries.length > 0) {
+      const currentRows = existingRows.length > 0 ? existingRows : terapiRows;
+      const newRows: TerapiRow[] = activeEntries.map((g) => {
+        const prevRow = currentRows.find((r) => r.jenis === g.jenis);
+        return {
+          id: prevRow?.id || genId(),
+          jenis: g.jenis,
+          jumlah_sesi: g.totalSessions,
+          harga_sesi: prevRow?.harga_sesi ?? "",
+        };
+      });
+      setTerapiRows(newRows);
+      setAutoFilledFromSchedule(true);
+    }
+  };
+
+  // Load schedules for the selected child and auto calculate sessions
+  useEffect(() => {
+    if (!selectedChildId) {
+      setChildSchedules([]);
+      setAutoFilledFromSchedule(false);
+      lastAutoAppliedKey.current = "";
+      resetTerapiToDefault();
+      return;
+    }
+    let isMounted = true;
+    getSchedules({ status: "aktif", per_page: 200 })
+      .then(async (res) => {
+        if (!isMounted || !res?.items) return;
+        const matched: ScheduleItem[] = res.items.filter(
+          (s: ScheduleItem) =>
+            s.child_id === selectedChildId ||
+            (selectedAnakName &&
+              s.child_name?.toLowerCase().trim() ===
+              selectedAnakName.toLowerCase().trim())
+        );
+        setChildSchedules(matched);
+
+        const detailsMap: Record<string, ScheduleDetailItem> = {};
+        await Promise.all(
+          matched.map(async (sch: ScheduleItem) => {
+            try {
+              const det = await getScheduleDetail(sch.id);
+              if (det) detailsMap[sch.id] = det;
+            } catch {
+              // ignore
+            }
+          })
+        );
+        if (!isMounted) return;
+        setScheduleDetails(detailsMap);
+
+        const isTargetValid =
+          tipeTagihan === "Bulanan"
+            ? Boolean(periode)
+            : Boolean(tanggalMulai && tanggalSelesai);
+
+        if (!isTargetValid) {
+          resetTerapiToDefault();
+          return;
+        }
+
+        const targetVal = tipeTagihan === "Bulanan" ? periode : `${tanggalMulai}_${tanggalSelesai}`;
+        const autoKey = `${selectedChildId}_${tipeTagihan}_${targetVal}`;
+        if (matched.length > 0 && lastAutoAppliedKey.current !== autoKey) {
+          lastAutoAppliedKey.current = autoKey;
+          applySchedulesToRows(matched, tipeTagihan, undefined, undefined, undefined, undefined, detailsMap);
+        }
+      })
+      .catch((err) => {
+        console.error("Gagal memuat jadwal anak:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedChildId, selectedAnakName, periode, tanggalMulai, tanggalSelesai, tipeTagihan]);
+
+  // Recalculate sessions when period or date range changes
+  useEffect(() => {
+    if (!selectedChildId) {
+      resetTerapiToDefault();
+      return;
+    }
+    const isTargetValid =
+      tipeTagihan === "Bulanan"
+        ? Boolean(periode)
+        : Boolean(tanggalMulai && tanggalSelesai);
+
+    if (!isTargetValid) {
+      resetTerapiToDefault();
+      return;
+    }
+
+    if (childSchedules.length === 0) return;
+
+    const targetVal = tipeTagihan === "Bulanan" ? periode : `${tanggalMulai}_${tanggalSelesai}`;
+    const autoKey = `${selectedChildId}_${tipeTagihan}_${targetVal}`;
+    if (lastAutoAppliedKey.current !== autoKey) {
+      lastAutoAppliedKey.current = autoKey;
+      applySchedulesToRows(childSchedules, tipeTagihan);
+    }
+  }, [periode, tanggalMulai, tanggalSelesai, tipeTagihan, childSchedules, selectedChildId]);
 
   // Pratinjau modal
   const [showPratinjau, setShowPratinjau] = useState(false);
@@ -1799,7 +2149,16 @@ function BuatTagihanForm({
   };
 
   const removeTerapiRow = (id: string) => {
-    setTerapiRows((rows) => rows.filter((r) => r.id !== id));
+    setTerapiRows((rows) => {
+      if (rows.length <= 1) {
+        return [{ id: genId(), jenis: "", jumlah_sesi: "", harga_sesi: "" }];
+      }
+      return rows.filter((r) => r.id !== id);
+    });
+    setErrors((prev) => ({
+      ...prev,
+      terapi: prev.terapi?.filter((t) => t.id !== id),
+    }));
   };
 
   const inputClass =
@@ -1884,8 +2243,8 @@ function BuatTagihanForm({
       transition={{ duration: 0.22 }}
     >
       <div className="p-4 space-y-5 sm:p-6">
-        <div className="overflow-hidden bg-white border border-gray-200 rounded-2xl">
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+        <div className="relative z-20 bg-white border border-gray-200 rounded-2xl">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 rounded-t-2xl">
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-[#1E5C58] text-white text-xs font-extrabold shrink-0">
               1
             </div>
@@ -1914,7 +2273,7 @@ function BuatTagihanForm({
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div ref={childDropdownRef} className="relative">
+              <div ref={childDropdownRef} className="relative z-30">
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
                   Pilih Anak
                   {childrenList.length > 0 && (
@@ -1924,11 +2283,10 @@ function BuatTagihanForm({
                   )}
                 </label>
                 <div
-                  className={`relative flex items-center rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium transition-all ${
-                    errors.anak
-                      ? "!border-red-500 !ring-red-500/20 !bg-red-50"
-                      : "border-gray-200 focus-within:border-[#2B7A75] focus-within:ring-2 focus-within:ring-[#2B7A75]/20"
-                  }`}
+                  className={`relative flex items-center rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium transition-all ${errors.anak
+                    ? "!border-red-500 !ring-red-500/20 !bg-red-50"
+                    : "border-gray-200 focus-within:border-[#2B7A75] focus-within:ring-2 focus-within:ring-[#2B7A75]/20"
+                    }`}
                 >
                   <input
                     ref={childInputRef}
@@ -1950,23 +2308,28 @@ function BuatTagihanForm({
                       isLoadingChildren
                         ? "Memuat daftar anak..."
                         : isChildDropdownOpen
-                        ? "Cari nama anak / nama orang tua..."
-                        : "Pilih Nama Anak"
+                          ? "Cari nama anak / nama orang tua..."
+                          : "Pilih Nama Anak"
                     }
-                    className="w-full pr-14 text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-800 font-medium"
+                    className="w-full text-sm font-medium text-gray-800 bg-transparent outline-none pr-14 placeholder:text-gray-400"
                     readOnly={isLoadingChildren}
                   />
 
                   {/* Clear button if child is selected */}
-                  {selectedChildId && !isChildDropdownOpen && (
+                  {selectedChildId && (
                     <button
                       type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleClearChild();
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleClearChild();
                       }}
                       title="Hapus pilihan"
-                      className="absolute right-8 p-1 text-gray-400 hover:text-red-500 rounded-full transition-colors cursor-pointer"
+                      className="absolute z-10 p-1 text-gray-400 transition-colors rounded-full cursor-pointer right-8 hover:text-red-500"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1981,15 +2344,14 @@ function BuatTagihanForm({
                         requestAnimationFrame(() => childInputRef.current?.focus());
                       }
                     }}
-                    className="absolute right-3 flex items-center cursor-pointer text-gray-400"
+                    className="absolute flex items-center text-gray-400 cursor-pointer right-3"
                   >
                     {isLoadingChildren ? (
                       <Loader2 className="w-4 h-4 animate-spin text-[#2B7A75]" />
                     ) : (
                       <ChevronDown
-                        className={`w-4 h-4 transition-transform duration-200 ${
-                          isChildDropdownOpen ? "rotate-180 text-[#2B7A75]" : ""
-                        }`}
+                        className={`w-4 h-4 transition-transform duration-200 ${isChildDropdownOpen ? "rotate-180 text-[#2B7A75]" : ""
+                          }`}
                       />
                     )}
                   </div>
@@ -1997,14 +2359,14 @@ function BuatTagihanForm({
 
                 {/* Dropdown Menu */}
                 {isChildDropdownOpen && (
-                  <div className="absolute left-0 right-0 z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-teal-100 bg-white shadow-xl">
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-teal-100 bg-white shadow-2xl">
                     {isLoadingChildren ? (
                       <div className="flex items-center justify-center gap-2 p-4 text-xs font-medium text-gray-500">
                         <Loader2 className="w-4 h-4 animate-spin text-[#2B7A75]" />
                         <span>Memuat data anak...</span>
                       </div>
                     ) : filteredChildren.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-gray-400">
+                      <div className="p-4 text-xs text-center text-gray-400">
                         {childrenList.length === 0
                           ? "Belum ada data anak di sistem"
                           : `Tidak ditemukan anak dengan kata kunci "${childSearchTerm}"`}
@@ -2019,11 +2381,10 @@ function BuatTagihanForm({
                               type="button"
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => handleSelectChild(child)}
-                              className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
-                                isSelected
-                                  ? "bg-teal-50 text-[#1E5C58] font-bold"
-                                  : "hover:bg-gray-50 text-gray-700"
-                              }`}
+                              className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${isSelected
+                                ? "bg-teal-50 text-[#1E5C58] font-bold"
+                                : "hover:bg-gray-50 text-gray-700"
+                                }`}
                             >
                               <div>
                                 <p className="font-semibold text-gray-800 text-[13px]">
@@ -2088,18 +2449,50 @@ function BuatTagihanForm({
                         }
                       }
                     }}
-                    className={`${inputClass} cursor-pointer pr-10 placeholder:text-gray-400 ${errors.periode ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
+                    className={`${inputClass} cursor-pointer ${periode ? "pr-14" : "pr-10"} placeholder:text-gray-400 ${errors.periode ? "!border-red-500 !ring-red-500/20 !bg-red-50" : ""}`}
                   />
-                  <Calendar
-                    size={16}
-                    className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2"
-                  />
+                  {periode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClearPeriode();
+                      }}
+                      title="Hapus periode"
+                      className="absolute p-1 text-gray-400 transition-colors -translate-y-1/2 rounded-full cursor-pointer right-8 top-1/2 hover:text-red-500"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <div
+                    onClick={() => {
+                      const el = document.getElementById("input-periode-bulan") as HTMLInputElement | null;
+                      if (el) {
+                        if (typeof el.showPicker === "function") {
+                          try { el.showPicker(); } catch { el.focus(); }
+                        } else {
+                          el.focus();
+                        }
+                      }
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center cursor-pointer text-gray-400 hover:text-[#2B7A75] transition-colors"
+                  >
+                    <Calendar size={16} />
+                  </div>
                   {/* Input month tersembunyi — mengelola value & membuka picker */}
                   <input
                     id="input-periode-bulan"
                     type="month"
                     value={periode}
-                    onChange={(e) => { setPeriode(e.target.value); setErrors(prev => ({ ...prev, periode: false })); }}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        handleClearPeriode();
+                      } else {
+                        setPeriode(val);
+                        setErrors((prev) => ({ ...prev, periode: false }));
+                      }
+                    }}
                     className="absolute inset-0 w-0 h-0 opacity-0 pointer-events-none"
                     tabIndex={-1}
                   />
@@ -2152,6 +2545,17 @@ function BuatTagihanForm({
               2
             </div>
             <h2 className="text-sm font-extrabold text-gray-800">Terapi & Jumlah Sesi</h2>
+            {autoFilledFromSchedule && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.9, y: -2 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                className="ml-auto text-[10px] font-bold text-[#1E5C58] bg-[#EAF7F2] border border-[#2B7A75]/20 px-2 py-0.5 rounded-full flex items-center gap-1"
+              >
+                <CheckCircle2 size={11} className="text-[#2B7A75]" />
+                Otomatis dihitung dari kalender jadwal
+              </motion.span>
+            )}
           </div>
 
           <div className="p-5 space-y-3">
@@ -2171,14 +2575,16 @@ function BuatTagihanForm({
               <span className="w-7" />
             </div>
 
-            <AnimatePresence>
+            <motion.div
+              key={autoFilledFromSchedule ? `autofill-${lastAutoAppliedKey.current}` : "default-rows"}
+              initial={autoFilledFromSchedule ? { opacity: 0, y: 8 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.24, ease: "easeOut" }}
+              className="space-y-3"
+            >
               {terapiRows.map((row, idx) => (
-                <motion.div
+                <div
                   key={row.id}
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.18 }}
                   className="grid grid-cols-1 sm:grid-cols-[1.2fr_90px_1fr_1.1fr_auto] gap-3 items-center"
                 >
                   <div className="relative">
@@ -2223,18 +2629,21 @@ function BuatTagihanForm({
                     {formatRupiah(rowSubtotal(row))}
                   </p>
 
-                  <button
-                    type="button"
-                    onClick={() => removeTerapiRow(row.id)}
-                    disabled={terapiRows.length === 1}
-                    className="flex items-center justify-center text-red-400 transition-colors rounded-lg cursor-pointer w-7 h-7 hover:text-red-600 hover:bg-red-50 disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
-                    title="Hapus baris"
-                  >
-
-                  </button>
-                </motion.div>
+                  {terapiRows.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => removeTerapiRow(row.id)}
+                      className="flex items-center justify-center text-red-400 transition-colors rounded-lg cursor-pointer w-7 h-7 hover:text-red-600 hover:bg-red-50 shrink-0"
+                      title="Hapus baris"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  ) : (
+                    <span className="w-7 h-7 shrink-0" />
+                  )}
+                </div>
               ))}
-            </AnimatePresence>
+            </motion.div>
 
             <button
               type="button"
@@ -2347,16 +2756,15 @@ function BuatTagihanForm({
               type="button"
               disabled={isSaving || !!isSubmitting}
               onClick={handleSimpan}
-              className={`cursor-pointer px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-sm transition-colors inline-flex items-center gap-2 ${
-                (isSaving || isSubmitting) ? "opacity-75 cursor-not-allowed" : ""
-              } ${initialData ? "bg-[#059669] hover:bg-[#047857] shadow-emerald-700/20" : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"}`}
+              className={`cursor-pointer px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-sm transition-colors inline-flex items-center gap-2 ${(isSaving || isSubmitting) ? "opacity-75 cursor-not-allowed" : ""
+                } ${initialData ? "bg-[#059669] hover:bg-[#047857] shadow-emerald-700/20" : "bg-[#1E5C58] hover:bg-[#174d49] shadow-teal-700/20"}`}
             >
               {(isSaving || isSubmitting) && <Loader2 size={16} className="animate-spin" />}
               {(isSaving || isSubmitting)
                 ? "Menyimpan..."
                 : initialData
-                ? "Simpan Perubahan"
-                : "Simpan tagihan"}
+                  ? "Simpan Perubahan"
+                  : "Simpan tagihan"}
             </button>
             <button
               id="btn-batal-tagihan"
@@ -2445,7 +2853,24 @@ export default function KeuanganPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [backendTotalPages, setBackendTotalPages] = useState(1);
   const [totalData, setTotalData] = useState(0);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const activeRequestIdRef = useRef(0);
+  const cacheRef = useRef<Record<string, {
+    invoices: Invoice[];
+    summary: any;
+    totalPages: number;
+    total: number;
+  }>>({});
   const ITEMS_PER_PAGE = 10;
+
+  // Debounce search input (300ms) to avoid server bombardment and race conditions
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const handleBack = () => {
     setPageView("list");
@@ -2467,7 +2892,8 @@ export default function KeuanganPage() {
         await createInvoice(invData);
         showSuccessToast("Tagihan berhasil dibuat!", "Berhasil");
       }
-      await fetchInvoicesData();
+      cacheRef.current = {};
+      await fetchInvoicesData(currentPage, debouncedSearch, activeTab, true);
       handleBack();
     } catch (e: any) {
       handleApiError(e, editingInvoice ? "Gagal memperbarui tagihan" : "Gagal membuat tagihan");
@@ -2481,7 +2907,8 @@ export default function KeuanganPage() {
     try {
       await deleteInvoice(invoiceId);
       showSuccessToast("Invoice berhasil dihapus", "Berhasil");
-      fetchInvoicesData();
+      cacheRef.current = {};
+      fetchInvoicesData(currentPage, debouncedSearch, activeTab, true);
     } catch (e: any) {
       showErrorToast(e.message || "Gagal menghapus invoice", "Error");
     }
@@ -2498,69 +2925,121 @@ export default function KeuanganPage() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [previousTab]);
 
-  // Load backend invoices data
-  const fetchInvoicesData = async () => {
-    const res = await getInvoices({
-      status_tab: activeTab,
-      tipe,
-      tahun,
-      bulan,
-      search,
-      page: currentPage,
-      per_page: ITEMS_PER_PAGE,
-    });
+  // Load backend invoices data with caching, cancellation guard, and no desync
+  const fetchInvoicesData = async (
+    targetPage = currentPage,
+    targetSearch = debouncedSearch,
+    targetTab = activeTab,
+    forceRefresh = false
+  ) => {
+    const requestId = ++activeRequestIdRef.current;
+    const cacheKey = `${targetTab}_${targetSearch}_${tipe}_${tahun}_${bulan}_${targetPage}`;
 
-    if (res) {
-      if (res.summary) setSummary(res.summary);
-      if (res.invoices) {
-        const mapped = (res.invoices.data || []).map((inv: any) => ({
-          id: inv.id,
-          no_invoice: inv.no_invoice,
-          anak: inv.child?.child_name || "—",
-          wali: inv.guardian?.guardian_name || "—",
-          child_id: inv.child_id,
-          guardian_id: inv.guardian_id,
-          tipe: inv.type,
-          periode: inv.period_label,
-          total: parseFloat(inv.total_amount || 0),
-          subtotal: parseFloat(inv.subtotal_amount || 0),
-          tanggal_terbit: inv.issued_date ? new Date(inv.issued_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—",
-          status: inv.status as InvoiceStatus,
-          potongan: parseFloat(inv.discount_amount || 0),
-          terapiRows: (inv.items || []).map((it: any) => ({
-            id: it.id,
-            jenis: it.therapy_type,
-            jumlah_sesi: it.session_count,
-            harga_sesi: parseFloat(it.price_per_session || 0),
-          })),
-          pembayaran: inv.payments && inv.payments.length > 0 ? {
-            tanggal: inv.payments[0].payment_date
-              ? (() => {
-                const raw = String(inv.payments[0].payment_date);
-                const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-                const d = new Date(raw);
-                if (!isNaN(d.getTime())) {
-                  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-                }
-                return raw;
-              })()
-              : "—",
-            metode: inv.payments[0].payment_method,
-            noResi: inv.payments[0].receipt_number || "",
-            buktiUrl: inv.payments[0].proof_file_path || undefined,
-          } : undefined,
-        }));
-        setInvoices(mapped);
-        setBackendTotalPages(res.invoices.last_page || 1);
-        setTotalData(res.invoices.total || 0);
+    if (!forceRefresh && cacheRef.current[cacheKey]) {
+      const cached = cacheRef.current[cacheKey];
+      setInvoices(cached.invoices);
+      if (cached.summary) setSummary(cached.summary);
+      setBackendTotalPages(cached.totalPages);
+      setTotalData(cached.total);
+      setIsLoadingInvoices(false);
+      return;
+    }
+
+    setIsLoadingInvoices(true);
+
+    try {
+      const res = await getInvoices({
+        status_tab: targetTab,
+        tipe,
+        tahun,
+        bulan,
+        search: targetSearch,
+        page: targetPage,
+        per_page: ITEMS_PER_PAGE,
+      });
+
+      if (activeRequestIdRef.current !== requestId) return;
+
+      if (res) {
+        if (res.summary) setSummary(res.summary);
+        if (res.invoices) {
+          const mapped: Invoice[] = (res.invoices.data || []).map((inv: any) => ({
+            id: inv.id,
+            no_invoice: inv.no_invoice,
+            anak: inv.child?.child_name || "—",
+            wali: inv.guardian?.guardian_name || "—",
+            child_id: inv.child_id,
+            guardian_id: inv.guardian_id,
+            tipe: inv.type,
+            periode: inv.period_label,
+            total: parseFloat(inv.total_amount || 0),
+            subtotal: parseFloat(inv.subtotal_amount || 0),
+            tanggal_terbit: inv.issued_date ? new Date(inv.issued_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—",
+            status: inv.status as InvoiceStatus,
+            potongan: parseFloat(inv.discount_amount || 0),
+            terapiRows: (inv.items || []).map((it: any) => ({
+              id: it.id,
+              jenis: it.therapy_type,
+              jumlah_sesi: it.session_count,
+              harga_sesi: parseFloat(it.price_per_session || 0),
+            })),
+            pembayaran: inv.payments && inv.payments.length > 0 ? {
+              tanggal: inv.payments[0].payment_date
+                ? (() => {
+                  const raw = String(inv.payments[0].payment_date);
+                  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+                  const d = new Date(raw);
+                  if (!isNaN(d.getTime())) {
+                    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                  }
+                  return raw;
+                })()
+                : "—",
+              metode: inv.payments[0].payment_method,
+              noResi: inv.payments[0].receipt_number || "",
+              buktiUrl: inv.payments[0].proof_file_path || undefined,
+            } : undefined,
+          }));
+
+          const totalPages = res.invoices.last_page || 1;
+          const total = res.invoices.total || 0;
+
+          setInvoices(mapped);
+          setBackendTotalPages(totalPages);
+          setTotalData(total);
+
+          cacheRef.current[cacheKey] = {
+            invoices: mapped,
+            summary: res.summary,
+            totalPages,
+            total,
+          };
+        }
+      }
+    } catch (err) {
+      console.error("Gagal memuat data tagihan:", err);
+    } finally {
+      if (activeRequestIdRef.current === requestId) {
+        setIsLoadingInvoices(false);
       }
     }
   };
 
+  // Reset page to 1 when filters change
+  const isFirstRender = useRef(true);
   useEffect(() => {
-    fetchInvoicesData();
-  }, [activeTab, search, tipe, tahun, bulan, currentPage]);
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setCurrentPage(1);
+  }, [activeTab, debouncedSearch, tipe, tahun, bulan]);
+
+  // Fetch when filters or page change
+  useEffect(() => {
+    fetchInvoicesData(currentPage, debouncedSearch, activeTab);
+  }, [activeTab, debouncedSearch, tipe, tahun, bulan, currentPage]);
 
   useEffect(() => {
     async function loadSessionCredits() {
@@ -2584,62 +3063,9 @@ export default function KeuanganPage() {
 
   const lunasInvoices = invoices.filter((i) => i.status === "LUNAS");
 
-  // Reset pagination when filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, search, tipe, tahun, bulan]);
-
-  // Filtered invoices
-  const filtered = invoices.filter((inv) => {
-    const matchSearch =
-      search === "" ||
-      inv.anak.toLowerCase().includes(search.toLowerCase()) ||
-      inv.wali.toLowerCase().includes(search.toLowerCase()) ||
-      inv.no_invoice.toLowerCase().includes(search.toLowerCase());
-
-    const matchTipe = tipe === "Tipe" || inv.tipe === tipe;
-
-    // Filter tahun: cocokkan string tahun di periode atau tanggal_terbit
-    const matchTahun =
-      tahun === "Tahun" ||
-      inv.periode.includes(tahun) ||
-      inv.tanggal_terbit.includes(tahun);
-
-    // Filter bulan: cocokkan nama bulan di field periode
-    const matchBulan =
-      bulan === "Bulan" ||
-      inv.periode.toLowerCase().includes(bulan.toLowerCase());
-
-    const matchTab =
-      activeTab === "Semua" ||
-      (activeTab === "Belum dibayar" && inv.status === "BELUM DIBAYAR") ||
-      // Berjalan = Paket Durasi yang sudah LUNAS (paket masih berjalan)
-      (activeTab === "Berjalan" &&
-        inv.tipe === "Paket Durasi" &&
-        inv.status === "LUNAS") ||
-      // Periode berakhir = tagihan LUNAS dari tipe Bulanan (periode sudah selesai/berakhir)
-      (activeTab === "Periode berakhir" &&
-        inv.tipe === "Bulanan" &&
-        inv.status === "LUNAS") ||
-      // Selesai = tagihan LUNAS yang memiliki pengembalian atau periode berikutnya
-      (activeTab === "Selesai" &&
-        inv.status === "LUNAS" &&
-        Boolean(inv.pengembalian || inv.periodeBerikutnya));
-
-    return matchSearch && matchTipe && matchTahun && matchBulan && matchTab;
-  });
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginatedData = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
-
   // Summary stats — jumlah tagihan, belum dibayar, lunas, dan total keseluruhan
-  const jumlahTagihan = filtered.length;
-  const totalBelumDibayar = invoices
-    .filter((i) => i.status === "BELUM DIBAYAR")
-    .reduce((sum, i) => sum + i.total, 0);
+  const jumlahTagihan = totalData;
+  const totalBelumDibayar = summary.total_belum_dibayar;
   const totalLunas = invoices
     .filter((i) => i.status === "LUNAS")
     .reduce((sum, i) => sum + i.total, 0);
@@ -2650,7 +3076,8 @@ export default function KeuanganPage() {
     let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body><table border="1"><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
 
     invoices.forEach((inv) => {
-      tableHtml += `<tr><td>${inv.no_invoice}</td><td>${inv.tipe}</td><td>${inv.anak}</td><td>${inv.wali}</td><td>${inv.periode}</td><td>${inv.tanggal_terbit}</td><td>${inv.total}</td><td>${inv.status}</td></tr>`;
+      const displayStatus = inv.status === "BELUM DIBAYAR" ? "Belum Dibayar" : "Lunas";
+      tableHtml += `<tr><td>${inv.no_invoice}</td><td>${inv.tipe}</td><td>${inv.anak}</td><td>${inv.wali}</td><td>${inv.periode}</td><td>${inv.tanggal_terbit}</td><td>${inv.total}</td><td>${displayStatus}</td></tr>`;
     });
     tableHtml += `</tbody></table></body></html>`;
 
@@ -2759,7 +3186,11 @@ export default function KeuanganPage() {
                 {TABS.map((tab) => (
                   <button
                     key={tab}
-                    onClick={() => { setActiveTab(tab); setCurrentPage(1); }}
+                    onClick={() => {
+                      if (activeTab === tab) return;
+                      setActiveTab(tab);
+                      setCurrentPage(1);
+                    }}
                     id={`status-tab-${tab.toLowerCase().replace(/ /g, "-")}`}
                     className={`cursor-pointer whitespace-nowrap px-3 py-2 text-xs font-semibold transition-all border-b-2 ${activeTab === tab
                       ? "border-[#2B7A75] text-[#1E5C58] font-bold"
@@ -2899,7 +3330,35 @@ export default function KeuanganPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {invoices.length === 0 ? (
+                        {isLoadingInvoices ? (
+                          Array.from({ length: 5 }).map((_, idx) => (
+                            <tr key={`skel-${idx}`} className="border-b border-gray-100">
+                              <td className="px-4 py-3">
+                                <div className="h-3.5 bg-gray-200 rounded animate-pulse w-24 mb-1.5" />
+                                <div className="h-2.5 bg-gray-100 rounded animate-pulse w-16" />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="h-3.5 bg-gray-200 rounded animate-pulse w-28 mb-1.5" />
+                                <div className="w-20 h-3 bg-gray-100 rounded animate-pulse" />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="h-3.5 bg-gray-200 rounded animate-pulse w-24" />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="h-3.5 bg-gray-200 rounded animate-pulse w-20" />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="h-3.5 bg-gray-200 rounded animate-pulse w-20" />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="h-3.5 bg-gray-200 rounded animate-pulse w-14" />
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="w-12 h-6 mx-auto bg-gray-100 rounded-lg animate-pulse" />
+                              </td>
+                            </tr>
+                          ))
+                        ) : invoices.length === 0 ? (
                           <tr>
                             <td colSpan={7} className="px-4 py-16 text-center">
                               <div className="flex flex-col items-center gap-2.5">
@@ -2911,7 +3370,7 @@ export default function KeuanganPage() {
                             </td>
                           </tr>
                         ) : (
-                          paginatedData.map((inv, idx) => (
+                          invoices.map((inv) => (
                             <tr
                               key={inv.id}
                               className="transition-colors border-b border-gray-100 hover:bg-teal-50/20 group"
@@ -2984,7 +3443,7 @@ export default function KeuanganPage() {
                   </div>
 
                   {/* Summary Footer */}
-                  {filtered.length > 0 && (
+                  {!isLoadingInvoices && totalData > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-t border-gray-100 bg-[#F4F9F8]/60">
                       {/* Jumlah Tagihan */}
                       <div className="px-5 py-3.5 border-r border-gray-100">
@@ -3011,30 +3470,30 @@ export default function KeuanganPage() {
                     </div>
                   )}
 
-                  {totalPages > 1 && (
+                  {backendTotalPages > 1 && (
                     <div className="flex items-center justify-between px-5 py-3 bg-white border-t border-gray-100">
                       <p className="text-xs text-gray-500">
                         Menampilkan <span className="font-semibold text-gray-800">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> hingga{" "}
                         <span className="font-semibold text-gray-800">
-                          {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
+                          {Math.min(currentPage * ITEMS_PER_PAGE, totalData)}
                         </span>{" "}
-                        dari <span className="font-semibold text-gray-800">{filtered.length}</span> data
+                        dari <span className="font-semibold text-gray-800">{totalData}</span> data
                       </p>
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                          disabled={currentPage === 1}
-                          className="p-1 text-gray-500 transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isLoadingInvoices || currentPage === 1}
+                          className="p-1 text-gray-500 transition-colors border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <ChevronLeft size={14} />
                         </button>
                         <span className="px-1.5 text-xs font-medium text-gray-700">
-                          Halaman {currentPage} dari {totalPages}
+                          Halaman {currentPage} dari {backendTotalPages}
                         </span>
                         <button
-                          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                          disabled={currentPage === totalPages}
-                          className="p-1 text-gray-500 transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, backendTotalPages))}
+                          disabled={isLoadingInvoices || currentPage >= backendTotalPages}
+                          className="p-1 text-gray-500 transition-colors border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <ChevronRight size={14} />
                         </button>
@@ -3134,7 +3593,10 @@ export default function KeuanganPage() {
               });
             }
           }}
-          onRefresh={fetchInvoicesData}
+          onRefresh={() => {
+            cacheRef.current = {};
+            fetchInvoicesData(currentPage, debouncedSearch, activeTab, true);
+          }}
         />
       )}
 
@@ -3142,7 +3604,10 @@ export default function KeuanganPage() {
         <CatatBayarModal
           invoice={catatBayarInvoice}
           onClose={() => setCatatBayarInvoice(null)}
-          onRefresh={fetchInvoicesData}
+          onRefresh={() => {
+            cacheRef.current = {};
+            fetchInvoicesData(currentPage, debouncedSearch, activeTab, true);
+          }}
         />
       )}
 

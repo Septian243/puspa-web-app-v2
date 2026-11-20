@@ -108,36 +108,7 @@ const MENU_SECTIONS: MenuSection[] = [
 
 /* ─────────────────────── INITIAL MOCK DATA ─────────────────── */
 
-const INITIAL_ROLES: AdminRole[] = [
-  {
-    id: "keuangan",
-    name: "Admin Keuangan",
-    desc: "Mengelola tagihan, pembayaran, dan pengembalian dana pasien.",
-    checkedIds: ["dashboard", "admin", "keuangan", "ubah_profile", "ubah_password"],
-  },
-  {
-    id: "presensi",
-    name: "Admin Presensi",
-    desc: "Mengelola kehadiran terapi serta pencatatan izin, sakit, dan tidak hadir.",
-    checkedIds: ["dashboard", "terapis", "pasien_anak", "presensi", "ubah_profile", "ubah_password"],
-  },
-  {
-    id: "layanan",
-    name: "Admin Layanan",
-    desc: "Mengelola jadwal observasi, asesmen, dan terapi pasien.",
-    checkedIds: [
-      "dashboard",
-      "terapis",
-      "pasien_anak",
-      "observasi",
-      "asesmen",
-      "terapi_menu",
-      "laporan_soap",
-      "ubah_profile",
-      "ubah_password",
-    ],
-  },
-];
+const INITIAL_ROLES: AdminRole[] = [];
 
 /* ─────────────────────── HELPERS ───────────────────────────── */
 
@@ -217,9 +188,9 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 /* ─────────────────────── MAIN PAGE ─────────────────────────── */
 
 export default function HakAksesPage() {
-  const [roles, setRoles] = useState<AdminRole[]>(INITIAL_ROLES);
-  const [selectedRoleId, setSelectedRoleId] = useState<string>(INITIAL_ROLES[0]?.id || "keuangan");
-  const [loading, setLoading] = useState(false);
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   /* Users in role modal */
@@ -229,9 +200,9 @@ export default function HakAksesPage() {
 
   /* Editing state — synced from selected role */
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? roles[0];
-  const [editName, setEditName] = useState(selectedRole?.name || "");
-  const [editDesc, setEditDesc] = useState(selectedRole?.desc || "");
-  const [editCheckedIds, setEditCheckedIds] = useState<string[]>(selectedRole?.checkedIds || []);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editCheckedIds, setEditCheckedIds] = useState<string[]>([]);
   const [isDirty, setIsDirty] = useState(false);
 
   /* Modal state */
@@ -244,6 +215,19 @@ export default function HakAksesPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const fetchRoles = async () => {
+    // Muat dari penyimpanan lokal yang valid jika ada
+    const localRoles = getStoredAdminRoles();
+    if (localRoles.length > 0) {
+      setRoles(localRoles);
+      const current = localRoles.find((r) => r.id === selectedRoleId) || localRoles[0];
+      if (current) {
+        setSelectedRoleId(current.id);
+        setEditName(current.name);
+        setEditDesc(current.desc || "");
+        setEditCheckedIds(current.checkedIds || []);
+      }
+    }
+
     setLoading(true);
     try {
       const res = await getAdminRoles();
@@ -261,17 +245,6 @@ export default function HakAksesPage() {
       console.error(err);
     } finally {
       setLoading(false);
-    }
-
-    // Fallback ke localStorage atau initial roles
-    const localRoles = getStoredAdminRoles();
-    setRoles(localRoles);
-    const current = localRoles.find((r) => r.id === selectedRoleId) || localRoles[0];
-    if (current) {
-      setSelectedRoleId(current.id);
-      setEditName(current.name);
-      setEditDesc(current.desc || "");
-      setEditCheckedIds(current.checkedIds || []);
     }
   };
 
@@ -369,7 +342,7 @@ export default function HakAksesPage() {
             channel.postMessage({ type: "PERMISSIONS_UPDATED" });
             channel.close();
           }
-        } catch {}
+        } catch { }
         window.dispatchEvent(new Event("puspa_rbac_updated"));
       }
     } catch (err) {
@@ -454,7 +427,7 @@ export default function HakAksesPage() {
   return (
     <div className="flex flex-col h-full">
       {/* ── Page Header ── */}
-      <div className="flex flex-col px-8 pt-8 pb-0 gap-6 h-full overflow-hidden">
+      <div className="flex flex-col h-full gap-6 px-8 pt-8 pb-0 overflow-hidden">
         {/* Title row */}
         <div className="flex items-start justify-between shrink-0">
           <div>
@@ -483,195 +456,227 @@ export default function HakAksesPage() {
         </div>
 
         {/* Two-column section */}
-        <div className="flex gap-6 flex-1 min-h-0 overflow-hidden pb-8">
+        <div className="flex flex-1 min-h-0 gap-6 pb-8 overflow-hidden">
           {/* ── Left Panel: Role List ── */}
-          <div className="w-64 shrink-0 overflow-y-auto space-y-2 pr-1">
-            {roles.map((role) => {
-              const isActive = role.id === selectedRoleId;
-              return (
-                <button
-                  key={role.id}
-                  onClick={() => selectRole(role.id)}
-                  className={`w-full text-left px-4 py-3.5 rounded-2xl border transition-all duration-200
-                    ${isActive
-                      ? "bg-white border-[#2B7A75] shadow-sm"
-                      : "bg-white border-gray-100 hover:border-[#2B7A75]/40 hover:shadow-sm"
-                    }`}
-                >
-                  <p className={`text-sm font-bold ${isActive ? "text-[#1E5C58]" : "text-gray-700"}`}>
-                    {role.name}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {countChecked(role.checkedIds)} dari {ALL_LEAF_IDS.length} menu
-                  </p>
-                </button>
-              );
-            })}
+          <div className="w-64 pr-1 space-y-2 overflow-y-auto shrink-0">
+            {loading && roles.length === 0 ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="w-full px-4 py-3.5 rounded-2xl border border-gray-100 bg-white animate-pulse"
+                  >
+                    <div className="h-4 mb-2 bg-gray-200 rounded w-28" />
+                    <div className="w-20 h-3 bg-gray-100 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : roles.length === 0 ? (
+              <div className="p-4 py-8 text-xs text-center text-gray-400 bg-white border border-gray-100 rounded-2xl">
+                Belum ada jenis admin
+              </div>
+            ) : (
+              roles.map((role) => {
+                const isActive = role.id === selectedRoleId;
+                return (
+                  <button
+                    key={role.id}
+                    onClick={() => selectRole(role.id)}
+                    className={`w-full text-left px-4 py-3.5 rounded-2xl border transition-all duration-200
+                      ${isActive
+                        ? "bg-white border-[#2B7A75] shadow-sm"
+                        : "bg-white border-gray-100 hover:border-[#2B7A75]/40 hover:shadow-sm"
+                      }`}
+                  >
+                    <p className={`text-sm font-bold ${isActive ? "text-[#1E5C58]" : "text-gray-700"}`}>
+                      {role.name}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {countChecked(role.checkedIds)} dari {ALL_LEAF_IDS.length} menu
+                    </p>
+                  </button>
+                );
+              })
+            )}
           </div>
 
           {/* ── Right Panel: Editor ── */}
-          <div className="flex-1 bg-white rounded-3xl border border-teal-50 shadow-sm overflow-hidden flex flex-col">
-            {/* Top fields */}
-            <div className="px-6 pt-6 pb-4 shrink-0">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                    Nama Jenis Admin
-                  </label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => { setEditName(e.target.value); setIsDirty(true); }}
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-[#2B7A75] focus:ring-2 focus:ring-[#2B7A75]/10 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                    Deskripsi
-                  </label>
-                  <input
-                    type="text"
-                    value={editDesc}
-                    onChange={(e) => { setEditDesc(e.target.value); setIsDirty(true); }}
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-[#2B7A75] focus:ring-2 focus:ring-[#2B7A75]/10 transition-all"
-                  />
-                </div>
+          <div className="flex flex-col flex-1 overflow-hidden bg-white border shadow-sm rounded-3xl border-teal-50">
+            {loading && roles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center flex-1 gap-3 p-8">
+                <Loader2 size={32} className="text-[#2B7A75] animate-spin" />
+                <p className="text-xs font-medium text-gray-400">Memuat data hak akses...</p>
               </div>
-            </div>
-
-            {/* Menu header */}
-            <div className="flex items-center justify-between px-6 py-2.5 border-t border-b border-gray-100 shrink-0">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Menu yang Dapat Diakses · {checkedCount} dari {ALL_LEAF_IDS.length} Menu
-              </span>
-              <div className="flex items-center gap-3 text-xs font-bold text-[#2B7A75]">
-                <button onClick={selectAll} className="hover:underline transition-all">
-                  Pilih semua
-                </button>
-                <span className="text-gray-300">·</span>
-                <button onClick={clearAll} className="hover:underline transition-all">
-                  Kosongkan
-                </button>
+            ) : !selectedRole ? (
+              <div className="flex flex-col items-center justify-center flex-1 p-8 text-sm text-gray-400">
+                Belum ada jenis admin dipilih
               </div>
-            </div>
-
-            {/* Menu tree (scrollable) */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-              {MENU_SECTIONS.map((sec) => (
-                <div key={sec.section}>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
-                    {sec.section}
-                  </p>
-                  <div className="space-y-2">
-                    {sec.entries.map((entry) => {
-                      if (entry.type === "leaf") {
-                        const { item } = entry;
-                        const isChecked = editCheckedIds.includes(item.id);
-                        return (
-                          <div key={item.id} className="flex items-center gap-3">
-                            <TealCheckbox
-                              checked={isChecked}
-                              onChange={() => toggleLeaf(item.id)}
-                              disabled={item.wajib}
-                            />
-                            <span className="text-sm font-semibold text-gray-700">
-                              {item.label}
-                            </span>
-                            {item.wajib && (
-                              <span className="text-[10px] font-bold text-[#2B7A75] bg-teal-50 px-2 py-0.5 rounded-full">
-                                wajib
-                              </span>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      if (entry.type === "parent") {
-                        const { item } = entry;
-                        const allChecked = isParentChecked(item.childIds, editCheckedIds);
-                        const indeterminate = isParentIndeterminate(item.childIds, editCheckedIds);
-                        const isWajib = !!item.wajib;
-                        return (
-                          <div key={item.id} className="flex items-center gap-3">
-                            <TealCheckbox
-                              checked={allChecked}
-                              indeterminate={!isWajib && indeterminate}
-                              onChange={() => toggleParent(item.childIds)}
-                              disabled={isWajib}
-                            />
-                            <span className="text-sm font-semibold text-gray-700">
-                              {item.label}
-                            </span>
-                            {isWajib && (
-                              <span className="text-[10px] font-bold text-[#2B7A75] bg-teal-50 px-2 py-0.5 rounded-full">
-                                wajib
-                              </span>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      /* child */
-                      const { item } = entry;
-                      const isChecked = editCheckedIds.includes(item.id);
-                      return (
-                        <div key={item.id} className="flex items-center gap-3 pl-8">
-                          <TealCheckbox
-                            checked={isChecked}
-                            onChange={() => toggleLeaf(item.id)}
-                            disabled={item.wajib}
-                          />
-                          <span className="text-sm text-gray-600 font-medium">
-                            {item.label}
-                          </span>
-                          {item.wajib && (
-                            <span className="text-[10px] font-bold text-[#2B7A75] bg-teal-50 px-2 py-0.5 rounded-full">
-                              wajib
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
+            ) : (
+              <>
+                {/* Top fields */}
+                <div className="px-6 pt-6 pb-4 shrink-0">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Nama Jenis Admin
+                      </label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => { setEditName(e.target.value); setIsDirty(true); }}
+                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-[#2B7A75] focus:ring-2 focus:ring-[#2B7A75]/10 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Deskripsi
+                      </label>
+                      <input
+                        type="text"
+                        value={editDesc}
+                        onChange={(e) => { setEditDesc(e.target.value); setIsDirty(true); }}
+                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-[#2B7A75] focus:ring-2 focus:ring-[#2B7A75]/10 transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Footer / Actions */}
-            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowDeleteModal(true)}
-                  className="text-sm font-bold text-rose-500 hover:bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-xl transition-all active:scale-95"
-                >
-                  Hapus jenis admin
-                </button>
-                <button
-                  onClick={handleOpenUsersModal}
-                  className="text-sm font-bold text-[#1E5C58] hover:bg-teal-50 border border-teal-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 active:scale-95"
-                >
-                  <Users size={15} />
-                  Staf Terlibat
-                </button>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleCancel}
-                  disabled={!isDirty}
-                  className="text-sm font-bold text-gray-500 hover:text-gray-700 disabled:opacity-40 px-4 py-2.5 rounded-xl transition-all"
-                >
-                  Batalkan
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={!isDirty || isSaving}
-                  className="text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#174d49] disabled:opacity-40 px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2"
-                >
-                  {isSaving && <Loader2 size={15} className="animate-spin" />}
-                  Simpan hak akses
-                </button>
-              </div>
-            </div>
+                {/* Menu header */}
+                <div className="flex items-center justify-between px-6 py-2.5 border-t border-b border-gray-100 shrink-0">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Menu yang Dapat Diakses · {checkedCount} dari {ALL_LEAF_IDS.length} Menu
+                  </span>
+                  <div className="flex items-center gap-3 text-xs font-bold text-[#2B7A75]">
+                    <button onClick={selectAll} className="transition-all hover:underline">
+                      Pilih semua
+                    </button>
+                    <span className="text-gray-300">·</span>
+                    <button onClick={clearAll} className="transition-all hover:underline">
+                      Kosongkan
+                    </button>
+                  </div>
+                </div>
+
+                {/* Menu tree (scrollable) */}
+                <div className="flex-1 px-6 py-4 space-y-5 overflow-y-auto">
+                  {MENU_SECTIONS.map((sec) => (
+                    <div key={sec.section}>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        {sec.section}
+                      </p>
+                      <div className="space-y-2">
+                        {sec.entries.map((entry) => {
+                          if (entry.type === "leaf") {
+                            const { item } = entry;
+                            const isChecked = editCheckedIds.includes(item.id);
+                            return (
+                              <div key={item.id} className="flex items-center gap-3">
+                                <TealCheckbox
+                                  checked={isChecked}
+                                  onChange={() => toggleLeaf(item.id)}
+                                  disabled={item.wajib}
+                                />
+                                <span className="text-sm font-semibold text-gray-700">
+                                  {item.label}
+                                </span>
+                                {item.wajib && (
+                                  <span className="text-[10px] font-bold text-[#2B7A75] bg-teal-50 px-2 py-0.5 rounded-full">
+                                    wajib
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (entry.type === "parent") {
+                            const { item } = entry;
+                            const allChecked = isParentChecked(item.childIds, editCheckedIds);
+                            const indeterminate = isParentIndeterminate(item.childIds, editCheckedIds);
+                            const isWajib = !!item.wajib;
+                            return (
+                              <div key={item.id} className="flex items-center gap-3">
+                                <TealCheckbox
+                                  checked={allChecked}
+                                  indeterminate={!isWajib && indeterminate}
+                                  onChange={() => toggleParent(item.childIds)}
+                                  disabled={isWajib}
+                                />
+                                <span className="text-sm font-semibold text-gray-700">
+                                  {item.label}
+                                </span>
+                                {isWajib && (
+                                  <span className="text-[10px] font-bold text-[#2B7A75] bg-teal-50 px-2 py-0.5 rounded-full">
+                                    wajib
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          /* child */
+                          const { item } = entry;
+                          const isChecked = editCheckedIds.includes(item.id);
+                          return (
+                            <div key={item.id} className="flex items-center gap-3 pl-8">
+                              <TealCheckbox
+                                checked={isChecked}
+                                onChange={() => toggleLeaf(item.id)}
+                                disabled={item.wajib}
+                              />
+                              <span className="text-sm font-medium text-gray-600">
+                                {item.label}
+                              </span>
+                              {item.wajib && (
+                                <span className="text-[10px] font-bold text-[#2B7A75] bg-teal-50 px-2 py-0.5 rounded-full">
+                                  wajib
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer / Actions */}
+                <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowDeleteModal(true)}
+                      disabled={selectedRole?.name.toLowerCase() === "admin"}
+                      className="text-sm font-bold text-rose-500 hover:bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Hapus jenis admin
+                    </button>
+                    <button
+                      onClick={handleOpenUsersModal}
+                      className="text-sm font-bold text-[#1E5C58] hover:bg-teal-50 border border-teal-200 px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 active:scale-95"
+                    >
+                      <Users size={15} />
+                      Staf Terlibat
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleCancel}
+                      disabled={!isDirty}
+                      className="text-sm font-bold text-gray-500 hover:text-gray-700 disabled:opacity-40 px-4 py-2.5 rounded-xl transition-all"
+                    >
+                      Batalkan
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={!isDirty || isSaving}
+                      className="text-sm font-bold text-white bg-[#1E5C58] hover:bg-[#174d49] disabled:opacity-40 px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                    >
+                      {isSaving && <Loader2 size={15} className="animate-spin" />}
+                      Simpan hak akses
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -684,12 +689,12 @@ export default function HakAksesPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="w-full max-w-md overflow-hidden bg-white shadow-2xl rounded-3xl"
             >
               {/* Modal Header */}
               <div className="bg-[#1E5C58] px-6 py-5 flex items-start justify-between">
                 <div>
-                  <h3 className="text-lg font-extrabold text-white tracking-tight">
+                  <h3 className="text-lg font-extrabold tracking-tight text-white">
                     Jenis Admin Baru
                   </h3>
                   <p className="text-sm text-white/70 mt-0.5">
@@ -776,7 +781,7 @@ export default function HakAksesPage() {
             >
               <div className="bg-[#1E5C58] px-6 py-5 flex items-start justify-between shrink-0">
                 <div>
-                  <h3 className="text-lg font-extrabold text-white tracking-tight">
+                  <h3 className="text-lg font-extrabold tracking-tight text-white">
                     Staf Terlibat: {selectedRole.name}
                   </h3>
                   <p className="text-sm text-white/70 mt-0.5">
@@ -791,19 +796,19 @@ export default function HakAksesPage() {
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto flex-1">
+              <div className="flex-1 p-6 overflow-y-auto">
                 {loadingUsers ? (
                   <div className="flex items-center justify-center py-12 text-[#1E5C58]">
                     <Loader2 size={24} className="animate-spin" />
                   </div>
                 ) : roleUsers.length === 0 ? (
-                  <div className="text-center py-10 text-gray-400">
+                  <div className="py-10 text-center text-gray-400">
                     <p className="text-sm font-semibold">Belum ada akun admin yang ditetapkan pada jenis ini.</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {roleUsers.map((u) => (
-                      <div key={u.user_id} className="py-3 flex items-center justify-between">
+                      <div key={u.user_id} className="flex items-center justify-between py-3">
                         <div>
                           <p className="text-sm font-bold text-gray-800">{u.name}</p>
                           <p className="text-xs text-gray-400">{u.email} {u.phone ? `· ${u.phone}` : ""}</p>
@@ -817,7 +822,7 @@ export default function HakAksesPage() {
                 )}
               </div>
 
-              <div className="flex justify-end px-6 pb-6 pt-2 shrink-0 border-t border-gray-100">
+              <div className="flex justify-end px-6 pt-2 pb-6 border-t border-gray-100 shrink-0">
                 <button
                   onClick={() => setShowUsersModal(false)}
                   className="px-5 py-2.5 text-sm font-bold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
@@ -838,12 +843,12 @@ export default function HakAksesPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+              className="w-full max-w-sm overflow-hidden bg-white shadow-2xl rounded-3xl"
             >
               {/* Modal Header */}
               <div className="bg-[#1E5C58] px-6 py-5 flex items-start justify-between">
                 <div>
-                  <h3 className="text-lg font-extrabold text-white tracking-tight">
+                  <h3 className="text-lg font-extrabold tracking-tight text-white">
                     Hapus Jenis Admin
                   </h3>
                   <p className="text-sm text-white/70 mt-0.5">
@@ -860,7 +865,7 @@ export default function HakAksesPage() {
 
               {/* Modal Body */}
               <div className="px-6 py-6">
-                <p className="text-sm text-gray-600 leading-relaxed">
+                <p className="text-sm leading-relaxed text-gray-600">
                   Jenis admin{" "}
                   <span className="font-bold text-gray-900">{selectedRole.name}</span>{" "}
                   akan dihapus beserta pengaturan hak aksesnya.

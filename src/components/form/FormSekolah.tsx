@@ -62,6 +62,8 @@ export default function FormSekolah({
   submitting = false,
 }: FormSekolahProps) {
   const isEdit = mode === "ubah";
+  const [localSubmitting, setLocalSubmitting] = useState(false);
+  const isSubmitting = submitting || localSubmitting;
 
   const [form, setForm] = useState<FormSekolahState>({
     nama: "",
@@ -79,6 +81,7 @@ export default function FormSekolah({
   // Sinkronkan data saat modal dibuka
   useEffect(() => {
     if (open) {
+      setLocalSubmitting(false);
       if (isEdit && initialData) {
         // Cocokkan jenjang dengan daftar pilihan singkatan tanpa tanda kurung ()
         const cleanJenjang = (initialData.jenjang || "").split(" (")[0].trim();
@@ -170,16 +173,21 @@ export default function FormSekolah({
   };
 
   // ================= SUBMIT =================
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (isSubmitting) return;
 
     const validationErrors = validate();
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) return;
 
-    onSubmit(form);
+    try {
+      setLocalSubmitting(true);
+      await Promise.resolve(onSubmit(form));
+    } catch {
+      setLocalSubmitting(false);
+    }
   };
 
   // Styling dinamis berdasarkan mode (Tambah: Toska | Ubah: Amber)
@@ -213,8 +221,11 @@ export default function FormSekolah({
 
             <button
               onClick={onClose}
+              disabled={isSubmitting}
               type="button"
-              className="cursor-pointer absolute right-4 top-4 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-1.5 transition-colors z-20"
+              className={`cursor-pointer absolute right-4 top-4 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-1.5 transition-colors z-20 ${
+                isSubmitting ? "opacity-40 cursor-not-allowed pointer-events-none" : ""
+              }`}
             >
               <X className="w-5 h-5" />
             </button>
@@ -250,6 +261,7 @@ export default function FormSekolah({
             onSubmit={handleSubmit}
             className="flex-1 p-6 space-y-4 overflow-y-auto"
           >
+            <fieldset disabled={isSubmitting} className="space-y-4">
             {/* 1. Nama Sekolah */}
             <div className="space-y-1.5">
               <label className="ml-1 text-sm font-semibold text-gray-700">
@@ -501,34 +513,36 @@ export default function FormSekolah({
               </div>
             )}
 
+            </fieldset>
+
             {/* Tombol Aksi */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
               <button
                 type="button"
                 onClick={onClose}
-                disabled={submitting}
+                disabled={isSubmitting}
                 className={`cursor-pointer px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 active:scale-95 transition-all ${
-                  submitting ? "opacity-50 cursor-not-allowed pointer-events-none" : ""
+                  isSubmitting ? "opacity-50 cursor-not-allowed pointer-events-none" : ""
                 }`}
               >
                 Batal
               </button>
               <button
                 type="submit"
-                disabled={submitting}
-                className={`cursor-pointer flex items-center gap-2 px-6 py-2.5 rounded-xl ${submitButtonClass} text-white font-semibold text-sm transition-all shadow-md active:scale-95 ${
-                  submitting ? "opacity-60 cursor-not-allowed pointer-events-none" : ""
+                disabled={isSubmitting}
+                className={`cursor-pointer flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl ${submitButtonClass} text-white font-semibold text-sm transition-all shadow-md active:scale-95 min-w-[155px] ${
+                  isSubmitting ? "opacity-60 cursor-not-allowed pointer-events-none" : ""
                 }`}
               >
-                {submitting ? (
+                {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Menyimpan...
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Menyimpan...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    {isEdit ? "Simpan Perubahan" : "Simpan Sekolah"}
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{isEdit ? "Simpan Perubahan" : "Simpan Sekolah"}</span>
                   </>
                 )}
               </button>

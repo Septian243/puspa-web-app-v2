@@ -19,52 +19,7 @@ import {
 import { getAllAdmins, getAdminComputedStatus } from "@/lib/api/ownerAdmin";
 import { getAdminById } from "@/lib/api/data_admin";
 
-const DEFAULT_SAMPLE_ADMINS: any[] = [
-  {
-    admin_id: "adm-001",
-    admin_name: "Super Admin",
-    jenis: "-",
-    username: "superadmin",
-    email: "superadmin@puspa.id",
-    admin_phone: "081234567890",
-    status: "Terverifikasi",
-    created_at: "10 Januari 2026",
-    updated_at: "10 Januari 2026",
-  },
-  {
-    admin_id: "adm-002",
-    admin_name: "Kaila",
-    jenis: "Admin Layanan",
-    username: "kaila",
-    email: "kaila@gmail.com",
-    admin_phone: "081234567891",
-    status: "Terverifikasi",
-    created_at: "24 April 2026",
-    updated_at: "24 April 2026",
-  },
-  {
-    admin_id: "adm-003",
-    admin_name: "Budi Santoso",
-    jenis: "Admin Keuangan",
-    username: "budisantoso",
-    email: "budi.santoso@gmail.com",
-    admin_phone: "088234567892",
-    status: "Terverifikasi",
-    created_at: "02 Mei 2026",
-    updated_at: "02 Mei 2026",
-  },
-  {
-    admin_id: "adm-004",
-    admin_name: "Siti Rahma",
-    jenis: "Admin Presensi",
-    username: "sitirahma",
-    email: "siti.rahma@gmail.com",
-    admin_phone: "081398765432",
-    status: "Terverifikasi",
-    created_at: "15 Mei 2026",
-    updated_at: "15 Mei 2026",
-  },
-];
+const DEFAULT_SAMPLE_ADMINS: any[] = [];
 
 function renderJenisBadge(jenis?: string) {
   if (!jenis || jenis === "-" || jenis.trim() === "") {
@@ -128,27 +83,25 @@ const AdminListPage: React.FC = () => {
     try {
       setLoading(true);
       const res = await getAllAdmins();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        // Hanya tampilkan admin yang sudah terverifikasi (disetujui/ditolak)
-        const processed = res.data
-          .map((item: any) => {
-            const computed = getAdminComputedStatus(item);
-            return {
-              ...item,
-              status: computed.status,
-              jenis: computed.role || item.jenis || item.role || item.admin_type || "-",
-              isVerifiedOrRejected: computed.isVerifiedOrRejected,
-            };
-          })
-          .filter((item: any) => item.isVerifiedOrRejected);
+      if (res.success && Array.isArray(res.data)) {
+        // Tampilkan seluruh admin termasuk yang belum terverifikasi
+        const processed = res.data.map((item: any) => {
+          const computed = getAdminComputedStatus(item);
+          return {
+            ...item,
+            status: computed.status,
+            jenis: computed.role || item.jenis || item.role || item.admin_type || "-",
+            isVerifiedOrRejected: computed.isVerifiedOrRejected,
+          };
+        });
 
         setAdmins(processed);
       } else {
-        setAdmins(DEFAULT_SAMPLE_ADMINS);
+        setAdmins([]);
       }
     } catch (error) {
       console.error("Gagal mengambil data admin:", error);
-      setAdmins(DEFAULT_SAMPLE_ADMINS);
+      setAdmins([]);
     } finally {
       setLoading(false);
     }

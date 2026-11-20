@@ -40,7 +40,7 @@ export function getRejectedAdminsRecord(): Record<string, AdminStatusOverride> {
 }
 
 export function getUnverifiedAdminsList(): string[] {
-  return getSafeStorageJSON<string[]>(STORAGE_UNVERIFIED_ADMINS, ["nawaitu", "fedric"]);
+  return getSafeStorageJSON<string[]>(STORAGE_UNVERIFIED_ADMINS, []);
 }
 
 export function markAdminVerified(identifiers: (string | undefined)[], roleName?: string) {
@@ -194,15 +194,6 @@ export function getAdminComputedStatus(admin: any): {
     return {
       status: "Ditolak",
       isVerifiedOrRejected: true,
-    };
-  }
-
-  // Jika nama atau username mengandung Nawaitu atau Fedric dan belum disetujui
-  const nameOrUser = `${admin.admin_name || ""} ${admin.username || ""}`.toLowerCase();
-  if (nameOrUser.includes("nawaitu") || nameOrUser.includes("fedric")) {
-    return {
-      status: "Tidak Terverifikasi",
-      isVerifiedOrRejected: false,
     };
   }
 

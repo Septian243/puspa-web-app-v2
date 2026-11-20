@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSchedules, deleteSchedule, getTherapists, createSchedule, getChildren, updateSchedule } from "@/lib/api/jadwal_terapi";
@@ -151,16 +152,15 @@ function PeriodeDateField({
   };
 
   return (
-    <div className="relative flex-1 flex items-center">
+    <div className="relative flex items-center flex-1">
       <input
         type="text"
         readOnly
         value={formatDisplay(value)}
         onClick={handleOpenPicker}
         placeholder={placeholder}
-        className={`w-full px-2 py-2.5 pr-7 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 bg-white cursor-pointer transition-colors ${
-          isError ? "border-red-500 bg-red-50" : "border-gray-200"
-        }`}
+        className={`w-full px-2 py-2.5 pr-7 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 bg-white cursor-pointer transition-colors ${isError ? "border-red-500 bg-red-50" : "border-gray-200"
+          }`}
       />
       <CalendarDays
         onClick={handleOpenPicker}
@@ -171,7 +171,7 @@ function PeriodeDateField({
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 opacity-0 pointer-events-none w-0 h-0"
+        className="absolute inset-0 w-0 h-0 opacity-0 pointer-events-none"
         tabIndex={-1}
       />
     </div>
@@ -185,8 +185,6 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
   const [periodeAwal, setPeriodeAwal] = useState("");
   const [periodeAkhir, setPeriodeAkhir] = useState("");
   const [showAnakDropdown, setShowAnakDropdown] = useState(false);
-  const [showNoRekamDropdown, setShowNoRekamDropdown] = useState(false);
-  const [showOrangtuaDropdown, setShowOrangtuaDropdown] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [childrenList, setChildrenList] = useState<{ id: string; name: string; rm: string; guardian?: string }[]>([]);
@@ -195,15 +193,38 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
 
   useEffect(() => {
     if (open) {
+      setHasSubmitted(false);
+      setWarningMessage("");
+      setNoRekam("");
+      setNamaAnak("");
+      setNamaOrangtua("");
+      setPeriodeAwal("");
+      setPeriodeAkhir("");
+      setSelectedTerapi([]);
+      setScheduleMap({});
+      setSelectedChildId("");
+      setShowAnakDropdown(false);
+
       getChildren(true).then((res) => {
         if (Array.isArray(res)) {
           setChildrenList(
-            res.map((c: any) => ({
-              id: c.child_id || c.id || "",
-              name: c.child_name || c.name || "",
-              rm: c.medical_record_number || c.no_rekam_medis || c.child_id || c.id || "",
-              guardian: c.guardian_name || c.parent_name || c.father_name || c.mother_name || "",
-            }))
+            res.map((c: any) => {
+              let childRm = (c.medical_record_number && c.medical_record_number !== "-")
+                ? c.medical_record_number
+                : (c.no_rekam_medis && c.no_rekam_medis !== "-" ? c.no_rekam_medis : "");
+              if (!childRm && typeof window !== "undefined" && (c.child_id || c.id)) {
+                try {
+                  const cached = localStorage.getItem(`puspa_child_rm_${c.child_id || c.id}`);
+                  if (cached) childRm = cached;
+                } catch { }
+              }
+              return {
+                id: c.child_id || c.id || "",
+                name: c.child_name || c.name || "",
+                rm: childRm || "",
+                guardian: c.guardian_name || c.parent_name || c.father_name || c.mother_name || "",
+              };
+            })
           );
         }
       });
@@ -224,38 +245,16 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
     }
   }, [open]);
 
-  // Options for No Rekam Medis dropdown
-  const rmOptions = useMemo(() => {
-    const list: { rm: string; name: string; guardian: string; id: string }[] = [];
-    const seen = new Set<string>();
-
-    childrenList.forEach((c) => {
-      const rmVal = c.rm || c.id;
-      if (rmVal && !seen.has(rmVal.toLowerCase())) {
-        seen.add(rmVal.toLowerCase());
-        list.push({ rm: rmVal, name: c.name, guardian: c.guardian || "", id: c.id });
-      }
-    });
-
-    allData.forEach((d) => {
-      if (d.noRekam && d.noRekam !== "-" && !seen.has(d.noRekam.toLowerCase())) {
-        seen.add(d.noRekam.toLowerCase());
-        list.push({ rm: d.noRekam, name: d.namaAnak, guardian: d.namaWali || "", id: "" });
-      }
-    });
-
-    return list;
-  }, [childrenList, allData]);
-
-  // Options for Nama Anak dropdown
+  // Options for Nama Anak dropdown (Smart Search)
   const anakOptions = useMemo(() => {
     const list: { name: string; rm: string; guardian: string; id: string }[] = [];
     const seen = new Set<string>();
 
     childrenList.forEach((c) => {
-      if (c.name && !seen.has(c.name.toLowerCase())) {
-        seen.add(c.name.toLowerCase());
-        list.push({ name: c.name, rm: c.rm || c.id || "", guardian: c.guardian || "", id: c.id });
+      const key = `${c.name}_${c.id}`.toLowerCase();
+      if (c.name && !seen.has(key)) {
+        seen.add(key);
+        list.push({ name: c.name, rm: c.rm || "", guardian: c.guardian || "", id: c.id });
       }
     });
 
@@ -269,29 +268,76 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
     return list;
   }, [childrenList, allData]);
 
-  // Options for Orang Tua dropdown
-  const orangtuaOptions = useMemo(() => {
-    const list: { guardian: string; name: string; rm: string; id: string }[] = [];
-    const seen = new Set<string>();
+  // Filtered anak options for Smart Search (search by child name, No. RM, or guardian)
+  const filteredAnak = useMemo(() => {
+    const q = namaAnak.trim().toLowerCase();
+    if (!q) return anakOptions;
+    return anakOptions.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        (item.rm && item.rm.toLowerCase().includes(q)) ||
+        (item.guardian && item.guardian.toLowerCase().includes(q))
+    );
+  }, [anakOptions, namaAnak]);
 
-    childrenList.forEach((c) => {
-      const guardianVal = c.guardian?.trim();
-      if (guardianVal && !seen.has(guardianVal.toLowerCase())) {
-        seen.add(guardianVal.toLowerCase());
-        list.push({ guardian: guardianVal, name: c.name, rm: c.rm || c.id || "", id: c.id });
-      }
-    });
+  // Check if selected child already has an official No. RM
+  const selectedChild = useMemo(() => {
+    if (selectedChildId) {
+      return childrenList.find((c) => c.id === selectedChildId);
+    }
+    if (namaAnak) {
+      return childrenList.find((c) => c.name.toLowerCase() === namaAnak.toLowerCase().trim());
+    }
+    return undefined;
+  }, [childrenList, selectedChildId, namaAnak]);
 
-    allData.forEach((d) => {
-      const guardianVal = d.namaWali?.trim();
-      if (guardianVal && guardianVal !== "-" && !seen.has(guardianVal.toLowerCase())) {
-        seen.add(guardianVal.toLowerCase());
-        list.push({ guardian: guardianVal, name: d.namaAnak, rm: d.noRekam && d.noRekam !== "-" ? d.noRekam : "", id: "" });
-      }
-    });
+  const isRmLocked = Boolean(selectedChild?.rm && selectedChild.rm.trim() !== "" && selectedChild.rm !== "-");
 
-    return list;
-  }, [childrenList, allData]);
+  // Check if manually inputted No. RM is already used by another child
+  const duplicateRmOwner = useMemo(() => {
+    const clean = noRekam.trim().toLowerCase();
+    if (!clean || isRmLocked) return null;
+    const currentId = selectedChild?.id || selectedChildId;
+    const currentName = selectedChild?.name?.toLowerCase() || namaAnak.trim().toLowerCase();
+
+    // Check against childrenList
+    const matchChild = childrenList.find(
+      (c) => c.rm && c.rm.trim().toLowerCase() === clean && (!currentId || c.id !== currentId) && c.name.toLowerCase() !== currentName
+    );
+    if (matchChild) return matchChild.name;
+
+    // Check against allData
+    const matchData = allData.find(
+      (d) =>
+        d.noRekam &&
+        d.noRekam !== "-" &&
+        d.noRekam.trim().toLowerCase() === clean &&
+        d.namaAnak.toLowerCase() !== currentName
+    );
+    if (matchData) return matchData.namaAnak;
+
+    return null;
+  }, [noRekam, isRmLocked, selectedChild, selectedChildId, namaAnak, childrenList, allData]);
+
+  const handleSelectChild = (item: { id: string; name: string; rm: string; guardian: string }) => {
+    setSelectedChildId(item.id);
+    setNamaAnak(item.name);
+    setNamaOrangtua(item.guardian || "");
+    if (item.rm && item.rm !== "-") {
+      setNoRekam(item.rm);
+    } else {
+      setNoRekam("");
+    }
+    setShowAnakDropdown(false);
+  };
+
+  const handleClearChild = () => {
+    setSelectedChildId("");
+    setNamaAnak("");
+    setNamaOrangtua("");
+    setNoRekam("");
+    setShowAnakDropdown(false);
+  };
 
   // Checklist: set of selected therapy names
   const [selectedTerapi, setSelectedTerapi] = useState<string[]>([]);
@@ -363,22 +409,100 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
     setHasSubmitted(true);
     setWarningMessage("");
 
-    if (!namaAnak || !periodeAwal || !periodeAkhir || selectedTerapi.length === 0) {
-      setWarningMessage("Silakan lengkapi semua data utama!");
+    // 1. Validasi Nama Anak
+    if (!namaAnak.trim()) {
+      setWarningMessage("Nama anak wajib diisi terlebih dahulu!");
       return;
     }
 
     const matchedChild = childrenList.find(
       (c) =>
-        c.name.toLowerCase() === namaAnak.toLowerCase() ||
         c.id === selectedChildId ||
-        (noRekam && c.rm.toLowerCase() === noRekam.toLowerCase())
+        c.name.toLowerCase() === namaAnak.trim().toLowerCase() ||
+        (noRekam && c.rm && c.rm.toLowerCase() === noRekam.trim().toLowerCase())
     );
-    const targetChildId = matchedChild?.id || selectedChildId || childrenList[0]?.id;
+    const targetChildId = matchedChild?.id || selectedChildId;
 
     if (!targetChildId) {
-      setWarningMessage("Anak tidak ditemukan dalam sistem. Silakan pilih anak dari daftar!");
+      setWarningMessage("Pasien anak belum terdaftar dalam sistem. Silakan pilih anak dari daftar pencarian!");
       return;
+    }
+
+    // 2. Validasi No. Rekam Medis (wajib jika anak belum memiliki RM resmi)
+    if (!isRmLocked) {
+      if (!noRekam.trim()) {
+        setWarningMessage("Nomor Rekam Medis (RM) wajib diisi terlebih dahulu untuk pasien baru!");
+        return;
+      }
+      if (duplicateRmOwner) {
+        setWarningMessage(`Nomor Rekam Medis "${noRekam.trim()}" sudah terpakai oleh pasien ${duplicateRmOwner}! Silakan gunakan nomor RM yang berbeda.`);
+        return;
+      }
+    }
+
+    // 3. Validasi Checklist Terapi
+    if (selectedTerapi.length === 0) {
+      setWarningMessage("Silakan pilih minimal satu jenis terapi!");
+      return;
+    }
+
+    // 4. Validasi Tanggal Periode
+    if (!periodeAwal) {
+      setWarningMessage("Tanggal periode awal wajib diisi!");
+      return;
+    }
+    if (!periodeAkhir) {
+      setWarningMessage("Tanggal periode akhir wajib diisi!");
+      return;
+    }
+    if (periodeAwal > periodeAkhir) {
+      setWarningMessage("Tanggal periode awal tidak boleh melebihi tanggal periode akhir!");
+      return;
+    }
+
+    // 5. Validasi Baris Jadwal Terapi
+    for (const terapiName of selectedTerapi) {
+      const sectionKey = mapTerapiNameToSection(terapiName);
+      const rows = scheduleMap[terapiName] || [];
+      const sectionTherapists = therapistsBySection[sectionKey] || [];
+
+      if (rows.length === 0) {
+        setWarningMessage(`Silakan tambahkan jadwal untuk terapi ${terapiName}!`);
+        return;
+      }
+
+      for (const r of rows) {
+        if (!r.terapis) {
+          setWarningMessage(`Silakan pilih terapis untuk terapi ${terapiName}!`);
+          return;
+        }
+        if (!r.pertemuan || Number(r.pertemuan) <= 0) {
+          setWarningMessage(`Jumlah pertemuan untuk terapi ${terapiName} minimal 1 kali!`);
+          return;
+        }
+        if (!r.hari) {
+          setWarningMessage(`Silakan pilih hari untuk terapi ${terapiName}!`);
+          return;
+        }
+        if (!r.jamMulai) {
+          setWarningMessage(`Jam mulai untuk terapi ${terapiName} wajib diisi!`);
+          return;
+        }
+        if (!r.jamSelesai) {
+          setWarningMessage(`Jam selesai untuk terapi ${terapiName} wajib diisi!`);
+          return;
+        }
+        if (r.jamMulai >= r.jamSelesai) {
+          setWarningMessage(`Jam mulai harus lebih awal dari jam selesai pada terapi ${terapiName}!`);
+          return;
+        }
+
+        const matchedTherapist = sectionTherapists.find((t) => t.name === r.terapis);
+        if (!matchedTherapist) {
+          setWarningMessage(`Terapis ${r.terapis} tidak ditemukan untuk bidang ${terapiName}!`);
+          return;
+        }
+      }
     }
 
     const dayNumMap: Record<string, number> = {
@@ -391,6 +515,8 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
       Minggu: 7,
     };
 
+    const finalRm = noRekam.trim().toUpperCase();
+
     try {
       for (const terapiName of selectedTerapi) {
         const sectionKey = mapTerapiNameToSection(terapiName);
@@ -398,16 +524,8 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
         const sectionTherapists = therapistsBySection[sectionKey] || [];
 
         for (const r of rows) {
-          if (!r.terapis || !r.hari || !r.jamMulai || !r.jamSelesai || !r.pertemuan) {
-            setWarningMessage(`Silakan lengkapi semua kolom jadwal untuk terapi ${terapiName}!`);
-            return;
-          }
-
           const matchedTherapist = sectionTherapists.find((t) => t.name === r.terapis);
-          if (!matchedTherapist) {
-            setWarningMessage(`Terapis ${r.terapis} tidak ditemukan untuk bidang ${terapiName}!`);
-            return;
-          }
+          if (!matchedTherapist) continue;
 
           await createSchedule({
             child_id: targetChildId,
@@ -420,14 +538,21 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
             period_start: periodeAwal,
             period_end: periodeAkhir,
             status: "aktif",
+            medical_record_number: finalRm || undefined,
           });
         }
       }
 
+      if (finalRm && typeof window !== "undefined" && targetChildId) {
+        try {
+          localStorage.setItem(`puspa_child_rm_${targetChildId}`, finalRm);
+        } catch { }
+      }
+
       setNoRekam(""); setNamaAnak(""); setNamaOrangtua(""); setPeriodeAwal(""); setPeriodeAkhir("");
-      setSelectedTerapi([]); setScheduleMap({}); setSelectedChildId("");
+      setSelectedTerapi([]); setScheduleMap({}); setSelectedChildId(""); setHasSubmitted(false); setWarningMessage("");
       showSuccessToast("Jadwal terapi berhasil ditambahkan!");
-      onSubmit({ namaAnak, namaWali: namaOrangtua, hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir, totalMeetings: 4 });
+      onSubmit({ namaAnak, namaWali: namaOrangtua, noRekam: finalRm || "-", hari: "", jamMulai: "", jamSelesai: "", terapis: "", status: "Aktif", periodeAwal, periodeAkhir, totalMeetings: 4 });
       onClose();
     } catch (err: any) {
       console.error("CREATE SCHEDULE ERROR:", err);
@@ -438,7 +563,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
   const handleClose = () => {
     setNoRekam(""); setNamaAnak(""); setNamaOrangtua(""); setPeriodeAwal(""); setPeriodeAkhir("");
     setSelectedTerapi([]); setScheduleMap({}); setHasSubmitted(false); setWarningMessage("");
-    setShowAnakDropdown(false); setShowNoRekamDropdown(false); setShowOrangtuaDropdown(false);
+    setShowAnakDropdown(false); setSelectedChildId("");
     onClose();
   };
 
@@ -460,7 +585,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
             {/* Header */}
             <div className="bg-[#1E5C58] px-6 py-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center">
+                <div className="flex items-center justify-center rounded-lg w-9 h-9 bg-white/15">
                   <CalendarCheck className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -474,202 +599,264 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
 
             {/* Scrollable body */}
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto flex-1 p-5">
+              <div className="flex-1 p-5 overflow-y-auto">
                 <div className="flex flex-col gap-4">
                   {/* Grid Input Utama: Kolom Kiri (RM & Terapi) | Kolom Kanan (Anak, Orang Tua, Periode) */}
-                  <div className="grid grid-cols-2 gap-3 items-start">
-                  {/* Kolom Kiri: No. Rekam Medis & Checklist Terapi */}
-                  <div className="flex flex-col gap-3">
-                    {/* No. Rekam Medis dengan Dropdown */}
-                    <div className="relative">
-                      <label className={labelCls}>No. Rekam Medis</label>
-                      <input
-                        type="text"
-                        value={noRekam}
-                        onChange={(e) => {
-                          setNoRekam(e.target.value);
-                          setShowNoRekamDropdown(true);
-                        }}
-                        onFocus={() => setShowNoRekamDropdown(true)}
-                        onBlur={() => setTimeout(() => setShowNoRekamDropdown(false), 200)}
-                        placeholder="RM-000123"
-                        className={getInputCls(hasSubmitted && !noRekam)}
-                      />
-                      {showNoRekamDropdown && (
-                        <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
-                          {rmOptions
-                            .filter((item) => item.rm.toLowerCase().includes(noRekam.toLowerCase()))
-                            .map((item) => (
-                              <li
-                                key={item.rm}
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setNoRekam(item.rm);
-                                  if (item.name) setNamaAnak(item.name);
-                                  if (item.guardian) setNamaOrangtua(item.guardian);
-                                  if (item.id) setSelectedChildId(item.id);
-                                  setShowNoRekamDropdown(false);
-                                }}
-                                className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
-                              >
-                                {item.rm}
-                              </li>
-                            ))}
-                          {rmOptions.filter((item) => item.rm.toLowerCase().includes(noRekam.toLowerCase())).length === 0 && (
-                            <li className="px-3 py-2 text-xs text-gray-400">Tidak ada nomor RM cocok</li>
+                  <div className="grid items-start grid-cols-2 gap-3">
+                    {/* Kolom Kiri: No. Rekam Medis & Checklist Terapi */}
+                    <div className="flex flex-col gap-3">
+                      {/* No. Rekam Medis */}
+                      <div className="relative">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className={labelCls}>
+                            No. Rekam Medis {!isRmLocked && <span className="text-red-500">*</span>}
+                          </label>
+                          {isRmLocked && (
+                            <span className="text-[10px] text-[#2B7A75] bg-teal-50 border border-teal-100/80 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1">
+                              <Lock size={10} /> Terkunci Resmi
+                            </span>
                           )}
-                        </ul>
-                      )}
-                    </div>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={noRekam}
+                            readOnly={isRmLocked}
+                            onChange={(e) => {
+                              if (!isRmLocked) {
+                                setNoRekam(e.target.value.toUpperCase());
+                                if (warningMessage) setWarningMessage("");
+                              }
+                            }}
+                            placeholder={isRmLocked ? noRekam : "RM-000001"}
+                            className={`w-full px-3 py-2.5 border rounded-lg text-sm text-gray-700 transition-colors uppercase ${isRmLocked
+                                ? "bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed font-semibold pr-8"
+                                : getInputCls((hasSubmitted && !noRekam.trim()) || Boolean(duplicateRmOwner))
+                              }`}
+                          />
+                          {isRmLocked && (
+                            <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2">
+                              <Lock size={14} />
+                            </div>
+                          )}
+                        </div>
+                        {isRmLocked ? (
+                          <p className="text-[10px] text-[#2B7A75] mt-1 font-medium">
+                            No. RM resmi terdaftar & terkunci.
+                          </p>
+                        ) : duplicateRmOwner ? (
+                          <p className="text-[10px] text-red-500 mt-1 font-semibold flex items-center gap-1">
+                            <AlertTriangle size={11} className="shrink-0" /> Nomor RM sudah digunakan oleh pasien {duplicateRmOwner}!
+                          </p>
+                        ) : hasSubmitted && !noRekam.trim() ? (
+                          <p className="text-[10px] text-red-500 mt-1 font-semibold flex items-center gap-1">
+                            <AlertTriangle size={11} className="shrink-0" /> Nomor RM wajib diisi terlebih dahulu!
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            Input manual untuk jadwal perdana.
+                          </p>
+                        )}
+                      </div>
 
-                    {/* Checklist Terapi */}
-                    <div>
-                      <label className={labelCls}>Terapi</label>
-                      <div className={`border rounded-lg p-2.5 space-y-2 transition-colors ${hasSubmitted && selectedTerapi.length === 0 ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-gray-50/50"}`}>
-                        {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
-                          const checked = selectedTerapi.includes(name);
-                          const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
-                          return (
-                            <label key={name} className="flex items-center gap-2.5 cursor-pointer group">
-                              <div
-                                onClick={() => toggleTerapi(name)}
-                                className={`w-4.5 h-4.5 w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${
-                                  checked
-                                    ? "bg-[#1E5C58] border-[#1E5C58]"
-                                    : "border-gray-300 bg-white group-hover:border-[#2B7A75]"
-                                }`}
-                              >
-                                {checked && (
-                                  <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />
-                                )}
-                              </div>
-                              <span
-                                onClick={() => toggleTerapi(name)}
-                                className={`text-sm font-medium transition-colors ${
-                                  checked ? "text-[#1E5C58] font-semibold" : "text-gray-600"
-                                }`}
-                              >
-                                {label}
-                              </span>
-                            </label>
-                          );
-                        })}
+                      {/* Checklist Terapi */}
+                      <div>
+                        <label className={labelCls}>
+                          Terapi <span className="text-red-500">*</span>
+                        </label>
+                        <div className={`border rounded-lg p-2.5 space-y-2 transition-colors ${hasSubmitted && selectedTerapi.length === 0 ? "border-red-500 bg-red-50/50" : "border-gray-200 bg-gray-50/50"}`}>
+                          {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
+                            const checked = selectedTerapi.includes(name);
+                            const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
+                            return (
+                              <label key={name} className="flex items-center gap-2.5 cursor-pointer group">
+                                <div
+                                  onClick={() => {
+                                    toggleTerapi(name);
+                                    if (warningMessage) setWarningMessage("");
+                                  }}
+                                  className={`w-4.5 h-4.5 w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${checked
+                                      ? "bg-[#1E5C58] border-[#1E5C58]"
+                                      : "border-gray-300 bg-white group-hover:border-[#2B7A75]"
+                                    }`}
+                                >
+                                  {checked && (
+                                    <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />
+                                  )}
+                                </div>
+                                <span
+                                  onClick={() => {
+                                    toggleTerapi(name);
+                                    if (warningMessage) setWarningMessage("");
+                                  }}
+                                  className={`text-sm font-medium transition-colors ${checked ? "text-[#1E5C58] font-semibold" : "text-gray-600"
+                                    }`}
+                                >
+                                  {label}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {hasSubmitted && selectedTerapi.length === 0 && (
+                          <p className="text-[10px] text-red-500 mt-1 font-semibold flex items-center gap-1">
+                            <AlertTriangle size={11} className="shrink-0" /> Pilih minimal satu tipe terapi!
+                          </p>
+                        )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Kolom Kanan: Nama Anak, Orang Tua, Periode */}
-                  <div className="flex flex-col gap-3">
-                    {/* Nama Anak dengan Dropdown */}
-                    <div className="relative">
-                      <label className={labelCls}>Nama Anak</label>
-                      <input
-                        type="text"
-                        required
-                        value={namaAnak}
-                        onChange={(e) => {
-                          setNamaAnak(e.target.value);
-                          setShowAnakDropdown(true);
-                        }}
-                        onFocus={() => setShowAnakDropdown(true)}
-                        onBlur={() => setTimeout(() => setShowAnakDropdown(false), 200)}
-                        placeholder="Nama lengkap anak"
-                        className={getInputCls(hasSubmitted && !namaAnak)}
-                      />
-                      {showAnakDropdown && (
-                        <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
-                          {anakOptions
-                            .filter((item) => item.name.toLowerCase().includes(namaAnak.toLowerCase()))
-                            .map((item) => (
+                    {/* Kolom Kanan: Nama Anak, Orang Tua, Periode */}
+                    <div className="flex flex-col gap-3">
+                      {/* Nama Anak dengan Smart Search Dropdown */}
+                      <div className="relative">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className={labelCls}>
+                            Nama Anak <span className="text-red-500">*</span>
+                          </label>
+                          {selectedChildId && (
+                            <button
+                              type="button"
+                              onClick={handleClearChild}
+                              className="text-[10px] text-gray-400 hover:text-red-500 flex items-center gap-0.5 transition-colors"
+                            >
+                              <X size={11} /> Ganti Pasien
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={namaAnak}
+                            onChange={(e) => {
+                              setNamaAnak(e.target.value);
+                              setSelectedChildId("");
+                              setShowAnakDropdown(true);
+                              if (warningMessage) setWarningMessage("");
+                            }}
+                            onFocus={() => setShowAnakDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowAnakDropdown(false), 250)}
+                            placeholder="Cari nama anak atau No. RM..."
+                            className={`${getInputCls(hasSubmitted && !namaAnak.trim())} pr-8`}
+                          />
+                          {namaAnak ? (
+                            <button
+                              type="button"
+                              onClick={handleClearChild}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-100 transition-colors"
+                            >
+                              <X size={14} />
+                            </button>
+                          ) : (
+                            <div className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2">
+                              <ChevronDown size={14} />
+                            </div>
+                          )}
+                        </div>
+                        {hasSubmitted && !namaAnak.trim() ? (
+                          <p className="text-[10px] text-red-500 mt-1 font-semibold flex items-center gap-1">
+                            <AlertTriangle size={11} className="shrink-0" /> Nama anak wajib diisi terlebih dahulu!
+                          </p>
+                        ) : null}
+                        {showAnakDropdown && (
+                          <ul className="absolute z-30 w-full py-1 mt-1 overflow-y-auto bg-white border border-gray-200 divide-y shadow-xl rounded-xl max-h-56 divide-gray-50">
+                            {filteredAnak.map((item) => (
                               <li
-                                key={item.name}
+                                key={item.id || item.name}
                                 onMouseDown={(e) => {
                                   e.preventDefault();
-                                  setNamaAnak(item.name);
-                                  if (item.rm) setNoRekam(item.rm);
-                                  if (item.guardian) setNamaOrangtua(item.guardian);
-                                  if (item.id) setSelectedChildId(item.id);
-                                  setShowAnakDropdown(false);
+                                  handleSelectChild(item);
+                                  if (warningMessage) setWarningMessage("");
                                 }}
-                                className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
+                                className="px-3.5 py-2.5 cursor-pointer hover:bg-teal-50/80 transition-colors group"
                               >
-                                {item.name}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-sm text-gray-800 group-hover:text-[#1E5C58]">
+                                    {item.name}
+                                  </span>
+                                  {item.rm && item.rm !== "-" ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] bg-teal-50 text-[#1E5C58] px-2 py-0.5 rounded-md font-bold border border-teal-200/60 shrink-0">
+                                      <Lock size={9} /> {item.rm}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded font-medium shrink-0">
+                                      Belum ada RM
+                                    </span>
+                                  )}
+                                </div>
+                                {item.guardian && (
+                                  <div className="text-[11px] text-gray-400 mt-0.5">
+                                    Wali: <span className="text-gray-600">{item.guardian}</span>
+                                  </div>
+                                )}
                               </li>
                             ))}
-                          {anakOptions.filter((item) => item.name.toLowerCase().includes(namaAnak.toLowerCase())).length === 0 && (
-                            <li className="px-3 py-2 text-xs text-gray-400">Tidak ada nama cocok</li>
-                          )}
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* Kolom Orang Tua dengan Dropdown */}
-                    <div className="relative">
-                      <label className={labelCls}>Orang Tua</label>
-                      <input
-                        type="text"
-                        value={namaOrangtua}
-                        onChange={(e) => {
-                          setNamaOrangtua(e.target.value);
-                          setShowOrangtuaDropdown(true);
-                        }}
-                        onFocus={() => setShowOrangtuaDropdown(true)}
-                        onBlur={() => setTimeout(() => setShowOrangtuaDropdown(false), 200)}
-                        placeholder="Nama orang tua / wali"
-                        className={getInputCls(false)}
-                      />
-                      {showOrangtuaDropdown && (
-                        <ul className="absolute z-20 w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto py-1">
-                          {orangtuaOptions
-                            .filter((item) => item.guardian.toLowerCase().includes(namaOrangtua.toLowerCase()))
-                            .map((item) => (
-                              <li
-                                key={item.guardian}
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setNamaOrangtua(item.guardian);
-                                  if (item.name) setNamaAnak(item.name);
-                                  if (item.rm) setNoRekam(item.rm);
-                                  if (item.id) setSelectedChildId(item.id);
-                                  setShowOrangtuaDropdown(false);
-                                }}
-                                className="px-3 py-2 cursor-pointer hover:bg-blue-600 hover:text-white text-sm text-gray-700 transition-colors"
-                              >
-                                {item.guardian}
+                            {filteredAnak.length === 0 && (
+                              <li className="px-3 py-3 text-xs text-center text-gray-400">
+                                Tidak ditemukan pasien dengan nama atau No. RM tersebut
                               </li>
-                            ))}
-                          {orangtuaOptions.filter((item) => item.guardian.toLowerCase().includes(namaOrangtua.toLowerCase())).length === 0 && (
-                            <li className="px-3 py-2 text-xs text-gray-400">Tidak ada nama orang tua cocok</li>
-                          )}
-                        </ul>
-                      )}
-                    </div>
+                            )}
+                          </ul>
+                        )}
+                      </div>
 
-                    {/* Kolom Periode */}
-                    <div>
-                      <label className={labelCls}>Periode</label>
-                      <div className="flex items-center gap-1.5">
-                        <PeriodeDateField
-                          value={periodeAwal}
-                          onChange={setPeriodeAwal}
-                          isError={hasSubmitted && !periodeAwal}
-                          placeholder="dd/mm/yyyy"
+                      {/* Kolom Orang Tua (Auto-fill Read-Only) */}
+                      <div className="relative">
+                        <label className={labelCls}>Orang Tua</label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={namaOrangtua}
+                          placeholder={namaAnak ? "Tidak ada data orang tua" : "Otomatis terisi setelah memilih anak"}
+                          className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-700 cursor-not-allowed font-medium transition-colors"
                         />
-                        <span className="text-gray-400 text-sm">–</span>
-                        <PeriodeDateField
-                          value={periodeAkhir}
-                          onChange={setPeriodeAkhir}
-                          isError={hasSubmitted && !periodeAkhir}
-                          placeholder="dd/mm/yyyy"
-                        />
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          Otomatis terisi sesuai data keluarga pasien anak.
+                        </p>
+                      </div>
+
+                      {/* Kolom Periode */}
+                      <div>
+                        <label className={labelCls}>
+                          Periode <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <PeriodeDateField
+                            value={periodeAwal}
+                            onChange={(val) => {
+                              setPeriodeAwal(val);
+                              if (warningMessage) setWarningMessage("");
+                            }}
+                            isError={hasSubmitted && (!periodeAwal || (Boolean(periodeAkhir) && periodeAwal > periodeAkhir))}
+                            placeholder="dd/mm/yyyy"
+                          />
+                          <span className="text-sm text-gray-400">–</span>
+                          <PeriodeDateField
+                            value={periodeAkhir}
+                            onChange={(val) => {
+                              setPeriodeAkhir(val);
+                              if (warningMessage) setWarningMessage("");
+                            }}
+                            isError={hasSubmitted && (!periodeAkhir || (Boolean(periodeAwal) && periodeAwal > periodeAkhir))}
+                            placeholder="dd/mm/yyyy"
+                          />
+                        </div>
+                        {hasSubmitted && (!periodeAwal || !periodeAkhir) ? (
+                          <p className="text-[10px] text-red-500 mt-1 font-semibold flex items-center gap-1">
+                            <AlertTriangle size={11} className="shrink-0" /> Periode awal dan akhir wajib diisi!
+                          </p>
+                        ) : hasSubmitted && periodeAwal && periodeAkhir && periodeAwal > periodeAkhir ? (
+                          <p className="text-[10px] text-red-500 mt-1 font-semibold flex items-center gap-1">
+                            <AlertTriangle size={11} className="shrink-0" /> Periode awal tidak boleh melebihi periode akhir!
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
                 {/* Dynamic sections per selected terapi */}
-                <div className="mt-4 flex flex-col">
+                <div className="flex flex-col mt-4">
                   <AnimatePresence>
                     {selectedTerapi.map((terapiName) => {
                       const rows = scheduleMap[terapiName] || [];
@@ -683,100 +870,157 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
                           transition={{ duration: 0.3, ease: "easeInOut" }}
                           className="overflow-hidden"
                         >
-                          <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
-                        {/* Section header */}
-                        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-[#2B7A75]" />
-                            <span className="text-sm font-bold text-gray-700">{terapiName}</span>
-                          </div>
-                          <span className="text-xs text-gray-400 font-medium">{rows.length} jadwal</span>
-                        </div>
-
-                        {/* Rows */}
-                        <div className="p-3 space-y-3">
-                          {rows.map((row, idx) => (
-                            <div key={idx} className="border border-gray-100 rounded-lg p-3 bg-white space-y-2">
-                              {/* Baris atas: Terapis | Pertemuan */}
-                              <div className="grid grid-cols-2 gap-2 items-end">
-                                <div>
-                                  <label className={labelCls}>Terapis</label>
-                                  <div className="relative">
-                                    <select
-                                      value={row.terapis}
-                                      onChange={(e) => updateRow(terapiName, idx, "terapis", e.target.value)}
-                                      className={getSelectCls(hasSubmitted && !row.terapis) + " pr-7"}
-                                    >
-                                      <option value="">Pilih...</option>
-                                      {(therapistsBySection[mapTerapiNameToSection(terapiName)] || []).map((t) => (
-                                        <option key={t.id || t.name} value={t.name}>
-                                          {t.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Pertemuan</label>
-                                  <input type="number" min={0} value={row.pertemuan}
-                                    onChange={(e) => updateRow(terapiName, idx, "pertemuan", parseInt(e.target.value) || 0)}
-                                    className={`w-full px-2 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 text-center ${hasSubmitted && (!row.pertemuan || row.pertemuan <= 0) ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
-                                </div>
+                          <div className="mb-4 overflow-hidden border border-gray-200 rounded-xl">
+                            {/* Section header */}
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-[#2B7A75]" />
+                                <span className="text-sm font-bold text-gray-700">{terapiName}</span>
                               </div>
-                              {/* Baris bawah: Hari | Jam */}
-                              <div className="grid grid-cols-2 gap-2 items-end">
-                                <div>
-                                  <label className={labelCls}>Hari</label>
-                                  <div className="relative">
-                                    <select
-                                      value={row.hari}
-                                      onChange={(e) => updateRow(terapiName, idx, "hari", e.target.value)}
-                                      className={getSelectCls(hasSubmitted && !row.hari) + " pr-7"}
-                                    >
-                                      {HARI_ORDER.map((h) => <option key={h}>{h}</option>)}
-                                    </select>
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Jam</label>
-                                  <div className="flex items-center gap-1.5">
-                                    <input type="time" value={row.jamMulai}
-                                      onChange={(e) => updateRow(terapiName, idx, "jamMulai", e.target.value)}
-                                      className={`flex-1 px-2 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 ${hasSubmitted && !row.jamMulai ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
-                                    <span className="text-gray-300 text-xs shrink-0">–</span>
-                                    <input type="time" value={row.jamSelesai}
-                                      onChange={(e) => updateRow(terapiName, idx, "jamSelesai", e.target.value)}
-                                      className={`flex-1 px-2 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 ${hasSubmitted && !row.jamSelesai ? "border-red-500 bg-red-50" : "border-gray-200"}`} />
-                                  </div>
-                                </div>
-                              </div>
-                               {/* Hapus — hanya jika >1 row */}
-                               {rows.length > 1 && (
-                                 <div className="flex justify-end pt-1">
-                                   <button
-                                     type="button"
-                                     onClick={() => removeRow(terapiName, idx)}
-                                     className="cursor-pointer text-xs text-red-500 font-bold hover:text-red-700 flex items-center gap-1 transition-colors"
-                                   >
-                                     <X size={13} /> Hapus
-                                   </button>
-                                 </div>
-                               )}
+                              <span className="text-xs font-medium text-gray-400">{rows.length} jadwal</span>
                             </div>
-                          ))}
 
-                          {/* Tambah Jadwal button */}
-                          <button
-                            type="button"
-                            onClick={() => addRowForTerapi(terapiName)}
-                            className="cursor-pointer w-fit flex items-center gap-1.5 px-4 py-2 border-2 border-dashed border-[#2B7A75]/40 text-[#2B7A75] text-xs font-bold rounded-lg hover:border-[#2B7A75] hover:bg-teal-50/30 transition-colors"
-                          >
-                            <Plus size={13} strokeWidth={2.5} />
-                            Tambah Jadwal
-                          </button>
-                        </div>
+                            {/* Rows */}
+                            <div className="p-3 space-y-3">
+                              {rows.map((row, idx) => (
+                                <div key={idx} className="p-3 space-y-2 bg-white border border-gray-100 rounded-lg">
+                                  {/* Baris atas: Terapis | Pertemuan */}
+                                  <div className="grid items-end grid-cols-2 gap-2">
+                                    <div>
+                                      <label className={labelCls}>
+                                        Terapis <span className="text-red-500">*</span>
+                                      </label>
+                                      <div className="relative">
+                                        <select
+                                          value={row.terapis}
+                                          onChange={(e) => {
+                                            updateRow(terapiName, idx, "terapis", e.target.value);
+                                            if (warningMessage) setWarningMessage("");
+                                          }}
+                                          className={getSelectCls(hasSubmitted && !row.terapis) + " pr-7"}
+                                        >
+                                          <option value="">Pilih...</option>
+                                          {(therapistsBySection[mapTerapiNameToSection(terapiName)] || []).map((t) => (
+                                            <option key={t.id || t.name} value={t.name}>
+                                              {t.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className={labelCls}>
+                                        Pertemuan <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        value={row.pertemuan || ""}
+                                        placeholder="Contoh: 4"
+                                        onChange={(e) => {
+                                          updateRow(terapiName, idx, "pertemuan", parseInt(e.target.value) || 0);
+                                          if (warningMessage) setWarningMessage("");
+                                        }}
+                                        className={`w-full px-2 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 text-center ${hasSubmitted && (!row.pertemuan || row.pertemuan <= 0)
+                                            ? "border-red-500 bg-red-50"
+                                            : "border-gray-200"
+                                          }`}
+                                      />
+                                    </div>
+                                  </div>
+                                  {/* Baris bawah: Hari | Jam */}
+                                  <div className="grid items-end grid-cols-2 gap-2">
+                                    <div>
+                                      <label className={labelCls}>
+                                        Hari <span className="text-red-500">*</span>
+                                      </label>
+                                      <div className="relative">
+                                        <select
+                                          value={row.hari}
+                                          onChange={(e) => {
+                                            updateRow(terapiName, idx, "hari", e.target.value);
+                                            if (warningMessage) setWarningMessage("");
+                                          }}
+                                          className={getSelectCls(hasSubmitted && !row.hari) + " pr-7"}
+                                        >
+                                          {HARI_ORDER.map((h) => <option key={h}>{h}</option>)}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className={labelCls}>
+                                        Jam <span className="text-red-500">*</span>
+                                      </label>
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="time"
+                                          value={row.jamMulai}
+                                          onChange={(e) => {
+                                            updateRow(terapiName, idx, "jamMulai", e.target.value);
+                                            if (warningMessage) setWarningMessage("");
+                                          }}
+                                          className={`flex-1 px-2 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 ${hasSubmitted && (!row.jamMulai || (Boolean(row.jamSelesai) && row.jamMulai >= row.jamSelesai))
+                                              ? "border-red-500 bg-red-50"
+                                              : "border-gray-200"
+                                            }`}
+                                        />
+                                        <span className="text-xs text-gray-300 shrink-0">–</span>
+                                        <input
+                                          type="time"
+                                          value={row.jamSelesai}
+                                          onChange={(e) => {
+                                            updateRow(terapiName, idx, "jamSelesai", e.target.value);
+                                            if (warningMessage) setWarningMessage("");
+                                          }}
+                                          className={`flex-1 px-2 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 ${hasSubmitted && (!row.jamSelesai || (Boolean(row.jamMulai) && row.jamMulai >= row.jamSelesai))
+                                              ? "border-red-500 bg-red-50"
+                                              : "border-gray-200"
+                                            }`}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {hasSubmitted && (!row.terapis || !row.pertemuan || row.pertemuan <= 0 || !row.hari || !row.jamMulai || !row.jamSelesai || row.jamMulai >= row.jamSelesai) && (
+                                    <p className="text-[10px] text-red-500 font-medium flex items-center gap-1 pt-1">
+                                      <AlertTriangle size={10} />
+                                      {!row.terapis
+                                        ? "Terapis wajib dipilih!"
+                                        : !row.pertemuan || row.pertemuan <= 0
+                                          ? "Pertemuan minimal 1 kali!"
+                                          : !row.hari
+                                            ? "Hari wajib dipilih!"
+                                            : !row.jamMulai || !row.jamSelesai
+                                              ? "Jam mulai & jam selesai wajib diisi!"
+                                              : "Jam mulai harus lebih awal dari jam selesai!"}
+                                    </p>
+                                  )}
+                                  {/* Hapus — hanya jika >1 row */}
+                                  {rows.length > 1 && (
+                                    <div className="flex justify-end pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => removeRow(terapiName, idx)}
+                                        className="flex items-center gap-1 text-xs font-bold text-red-500 transition-colors cursor-pointer hover:text-red-700"
+                                      >
+                                        <X size={13} /> Hapus
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+
+                              {/* Tambah Jadwal button */}
+                              <button
+                                type="button"
+                                onClick={() => addRowForTerapi(terapiName)}
+                                className="cursor-pointer w-fit flex items-center gap-1.5 px-4 py-2 border-2 border-dashed border-[#2B7A75]/40 text-[#2B7A75] text-xs font-bold rounded-lg hover:border-[#2B7A75] hover:bg-teal-50/30 transition-colors"
+                              >
+                                <Plus size={13} strokeWidth={2.5} />
+                                Tambah Jadwal
+                              </button>
+                            </div>
                           </div>
                         </motion.div>
                       );
@@ -793,7 +1037,7 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
                         transition={{ duration: 0.3, ease: "easeInOut" }}
                         className="overflow-hidden"
                       >
-                        <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl mb-4">
+                        <div className="flex flex-col items-center justify-center py-8 mb-4 text-center text-gray-400 border-2 border-gray-200 border-dashed rounded-xl">
                           <CalendarCheck className="w-8 h-8 mb-2 opacity-30" />
                           <p className="text-sm font-medium">Pilih terapi di atas untuk menampilkan form jadwal</p>
                         </div>
@@ -805,20 +1049,21 @@ function TambahJadwalModal({ open, onClose, terapiType, onSubmit, allData }: Tam
 
               <div className="px-5 pb-2">
                 <div className="bg-[#1E5C58] rounded-3xl px-6 py-4 flex items-center justify-between shadow-md">
-                  <p className="text-sm font-bold text-white tracking-wide">Total Pertemuan Keseluruhan</p>
+                  <p className="text-sm font-bold tracking-wide text-white">Total Pertemuan Keseluruhan</p>
                   <p className="text-2xl font-extrabold text-white">
                     {totalPertemuan} <span className="text-sm font-medium text-white/80">kali pertemuan</span>
                   </p>
                 </div>
                 {warningMessage && (
-                  <p className="text-red-500 text-xs font-semibold text-left mt-3 ml-2">
-                    * {warningMessage}
-                  </p>
+                  <div className="flex items-center gap-2 p-3 mt-3 text-xs font-semibold text-red-700 border border-red-200 bg-red-50 rounded-xl">
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span>{warningMessage}</span>
+                  </div>
                 )}
               </div>
 
               {/* Action buttons */}
-              <div className="shrink-0 flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-100 bg-white">
+              <div className="flex items-center justify-end gap-3 px-5 py-4 bg-white border-t border-gray-100 shrink-0">
                 <button type="button" onClick={handleClose}
                   className="cursor-pointer px-6 py-2.5 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                   Batal
@@ -870,13 +1115,13 @@ function DetailModal({
             {/* Header */}
             <div className="bg-[#1E5C58] px-6 py-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-                   <Eye className="w-6 h-6 text-white/90" />
-                 </div>
-                 <div>
-                   <h2 className="text-xl font-extrabold text-white tracking-wide">Detail Penjadwalan</h2>
-                   <p className="text-sm text-white/70 mt-0.5">Informasi lengkap jadwal terapi {item.namaAnak}</p>
-                 </div>
+                <div className="flex items-center justify-center w-12 h-12 bg-white/10 rounded-xl">
+                  <Eye className="w-6 h-6 text-white/90" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold tracking-wide text-white">Detail Penjadwalan</h2>
+                  <p className="text-sm text-white/70 mt-0.5">Informasi lengkap jadwal terapi {item.namaAnak}</p>
+                </div>
               </div>
               <button onClick={onClose} className="p-2.5 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors">
                 <X size={18} />
@@ -884,35 +1129,36 @@ function DetailModal({
             </div>
 
             {/* Content */}
-            <div className="p-7 overflow-y-auto space-y-6">
+            <div className="space-y-6 overflow-y-auto p-7">
               {/* Top Grid */}
-              <div className="grid grid-cols-2 gap-y-6 gap-x-4 px-2">
+              <div className="grid grid-cols-2 px-2 gap-y-6 gap-x-4">
                 <div>
-                  <p className="text-xs font-bold text-gray-400 mb-2">No. Rekam Medis</p>
-                  <p className="text-sm font-extrabold text-gray-800">RM-{String(item.id).padStart(5, '0')}</p>
+                  <p className="mb-2 text-xs font-bold text-gray-400">No. Rekam Medis</p>
+                  <p className="text-sm font-extrabold text-gray-800">
+                    {item.noRekam && item.noRekam !== "-" ? item.noRekam : "Belum ada No. RM"}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-400 mb-2">Nama Anak</p>
+                  <p className="mb-2 text-xs font-bold text-gray-400">Nama Anak</p>
                   <p className="text-sm font-extrabold text-gray-800">{item.namaAnak}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-400 mb-2">Wali</p>
+                  <p className="mb-2 text-xs font-bold text-gray-400">Wali</p>
                   <p className="text-sm font-extrabold text-gray-800">{item.namaWali}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-400 mb-2">Status</p>
+                  <p className="mb-2 text-xs font-bold text-gray-400">Status</p>
                   <div>
-                     <span className={`px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest ${
-                       item.status === 'Aktif' ? 'bg-[#EAF4F2] text-[#2B7A75]' :
-                       item.status === 'Non Aktif' ? 'bg-orange-100 text-orange-600' :
-                       'bg-blue-100 text-blue-600'
-                     }`}>
-                       {item.status}
-                     </span>
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest ${item.status === 'Aktif' ? 'bg-[#EAF4F2] text-[#2B7A75]' :
+                        item.status === 'Non Aktif' ? 'bg-orange-100 text-orange-600' :
+                          'bg-blue-100 text-blue-600'
+                      }`}>
+                      {item.status}
+                    </span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-400 mb-2">Periode</p>
+                  <p className="mb-2 text-xs font-bold text-gray-400">Periode</p>
                   <p className="text-sm font-extrabold text-gray-800">
                     {item.periodeAwal && item.periodeAkhir ? `${item.periodeAwal} – ${item.periodeAkhir}` : "Periode Aktif"}
                   </p>
@@ -920,7 +1166,7 @@ function DetailModal({
               </div>
 
               {/* Terapi Card */}
-              <div className="border border-gray-100 bg-gray-50/50 rounded-2xl p-6">
+              <div className="p-6 border border-gray-100 bg-gray-50/50 rounded-2xl">
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#1E5C58]" />
@@ -960,19 +1206,19 @@ function DetailModal({
 
               {/* Terapi Lain Card */}
               {otherTherapies.length > 0 && (
-                <div className="border border-gray-100 bg-gray-50/50 rounded-2xl p-6">
+                <div className="p-6 border border-gray-100 bg-gray-50/50 rounded-2xl">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-[#1E5C58]" />
                       <span className="text-sm font-extrabold text-[#1E5C58]">Terapi Lain</span>
                     </div>
-                    <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full shadow-sm">
+                    <span className="px-3 py-1 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-full shadow-sm">
                       {otherTherapies.length} terapi
                     </span>
                   </div>
                   <div className="space-y-3">
                     {otherTherapies.map((t) => (
-                      <div key={t.id} className="p-4 bg-white border border-gray-100 rounded-xl flex items-center justify-between">
+                      <div key={t.id} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl">
                         <div>
                           <p className="text-sm font-bold text-gray-800">{t.terapiType}</p>
                           <p className="text-xs text-gray-400 font-medium mt-0.5">Terapis: {t.terapis}</p>
@@ -1017,7 +1263,7 @@ function EditModal({
   onSubmit: (data: JadwalTerapi) => void;
 }) {
   const [form, setForm] = useState<JadwalTerapi | null>(null);
-  const [noRekam, setNoRekam] = useState("RM-000123");
+  const [noRekam, setNoRekam] = useState("");
   const [periodeAwal, setPeriodeAwal] = useState("2025-01-01");
   const [periodeAkhir, setPeriodeAkhir] = useState("2025-06-01");
   const [therapistsBySection, setTherapistsBySection] = useState<Record<string, { id: string; name: string }[]>>({});
@@ -1047,6 +1293,7 @@ function EditModal({
   useEffect(() => {
     if (item) {
       setForm({ ...item });
+      setNoRekam(item.noRekam && item.noRekam !== "-" ? item.noRekam : "-");
       setPeriodeAwal(item.periodeAwal || "2025-01-01");
       setPeriodeAkhir(item.periodeAkhir || "2025-06-01");
       setSelectedTerapi([item.terapiType]);
@@ -1056,6 +1303,7 @@ function EditModal({
         ],
       });
     } else {
+      setNoRekam("");
       setSelectedTerapi([]);
       setScheduleMap({});
     }
@@ -1177,7 +1425,7 @@ function EditModal({
             {/* Header */}
             <div className="bg-[#1E5C58] px-6 py-4 shrink-0 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center">
+                <div className="flex items-center justify-center rounded-lg w-9 h-9 bg-white/15">
                   <Pencil className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -1187,77 +1435,97 @@ function EditModal({
                   </p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors">
+              <button onClick={onClose} className="p-2 text-white transition-colors rounded-xl bg-white/10 hover:bg-white/20">
                 <X size={18} />
               </button>
             </div>
 
             {/* Scrollable body */}
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto flex-1 p-5">
+              <div className="flex-1 p-5 overflow-y-auto">
                 <div className="flex flex-col gap-4">
-                {/* Row 1: No Rekam Medis + Nama Anak + Status */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className={labelCls}>No. Rekam Medis</label>
-                    <input type="text" value={noRekam} onChange={(e) => setNoRekam(e.target.value)} placeholder="RM-000123" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Nama Anak</label>
-                    <input type="text" name="namaAnak" required value={form.namaAnak} onChange={handleChange} placeholder="Nama lengkap anak" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Status</label>
-                    <div className="relative">
-                      <select name="status" value={form.status} onChange={handleChange} className={selectCls + " pr-7"}>
-                        <option value="Aktif">Aktif</option>
-                        <option value="Non Aktif">Non Aktif</option>
-                        <option value="Selesai">Selesai</option>
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  {/* Row 1: No Rekam Medis + Nama Anak + Status */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className={labelCls}>No. Rekam Medis</label>
+                        <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
+                          <Lock size={10} /> Terkunci
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={noRekam}
+                        readOnly
+                        disabled
+                        className="w-full px-3 py-2.5 border rounded-lg text-sm bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed font-medium"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className={labelCls}>Nama Anak</label>
+                        <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
+                          <Lock size={10} /> Terkunci
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        name="namaAnak"
+                        value={form.namaAnak}
+                        readOnly
+                        disabled
+                        className="w-full px-3 py-2.5 border rounded-lg text-sm bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Status</label>
+                      <div className="relative">
+                        <select name="status" value={form.status} onChange={handleChange} className={selectCls + " pr-7"}>
+                          <option value="Aktif">Aktif</option>
+                          <option value="Non Aktif">Non Aktif</option>
+                          <option value="Selesai">Selesai</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Row 2: Checklist Terapi + Periode */}
-                <div className="grid grid-cols-2 gap-3 items-start">
-                  <div>
-                    <label className={labelCls}>
-                      Terapi <span className="text-[10px] font-normal text-gray-400">(Tidak dapat diubah)</span>
-                    </label>
-                    <div className="border border-gray-200 rounded-lg p-2.5 space-y-2 bg-gray-50/70 select-none">
-                      {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
-                        const checked = selectedTerapi.includes(name);
-                        const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
-                        return (
-                          <div
-                            key={name}
-                            className={`flex items-center gap-2.5 cursor-not-allowed ${
-                              checked ? "opacity-100" : "opacity-40"
-                            }`}
-                            title={checked ? "Jenis terapi jadwal ini" : "Jenis terapi tidak dapat diubah pada saat edit jadwal"}
-                          >
+                  {/* Row 2: Checklist Terapi + Periode */}
+                  <div className="grid items-start grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>
+                        Terapi <span className="text-[10px] font-normal text-gray-400">(Tidak dapat diubah)</span>
+                      </label>
+                      <div className="border border-gray-200 rounded-lg p-2.5 space-y-2 bg-gray-50/70 select-none">
+                        {TERAPI_TAMBAHAN_OPTIONS.map((name) => {
+                          const checked = selectedTerapi.includes(name);
+                          const label = name.replace("PLB (Paedagog)", "Paedagog").replace("Terapi ", "");
+                          return (
                             <div
-                              className={`w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-not-allowed ${
-                                checked
-                                  ? "bg-[#1E5C58] border-[#1E5C58]"
-                                  : "border-gray-300 bg-gray-100"
-                              }`}
+                              key={name}
+                              className={`flex items-center gap-2.5 cursor-not-allowed ${checked ? "opacity-100" : "opacity-40"
+                                }`}
+                              title={checked ? "Jenis terapi jadwal ini" : "Jenis terapi tidak dapat diubah pada saat edit jadwal"}
                             >
-                              {checked && <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />}
+                              <div
+                                className={`w-[18px] h-[18px] shrink-0 rounded border-2 flex items-center justify-center transition-all cursor-not-allowed ${checked
+                                    ? "bg-[#1E5C58] border-[#1E5C58]"
+                                    : "border-gray-300 bg-gray-100"
+                                  }`}
+                              >
+                                {checked && <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={3} />}
+                              </div>
+                              <span
+                                className={`text-sm font-medium cursor-not-allowed ${checked ? "text-[#1E5C58] font-semibold" : "text-gray-400"
+                                  }`}
+                              >
+                                {label}
+                              </span>
                             </div>
-                            <span
-                              className={`text-sm font-medium cursor-not-allowed ${
-                                checked ? "text-[#1E5C58] font-semibold" : "text-gray-400"
-                              }`}
-                            >
-                              {label}
-                            </span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
                     <div>
                       <label className={labelCls}>Periode</label>
                       <div className="flex items-center gap-1.5">
@@ -1266,7 +1534,7 @@ function EditModal({
                           onChange={setPeriodeAwal}
                           placeholder="dd/mm/yyyy"
                         />
-                        <span className="text-gray-400 text-sm">–</span>
+                        <span className="text-sm text-gray-400">–</span>
                         <PeriodeDateField
                           value={periodeAkhir}
                           onChange={setPeriodeAkhir}
@@ -1274,11 +1542,11 @@ function EditModal({
                         />
                       </div>
                     </div>
-                </div>
+                  </div>
                 </div>
 
                 {/* Dynamic sections per selected terapi */}
-                <div className="mt-4 flex flex-col">
+                <div className="flex flex-col mt-4">
                   <AnimatePresence>
                     {selectedTerapi.map((terapiName) => {
                       const rows = scheduleMap[terapiName] || [];
@@ -1292,97 +1560,97 @@ function EditModal({
                           transition={{ duration: 0.3, ease: "easeInOut" }}
                           className="overflow-hidden"
                         >
-                          <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
-                        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-[#2B7A75]" />
-                            <span className="text-sm font-bold text-gray-700">{terapiName}</span>
-                          </div>
-                          <span className="text-xs text-gray-400 font-medium">{rows.length} jadwal</span>
-                        </div>
-
-                        <div className="p-3 space-y-3">
-                          {rows.map((row, idx) => (
-                            <div key={idx} className="border border-gray-100 rounded-lg p-3 bg-white space-y-2">
-                              {/* Baris atas: Terapis | Pertemuan */}
-                              <div className="grid grid-cols-2 gap-2 items-end">
-                                <div>
-                                  <label className={labelCls}>Terapis</label>
-                                  <div className="relative">
-                                    <select
-                                      value={row.terapis}
-                                      onChange={(e) => updateRow(terapiName, idx, "terapis", e.target.value)}
-                                      className={selectCls + " pr-7"}
-                                    >
-                                      <option value="">Pilih...</option>
-                                      {(therapistsBySection[mapTerapiNameToSection(terapiName)] || []).map((t) => (
-                                        <option key={t.id || t.name} value={t.name}>
-                                          {t.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Pertemuan</label>
-                                  <input type="number" min={0} value={row.pertemuan}
-                                    onChange={(e) => updateRow(terapiName, idx, "pertemuan", parseInt(e.target.value) || 0)}
-                                    className="w-full px-2 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 text-center" />
-                                </div>
+                          <div className="mb-4 overflow-hidden border border-gray-200 rounded-xl">
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-[#2B7A75]" />
+                                <span className="text-sm font-bold text-gray-700">{terapiName}</span>
                               </div>
-                              {/* Baris bawah: Hari | Jam */}
-                              <div className="grid grid-cols-2 gap-2 items-end">
-                                <div>
-                                  <label className={labelCls}>Hari</label>
-                                  <div className="relative">
-                                    <select
-                                      value={row.hari}
-                                      onChange={(e) => updateRow(terapiName, idx, "hari", e.target.value)}
-                                      className={selectCls + " pr-7"}
-                                    >
-                                      {HARI_ORDER.map((h) => <option key={h}>{h}</option>)}
-                                    </select>
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Jam</label>
-                                  <div className="flex items-center gap-1.5">
-                                    <input type="time" value={row.jamMulai}
-                                      onChange={(e) => updateRow(terapiName, idx, "jamMulai", e.target.value)}
-                                      className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700" />
-                                    <span className="text-gray-300 text-xs shrink-0">–</span>
-                                    <input type="time" value={row.jamSelesai}
-                                      onChange={(e) => updateRow(terapiName, idx, "jamSelesai", e.target.value)}
-                                      className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700" />
-                                  </div>
-                                </div>
-                              </div>
-                               {/* Hapus — hanya jika >1 row */}
-                               {rows.length > 1 && (
-                                 <div className="flex justify-end pt-1">
-                                   <button
-                                     type="button"
-                                     onClick={() => removeRow(terapiName, idx)}
-                                     className="cursor-pointer text-xs text-red-500 font-bold hover:text-red-700 flex items-center gap-1 transition-colors"
-                                   >
-                                     <X size={13} /> Hapus
-                                   </button>
-                                 </div>
-                               )}
+                              <span className="text-xs font-medium text-gray-400">{rows.length} jadwal</span>
                             </div>
-                          ))}
 
-                          <button
-                            type="button"
-                            onClick={() => addRowForTerapi(terapiName)}
-                            className="cursor-pointer w-fit flex items-center gap-1.5 px-4 py-2 border-2 border-dashed border-[#2B7A75]/40 text-[#2B7A75] text-xs font-bold rounded-lg hover:border-[#2B7A75] hover:bg-teal-50/30 transition-colors"
-                          >
-                            <Plus size={13} strokeWidth={2.5} />
-                            Tambah Jadwal
-                          </button>
-                        </div>
+                            <div className="p-3 space-y-3">
+                              {rows.map((row, idx) => (
+                                <div key={idx} className="p-3 space-y-2 bg-white border border-gray-100 rounded-lg">
+                                  {/* Baris atas: Terapis | Pertemuan */}
+                                  <div className="grid items-end grid-cols-2 gap-2">
+                                    <div>
+                                      <label className={labelCls}>Terapis</label>
+                                      <div className="relative">
+                                        <select
+                                          value={row.terapis}
+                                          onChange={(e) => updateRow(terapiName, idx, "terapis", e.target.value)}
+                                          className={selectCls + " pr-7"}
+                                        >
+                                          <option value="">Pilih...</option>
+                                          {(therapistsBySection[mapTerapiNameToSection(terapiName)] || []).map((t) => (
+                                            <option key={t.id || t.name} value={t.name}>
+                                              {t.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className={labelCls}>Pertemuan</label>
+                                      <input type="number" min={0} value={row.pertemuan}
+                                        onChange={(e) => updateRow(terapiName, idx, "pertemuan", parseInt(e.target.value) || 0)}
+                                        className="w-full px-2 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700 text-center" />
+                                    </div>
+                                  </div>
+                                  {/* Baris bawah: Hari | Jam */}
+                                  <div className="grid items-end grid-cols-2 gap-2">
+                                    <div>
+                                      <label className={labelCls}>Hari</label>
+                                      <div className="relative">
+                                        <select
+                                          value={row.hari}
+                                          onChange={(e) => updateRow(terapiName, idx, "hari", e.target.value)}
+                                          className={selectCls + " pr-7"}
+                                        >
+                                          {HARI_ORDER.map((h) => <option key={h}>{h}</option>)}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className={labelCls}>Jam</label>
+                                      <div className="flex items-center gap-1.5">
+                                        <input type="time" value={row.jamMulai}
+                                          onChange={(e) => updateRow(terapiName, idx, "jamMulai", e.target.value)}
+                                          className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700" />
+                                        <span className="text-xs text-gray-300 shrink-0">–</span>
+                                        <input type="time" value={row.jamSelesai}
+                                          onChange={(e) => updateRow(terapiName, idx, "jamSelesai", e.target.value)}
+                                          className="flex-1 px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#81B7A9] text-gray-700" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {/* Hapus — hanya jika >1 row */}
+                                  {rows.length > 1 && (
+                                    <div className="flex justify-end pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => removeRow(terapiName, idx)}
+                                        className="flex items-center gap-1 text-xs font-bold text-red-500 transition-colors cursor-pointer hover:text-red-700"
+                                      >
+                                        <X size={13} /> Hapus
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+
+                              <button
+                                type="button"
+                                onClick={() => addRowForTerapi(terapiName)}
+                                className="cursor-pointer w-fit flex items-center gap-1.5 px-4 py-2 border-2 border-dashed border-[#2B7A75]/40 text-[#2B7A75] text-xs font-bold rounded-lg hover:border-[#2B7A75] hover:bg-teal-50/30 transition-colors"
+                              >
+                                <Plus size={13} strokeWidth={2.5} />
+                                Tambah Jadwal
+                              </button>
+                            </div>
                           </div>
                         </motion.div>
                       );
@@ -1399,7 +1667,7 @@ function EditModal({
                         transition={{ duration: 0.3, ease: "easeInOut" }}
                         className="overflow-hidden"
                       >
-                        <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl mb-4">
+                        <div className="flex flex-col items-center justify-center py-8 mb-4 text-center text-gray-400 border-2 border-gray-200 border-dashed rounded-xl">
                           <CalendarCheck className="w-8 h-8 mb-2 opacity-30" />
                           <p className="text-sm font-medium">Pilih terapi di atas untuk menampilkan form jadwal</p>
                         </div>
@@ -1411,7 +1679,7 @@ function EditModal({
 
               <div className="px-5 pb-2">
                 <div className="bg-[#1E5C58] rounded-3xl px-6 py-4 flex items-center justify-between shadow-md">
-                  <p className="text-sm font-bold text-white tracking-wide">Total Pertemuan Keseluruhan</p>
+                  <p className="text-sm font-bold tracking-wide text-white">Total Pertemuan Keseluruhan</p>
                   <p className="text-2xl font-extrabold text-white">
                     {totalPertemuan} <span className="text-sm font-medium text-white/80">kali pertemuan</span>
                   </p>
@@ -1419,7 +1687,7 @@ function EditModal({
               </div>
 
               {/* Action buttons */}
-              <div className="shrink-0 flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-100 bg-white">
+              <div className="flex items-center justify-end gap-3 px-5 py-4 bg-white border-t border-gray-100 shrink-0">
                 <button type="button" onClick={onClose} className="cursor-pointer px-6 py-2.5 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                   Batal
                 </button>
@@ -1457,21 +1725,21 @@ function HapusModal({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="bg-white rounded-3xl shadow-2xl shadow-teal-900/10 w-full max-w-sm overflow-hidden"
+            className="w-full max-w-sm overflow-hidden bg-white shadow-2xl rounded-3xl shadow-teal-900/10"
           >
             <div className="p-8 text-center">
-              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 relative">
+              <div className="relative flex items-center justify-center w-20 h-20 mx-auto mb-6 rounded-full bg-red-50">
                 <motion.div
                   animate={{ scale: [1, 1.1, 1] }}
                   transition={{ repeat: Infinity, duration: 2 }}
-                  className="absolute inset-0 bg-red-100/50 rounded-full scale-125 opacity-20"
+                  className="absolute inset-0 scale-125 rounded-full bg-red-100/50 opacity-20"
                 />
                 <AlertTriangle className="w-10 h-10 text-red-500" />
               </div>
               <h3 className="text-xl font-extrabold text-[#1E5C58] mb-2 tracking-tight">
                 Hapus Jadwal Terapi?
               </h3>
-              <p className="text-sm text-gray-500 font-medium leading-relaxed mb-1 px-2">
+              <p className="px-2 mb-1 text-sm font-medium leading-relaxed text-gray-500">
                 Anda akan menghapus jadwal terapi untuk
               </p>
               <p className="text-sm font-extrabold text-[#1E5C58] mb-6">
@@ -1512,34 +1780,53 @@ export default function JadwalTerapiPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, filterStatus, search, filterDate]);
-
   const [data, setData] = useState<JadwalTerapi[]>(DUMMY_DATA);
   const [loading, setLoading] = useState(false);
   const [apiMeta, setApiMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    async function loadApiData() {
-      setLoading(true);
-      const tabToType: Record<string, string> = {
-        "PLB (Paedagog)": "paedagog",
-        "Terapi Okupasi": "okupasi",
-        "Terapi Wicara": "wicara",
-        "Fisioterapi": "fisio",
-      };
-      const statusMap: Record<string, string> = {
-        "Aktif": "aktif",
-        "Non Aktif": "non_aktif",
-        "Selesai": "selesai",
-      };
+  const tabCacheRef = useRef<Record<string, { items: JadwalTerapi[]; meta: any }>>({});
+  const activeRequestIdRef = useRef(0);
 
+  // Invalidate cache on mutations (add/edit/delete)
+  useEffect(() => {
+    tabCacheRef.current = {};
+  }, [refreshKey]);
+
+  useEffect(() => {
+    const tabToType: Record<string, string> = {
+      "PLB (Paedagog)": "paedagog",
+      "Terapi Okupasi": "okupasi",
+      "Terapi Wicara": "wicara",
+      "Fisioterapi": "fisio",
+    };
+    const statusMap: Record<string, string> = {
+      "Aktif": "aktif",
+      "Non Aktif": "non_aktif",
+      "Selesai": "selesai",
+    };
+
+    const sectionKey = tabToType[activeTab] || "paedagog";
+    const cacheKey = `${sectionKey}_${filterStatus}_${search}_${filterDate}_${currentPage}`;
+
+    // Cek cache: jika ada, render instan 0ms tanpa menunggu network
+    if (tabCacheRef.current[cacheKey]) {
+      setData(tabCacheRef.current[cacheKey].items);
+      setApiMeta(tabCacheRef.current[cacheKey].meta);
+      setLoading(false);
+    } else {
+      // Jika belum di-cache, segera set loading & kosongkan data agar data tab sebelumnya tidak 'menggantung'
+      setData([]);
+      setLoading(true);
+    }
+
+    const currentRequestId = ++activeRequestIdRef.current;
+
+    async function loadApiData() {
       const filters: any = {
         page: currentPage,
         per_page: ITEMS_PER_PAGE,
-        therapy_type: tabToType[activeTab],
+        therapy_type: sectionKey,
       };
       if (filterStatus !== "Semua") filters.status = statusMap[filterStatus];
       if (search) filters.search = search;
@@ -1549,31 +1836,55 @@ export default function JadwalTerapiPage() {
         filters.day_of_week = dayOfWeek;
       }
 
-      const res = await getSchedules(filters);
-      if (res.items) {
-        const mapped = res.items.map((item: any, idx: number) => ({
-          id: item.id || idx + 1,
-          namaAnak: item.child_name || "-",
-          namaWali: item.guardian_name || "-",
-          noRekam: item.medical_record_number || "-",
-          hari: item.day_name || "Senin",
-          jamMulai: item.start_time || "15.00",
-          jamSelesai: item.end_time || "16.00",
-          terapis: item.therapist_name || "-",
-          status: (item.status === "aktif" ? "Aktif" : item.status === "selesai" ? "Selesai" : "Non Aktif") as StatusPasien,
-          terapiType: activeTab,
-          periodeAwal: item.period_start || "2026-10-01",
-          periodeAkhir: item.period_end || "2026-11-01",
-          totalMeetings: Number(item.total_meetings) || 12,
-        }));
+      try {
+        const res = await getSchedules(filters);
+        // Abaikan jika user sudah berganti tab/filter lain (anti race condition)
+        if (currentRequestId !== activeRequestIdRef.current) {
+          return;
+        }
+
+        let mapped: JadwalTerapi[] = [];
+        if (res.items) {
+          mapped = res.items.map((item: any, idx: number) => {
+            let rm = item.medical_record_number;
+            if ((!rm || rm === "-") && typeof window !== "undefined" && item.child_id) {
+              try {
+                const cachedRm = localStorage.getItem(`puspa_child_rm_${item.child_id}`);
+                if (cachedRm) rm = cachedRm;
+              } catch { }
+            }
+            return {
+              id: item.id || idx + 1,
+              namaAnak: item.child_name || "-",
+              namaWali: item.guardian_name || "-",
+              noRekam: rm || "-",
+              hari: item.day_name || "Senin",
+              jamMulai: item.start_time || "15.00",
+              jamSelesai: item.end_time || "16.00",
+              terapis: item.therapist_name || "-",
+              status: (item.status === "aktif" ? "Aktif" : item.status === "selesai" ? "Selesai" : "Non Aktif") as StatusPasien,
+              terapiType: activeTab,
+              periodeAwal: item.period_start || "2026-10-01",
+              periodeAkhir: item.period_end || "2026-11-01",
+              totalMeetings: Number(item.total_meetings) || 12,
+            };
+          });
+        }
+
+        const meta = res.meta || { current_page: 1, last_page: 1, total: mapped.length };
+
+        // Simpan ke cache
+        tabCacheRef.current[cacheKey] = { items: mapped, meta };
+
         setData(mapped);
-      } else {
-        setData([]);
+        setApiMeta(meta);
+      } catch (err) {
+        console.error("Error loading schedules:", err);
+      } finally {
+        if (currentRequestId === activeRequestIdRef.current) {
+          setLoading(false);
+        }
       }
-      if (res.meta) {
-        setApiMeta(res.meta);
-      }
-      setLoading(false);
     }
 
     loadApiData();
@@ -1618,14 +1929,14 @@ export default function JadwalTerapiPage() {
   return (
     <>
       <div className="flex min-h-[calc(100vh-80px)] bg-transparent w-full">
-        <div className="flex flex-col flex-1 w-full px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col flex-1 w-full px-4 py-8 sm:px-6 lg:px-8">
           {/* Page Header */}
           <div className="mb-6">
             <h1 className="text-2xl font-extrabold text-[#1E5C58] tracking-tight flex items-center gap-2">
               <CalendarCheck className="w-7 h-7 text-[#2B7A75]" />
               Jadwal Terapi Anak
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="mt-1 text-sm text-gray-500">
               Kelola antrean dan penjadwalan prosedur terapi pasien.
             </p>
           </div>
@@ -1640,13 +1951,15 @@ export default function JadwalTerapiPage() {
                     key={tab}
                     id={`tab-${tab.replace(/\s+/g, "-").toLowerCase()}`}
                     onClick={() => {
-                      setActiveTab(tab);
+                      if (activeTab !== tab) {
+                        setActiveTab(tab);
+                        setCurrentPage(1);
+                      }
                     }}
-                    className={`cursor-pointer px-4 py-2.5 text-sm font-semibold rounded-xl text-center transition-all duration-300 ${
-                      isActive
+                    className={`cursor-pointer px-4 py-2.5 text-sm font-semibold rounded-xl text-center transition-all duration-300 ${isActive
                         ? "bg-[#1E5C58] text-white shadow-sm"
                         : "text-[#1E5C58]/80 hover:bg-white/60 hover:text-[#1E5C58]"
-                    }`}
+                      }`}
                   >
                     {tab}
                   </button>
@@ -1655,7 +1968,7 @@ export default function JadwalTerapiPage() {
             </div>
 
             {/* ROW 2: Date (kiri) | Search + Tambah Jadwal (kanan) */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Kiri: Date picker + Reset Filter */}
               <div className="flex items-center gap-2">
                 <div className="relative">
@@ -1689,7 +2002,10 @@ export default function JadwalTerapiPage() {
                     type="text"
                     placeholder="Cari nama anak / orangtua..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     className="w-64 pl-10 pr-4 py-2.5 border border-teal-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#81B7A9] shadow-[0_2px_8px_rgba(30,92,88,0.02)] hover:border-teal-200 transition-colors"
                   />
                 </div>
@@ -1714,7 +2030,10 @@ export default function JadwalTerapiPage() {
                   <button
                     key={value}
                     id={`filter-status-${value.replace(/\s+/g, "-").toLowerCase()}`}
-                    onClick={() => setFilterStatus(isActive ? "Semua" : value)}
+                    onClick={() => {
+                      setFilterStatus(isActive ? "Semua" : value);
+                      setCurrentPage(1);
+                    }}
                     className={`cursor-pointer relative px-5 py-3 text-sm font-bold transition-colors duration-200
                       ${isActive ? "text-[#1E5C58]" : "text-gray-400 hover:text-gray-600"}`}
                   >
@@ -1741,70 +2060,134 @@ export default function JadwalTerapiPage() {
                 transition={{ duration: 0.2 }}
                 className="bg-white rounded-3xl shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] border border-teal-50 overflow-hidden"
               >
-              {paginatedData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-20 text-center">
-                  <div className="w-20 h-20 bg-teal-50 rounded-full flex items-center justify-center mb-4">
-                    <CalendarCheck className="w-10 h-10 text-[#2B7A75] opacity-40" />
+                {loading ? (
+                  <>
+                    <div className="hidden overflow-x-auto md:block">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Informasi Pasien
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Jadwal Terapi
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Terapis
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Status Pasien
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-center text-gray-400 uppercase">
+                              Aksi
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <tr key={i} className="border-b border-gray-50 animate-pulse">
+                              <td className="px-6 py-4">
+                                <div className="w-32 h-4 mb-2 bg-gray-200 rounded"></div>
+                                <div className="w-20 h-3 bg-gray-100 rounded"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="h-4 mb-2 bg-gray-200 rounded w-28"></div>
+                                <div className="w-24 h-3 bg-gray-100 rounded"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="w-24 h-4 bg-gray-200 rounded"></div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="w-16 h-6 bg-gray-100 rounded-full"></div>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <div className="w-16 h-5 mx-auto bg-gray-100 rounded"></div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="p-4 space-y-3 md:hidden">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="p-4 space-y-3 border border-gray-100 bg-gray-50/70 rounded-2xl animate-pulse">
+                          <div className="w-32 h-4 bg-gray-200 rounded"></div>
+                          <div className="h-16 bg-gray-100 rounded-xl"></div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : paginatedData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-20 text-center">
+                    <div className="flex items-center justify-center w-20 h-20 mb-4 rounded-full bg-teal-50">
+                      <CalendarCheck className="w-10 h-10 text-[#2B7A75] opacity-40" />
+                    </div>
+                    <h3 className="mb-1 text-lg font-bold text-gray-700">Belum Ada Jadwal</h3>
+                    <p className="max-w-xs text-sm text-gray-400">
+                      Tidak ditemukan jadwal terapi untuk filter yang dipilih.
+                    </p>
                   </div>
-                  <h3 className="text-lg font-bold text-gray-700 mb-1">Belum Ada Jadwal</h3>
-                  <p className="text-gray-400 text-sm max-w-xs">
-                    Tidak ditemukan jadwal terapi untuk filter yang dipilih.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                          <th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            Informasi Pasien
-                          </th>
-                          <th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            Jadwal Terapi
-                          </th>
-                          <th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            Terapis
-                          </th>
-                          <th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            Status Pasien
-                          </th>
-                          <th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">
-                            Aksi
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                ) : (
+                  <>
+                    {/* Desktop Table */}
+                    <div className="hidden overflow-x-auto md:block">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Informasi Pasien
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Jadwal Terapi
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Terapis
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                              Status Pasien
+                            </th>
+                            <th className="px-6 py-4 text-xs font-bold tracking-wider text-center text-gray-400 uppercase">
+                              Aksi
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
                           {paginatedData.map((item, idx) => (
                             <tr
                               key={item.id}
                               className="border-b border-gray-50 last:border-0 hover:bg-[#F4F9F8]/50 transition-colors group"
                             >
                               {/* Informasi Pasien */}
-                              <td className="py-4 px-6">
+                              <td className="px-6 py-4">
                                 <div>
-                                  <p className="font-bold text-gray-800 text-sm">{item.namaAnak}</p>
-                                  <span className="inline-block mt-0.5 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md">
-                                    Wali: {item.namaWali}
-                                  </span>
+                                  <p className="text-sm font-bold text-gray-800">{item.namaAnak}</p>
+                                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                    <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md">
+                                      Wali: {item.namaWali}
+                                    </span>
+                                    {item.noRekam && item.noRekam !== "-" && (
+                                      <span className="inline-block px-2 py-0.5 bg-teal-50 text-[#1E5C58] border border-teal-100/60 text-[10px] font-bold rounded-md">
+                                        No. RM: {item.noRekam}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
 
                               {/* Jadwal Terapi */}
-                              <td className="py-4 px-6">
-                                <div className="flex items-center gap-2 text-sm text-gray-700 font-semibold">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                                   <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
                                   {item.hari}
                                 </div>
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                                <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
                                   <Clock className="w-3.5 h-3.5 shrink-0" />
                                   Pukul {item.jamMulai} – {item.jamSelesai}
                                 </div>
                               </td>
 
                               {/* Terapis */}
-                              <td className="py-4 px-6">
+                              <td className="px-6 py-4">
                                 <div className="flex items-center gap-2 text-sm text-[#2B7A75] font-semibold">
                                   <UserRound className="w-4 h-4 shrink-0" />
                                   {item.terapis}
@@ -1812,12 +2195,12 @@ export default function JadwalTerapiPage() {
                               </td>
 
                               {/* Status */}
-                              <td className="py-4 px-6">
+                              <td className="px-6 py-4">
                                 <StatusBadge status={item.status} />
                               </td>
 
                               {/* Aksi */}
-                              <td className="py-4 px-6">
+                              <td className="px-6 py-4">
                                 <div className="flex items-center justify-center gap-3">
                                   <button
                                     id={`btn-detail-${item.id}`}
@@ -1831,7 +2214,7 @@ export default function JadwalTerapiPage() {
                                     id={`btn-edit-${item.id}`}
                                     onClick={() => setEditItem(item)}
                                     title="Edit"
-                                    className="cursor-pointer text-gray-400 hover:text-amber-500 transition-colors"
+                                    className="text-gray-400 transition-colors cursor-pointer hover:text-amber-500"
                                   >
                                     <Pencil size={16} strokeWidth={2} />
                                   </button>
@@ -1839,7 +2222,7 @@ export default function JadwalTerapiPage() {
                                     id={`btn-hapus-${item.id}`}
                                     onClick={() => setHapusItem(item)}
                                     title="Hapus"
-                                    className="cursor-pointer text-gray-400 hover:text-red-500 transition-colors"
+                                    className="text-gray-400 transition-colors cursor-pointer hover:text-red-500"
                                   >
                                     <Trash2 size={16} strokeWidth={2} />
                                   </button>
@@ -1847,122 +2230,121 @@ export default function JadwalTerapiPage() {
                               </td>
                             </tr>
                           ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </tbody>
+                      </table>
+                    </div>
 
-                  {/* Mobile Card View */}
-                  <div className="md:hidden p-4 space-y-3">
+                    {/* Mobile Card View */}
+                    <div className="p-4 space-y-3 md:hidden">
                       {paginatedData.map((item, idx) => (
                         <div
                           key={item.id}
                           className="bg-[#F4F9F8]/40 border border-teal-50 rounded-2xl p-4 shadow-xs"
                         >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <p className="text-sm font-bold text-gray-800">{item.namaAnak}</p>
-                            <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md">
-                              Wali: {item.namaWali}
-                            </span>
-                          </div>
-                          <StatusBadge status={item.status} />
-                        </div>
-
-                        <div className="bg-white/60 rounded-xl p-3 border border-white/60 grid grid-cols-2 gap-2 mb-3">
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Jadwal</p>
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
-                              <CalendarDays className="w-3 h-3 text-teal-500" />
-                              {item.hari}
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <p className="text-sm font-bold text-gray-800">{item.namaAnak}</p>
+                              <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md">
+                                Wali: {item.namaWali}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 ml-4 mt-0.5">
-                              <Clock className="w-3 h-3" />
-                              {item.jamMulai}–{item.jamSelesai}
+                            <StatusBadge status={item.status} />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 p-3 mb-3 border bg-white/60 rounded-xl border-white/60">
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Jadwal</p>
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                                <CalendarDays className="w-3 h-3 text-teal-500" />
+                                {item.hari}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-gray-500 ml-4 mt-0.5">
+                                <Clock className="w-3 h-3" />
+                                {item.jamMulai}–{item.jamSelesai}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Terapis</p>
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-[#2B7A75]">
+                                <UserRound className="w-3 h-3" />
+                                <span className="truncate">{item.terapis}</span>
+                              </div>
                             </div>
                           </div>
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Terapis</p>
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-[#2B7A75]">
-                              <UserRound className="w-3 h-3" />
-                              <span className="truncate">{item.terapis}</span>
-                            </div>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center justify-end gap-4">
-                          <button
-                            onClick={() => setDetailItem(item)}
-                            title="Lihat Detail"
-                            className="cursor-pointer text-gray-400 hover:text-[#2B7A75] transition-colors"
-                          >
-                            <Eye size={16} strokeWidth={2} />
-                          </button>
-                          <button
-                            onClick={() => setEditItem(item)}
-                            title="Edit"
-                            className="cursor-pointer text-gray-400 hover:text-amber-500 transition-colors"
-                          >
-                            <Pencil size={16} strokeWidth={2} />
-                          </button>
-                          <button
-                            onClick={() => setHapusItem(item)}
-                            title="Hapus"
-                            className="cursor-pointer text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={16} strokeWidth={2} />
-                          </button>
-                        </div>
-                      </div>
-                      ))}
-                  </div>
-
-                  {/* Footer info */}
-                  <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between flex-wrap gap-4">
-                    <p className="text-xs text-gray-400 font-medium">
-                      Menampilkan <span className="font-bold text-[#2B7A75]">{paginatedData.length}</span> dari <span className="font-bold text-[#2B7A75]">{apiMeta.total || paginatedData.length}</span> rekam jadwal{" "}
-                      <span className="font-semibold text-gray-600">{activeTab}</span>
-                      {filterStatus !== "Semua" && (
-                        <> &mdash; Status: <span className="font-bold text-gray-600">{filterStatus}</span></>
-                      )}
-                    </p>
-
-                    {(apiMeta.last_page > 1 || totalPages > 1) && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                          className="cursor-pointer px-3 py-1.5 text-xs font-bold text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Prev
-                        </button>
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: apiMeta.last_page || totalPages }).map((_, i) => (
+                          <div className="flex items-center justify-end gap-4">
                             <button
-                              key={i}
-                              onClick={() => setCurrentPage(i + 1)}
-                              className={`cursor-pointer w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-colors ${
-                                currentPage === i + 1
-                                  ? "bg-[#2B7A75] text-white"
-                                  : "text-gray-500 hover:bg-gray-100"
-                              }`}
+                              onClick={() => setDetailItem(item)}
+                              title="Lihat Detail"
+                              className="cursor-pointer text-gray-400 hover:text-[#2B7A75] transition-colors"
                             >
-                              {i + 1}
+                              <Eye size={16} strokeWidth={2} />
                             </button>
-                          ))}
+                            <button
+                              onClick={() => setEditItem(item)}
+                              title="Edit"
+                              className="text-gray-400 transition-colors cursor-pointer hover:text-amber-500"
+                            >
+                              <Pencil size={16} strokeWidth={2} />
+                            </button>
+                            <button
+                              onClick={() => setHapusItem(item)}
+                              title="Hapus"
+                              className="text-gray-400 transition-colors cursor-pointer hover:text-red-500"
+                            >
+                              <Trash2 size={16} strokeWidth={2} />
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => setCurrentPage((p) => Math.min(apiMeta.last_page || totalPages, p + 1))}
-                          disabled={currentPage === (apiMeta.last_page || totalPages)}
-                          className="cursor-pointer px-3 py-1.5 text-xs font-bold text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </motion.div>
+                      ))}
+                    </div>
+
+                    {/* Footer info */}
+                    <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-t border-gray-50">
+                      <p className="text-xs font-medium text-gray-400">
+                        Menampilkan <span className="font-bold text-[#2B7A75]">{paginatedData.length}</span> dari <span className="font-bold text-[#2B7A75]">{apiMeta.total || paginatedData.length}</span> rekam jadwal{" "}
+                        <span className="font-semibold text-gray-600">{activeTab}</span>
+                        {filterStatus !== "Semua" && (
+                          <> &mdash; Status: <span className="font-bold text-gray-600">{filterStatus}</span></>
+                        )}
+                      </p>
+
+                      {(apiMeta.last_page > 1 || totalPages > 1) && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="cursor-pointer px-3 py-1.5 text-xs font-bold text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Prev
+                          </button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: apiMeta.last_page || totalPages }).map((_, i) => (
+                              <button
+                                key={i}
+                                onClick={() => setCurrentPage(i + 1)}
+                                className={`cursor-pointer w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-colors ${currentPage === i + 1
+                                    ? "bg-[#2B7A75] text-white"
+                                    : "text-gray-500 hover:bg-gray-100"
+                                  }`}
+                              >
+                                {i + 1}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => setCurrentPage((p) => Math.min(apiMeta.last_page || totalPages, p + 1))}
+                            disabled={currentPage === (apiMeta.last_page || totalPages)}
+                            className="cursor-pointer px-3 py-1.5 text-xs font-bold text-gray-500 bg-gray-50 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </motion.div>
             </AnimatePresence>
           </main>
         </div>

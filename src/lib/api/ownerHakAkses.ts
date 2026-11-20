@@ -13,56 +13,37 @@ export interface AdminRoleItem {
 
 export const ADMIN_ROLES_STORAGE_KEY = "puspa_admin_roles";
 
-export const INITIAL_ADMIN_ROLES: AdminRoleItem[] = [
-  {
-    id: "keuangan",
-    name: "Admin Keuangan",
-    desc: "Mengelola tagihan, pembayaran, dan pengembalian dana pasien.",
-    checkedIds: ["dashboard", "admin", "keuangan", "ubah_profile", "ubah_password"],
-  },
-  {
-    id: "presensi",
-    name: "Admin Presensi",
-    desc: "Mengelola kehadiran terapi serta pencatatan izin, sakit, dan tidak hadir.",
-    checkedIds: ["dashboard", "terapis", "pasien_anak", "presensi", "ubah_profile", "ubah_password"],
-  },
-  {
-    id: "layanan",
-    name: "Admin Layanan",
-    desc: "Mengelola jadwal observasi, asesmen, dan terapi pasien.",
-    checkedIds: [
-      "dashboard",
-      "terapis",
-      "pasien_anak",
-      "observasi",
-      "asesmen",
-      "terapi_menu",
-      "laporan_soap",
-      "ubah_profile",
-      "ubah_password",
-    ],
-  },
-];
+export const INITIAL_ADMIN_ROLES: AdminRoleItem[] = [];
 
 /**
  * Mengambil daftar jenis admin dari localStorage (sebagai fallback/sinkronisasi antar halaman)
  */
 export function getStoredAdminRoles(): AdminRoleItem[] {
-  if (typeof window === "undefined") return INITIAL_ADMIN_ROLES;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(ADMIN_ROLES_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(ADMIN_ROLES_STORAGE_KEY, JSON.stringify(INITIAL_ADMIN_ROLES));
-      return INITIAL_ADMIN_ROLES;
+      return [];
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+      // Filter out legacy dummy roles if still stored in the browser's localStorage
+      const valid = parsed.filter(
+        (r) =>
+          r &&
+          r.id !== "presensi" &&
+          r.id !== "layanan" &&
+          !(r.id === "keuangan" && r.name === "Admin Keuangan")
+      );
+      if (valid.length !== parsed.length) {
+        localStorage.setItem(ADMIN_ROLES_STORAGE_KEY, JSON.stringify(valid));
+      }
+      return valid;
     }
-    return INITIAL_ADMIN_ROLES;
+    return [];
   } catch (e) {
     console.error("Gagal membaca admin roles dari localStorage:", e);
-    return INITIAL_ADMIN_ROLES;
+    return [];
   }
 }
 

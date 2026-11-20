@@ -538,6 +538,7 @@ export default function DataSekolahPage() {
         }}
         onConfirm={handleConfirmHapus}
         namaSekolah={selectedSekolah?.nama}
+        loading={submitting}
       />
     </div>
   );

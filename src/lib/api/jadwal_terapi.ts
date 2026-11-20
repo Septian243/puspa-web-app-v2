@@ -107,6 +107,7 @@ export async function createSchedule(data: {
   period_start: string;
   period_end: string;
   status?: string;
+  medical_record_number?: string;
 }) {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;

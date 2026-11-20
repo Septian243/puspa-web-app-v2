@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Calendar, Download, ChevronLeft, ChevronRight, ChevronDown, FileText, Loader2 } from "lucide-react";
 import { getCredits, getTransactions } from "@/lib/api/keuangan";
@@ -53,29 +53,66 @@ export default function TabPembayaran({
   const [isLoadingCredits, setIsLoadingCredits] = useState(true);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
 
-  const activeList = (riwayatList && riwayatList.length > 0) ? riwayatList : transactions;
   const currentYear = new Date().getFullYear();
   const [riwayatSearch, setRiwayatSearch] = useState("");
+  const [debouncedRiwayatSearch, setDebouncedRiwayatSearch] = useState("");
   const [filterMetode, setFilterMetode] = useState("Semua metode");
   const [filterBulan, setFilterBulan] = useState("Semua bulan");
   const [filterTahun, setFilterTahun] = useState(`Tahun ${currentYear}`);
   const [riwayatPage, setRiwayatPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const filteredData = activeList.filter(item => {
-    const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                        item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                        item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
-    const matchMetode = filterMetode === "Semua metode" || item.metode === filterMetode;
-    const matchBulan = filterBulan === "Semua bulan" || item.tanggal.toLowerCase().includes(filterBulan.substring(0,3).toLowerCase());
-    const matchTahun = filterTahun === "Semua tahun" || item.tanggal.includes(filterTahun.replace("Tahun ", ""));
-    return matchSearch && matchMetode && matchBulan && matchTahun;
-  });
-  const paginatedTransactions = filteredData.slice((riwayatPage - 1) * itemsPerPage, (riwayatPage - 1) * itemsPerPage + itemsPerPage);
+  const activeTrxRequestIdRef = useRef(0);
+  const trxCacheRef = useRef<Record<string, {
+    transactions: RiwayatPembayaran[];
+    summary: any;
+    meta: { current_page: number; last_page: number; total: number };
+  }>>({});
 
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedRiwayatSearch(riwayatSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [riwayatSearch]);
 
   const [trxMeta, setTrxMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
-  const [summaryData, setSummaryData] = useState({ total_pemasukan: 0, total_pengembalian: 0, jumlah_transaksi: 0 });
+  const [summaryData, setSummaryData] = useState<{
+    total_pemasukan: number;
+    total_pengembalian: number;
+    jumlah_transaksi: number;
+    total_periode_selanjutnya?: number;
+  }>({
+    total_pemasukan: 0,
+    total_pengembalian: 0,
+    jumlah_transaksi: 0,
+    total_periode_selanjutnya: 0,
+  });
+
+  const paginatedTransactions = transactions;
+  const activeList = transactions;
+
+  const totalPemasukan =
+    summaryData.total_pemasukan !== undefined && summaryData.total_pemasukan > 0
+      ? summaryData.total_pemasukan
+      : transactions
+          .filter((x) => x.status === "Pemasukan" || (x.status as any) === "Lunas")
+          .reduce((acc, curr) => acc + (curr.jumlah || 0), 0);
+
+  const totalPengembalian =
+    summaryData.total_pengembalian !== undefined && summaryData.total_pengembalian > 0
+      ? summaryData.total_pengembalian
+      : transactions
+          .filter((x) => x.status === "Pengembalian dana" || x.status === "Dikembalikan")
+          .reduce((acc, curr) => acc + (curr.jumlah || 0), 0);
+
+  const totalPeriodeSelanjutnya =
+    summaryData.total_periode_selanjutnya !== undefined && summaryData.total_periode_selanjutnya > 0
+      ? summaryData.total_periode_selanjutnya
+      : transactions
+          .filter((x) => x.status === "Ke periode berikutnya" || x.status === "Periode selanjutnya")
+          .reduce((acc, curr) => acc + (curr.jumlah || 0), 0);
 
   const MONTHS = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -85,7 +122,7 @@ export default function TabPembayaran({
     currentYear,
     currentYear - 1,
     currentYear - 2,
-    ...activeList.map(item => {
+    ...transactions.map(item => {
       const match = item.tanggal.match(/\d{4}/);
       return match ? parseInt(match[0], 10) : currentYear;
     })
@@ -113,18 +150,40 @@ export default function TabPembayaran({
     }
   };
 
-  // Fetch Transactions
-  const fetchTransactionsData = async () => {
+  // Fetch Transactions with caching and anti-race condition
+  const fetchTransactionsData = async (
+    targetPage = riwayatPage,
+    targetSearch = debouncedRiwayatSearch,
+    targetMetode = filterMetode,
+    targetTahun = filterTahun,
+    targetBulan = filterBulan,
+    targetPerPage = itemsPerPage,
+    forceRefresh = false
+  ) => {
+    const requestId = ++activeTrxRequestIdRef.current;
+    const cacheKey = `${targetMetode}_${targetTahun}_${targetBulan}_${targetSearch}_${targetPage}_${targetPerPage}`;
+
+    if (!forceRefresh && trxCacheRef.current[cacheKey]) {
+      const cached = trxCacheRef.current[cacheKey];
+      setTransactions(cached.transactions);
+      if (cached.summary) setSummaryData(cached.summary);
+      setTrxMeta(cached.meta);
+      setIsLoadingTransactions(false);
+      return;
+    }
+
     setIsLoadingTransactions(true);
     try {
       const res = await getTransactions({
-        metode: filterMetode,
-        tahun: filterTahun,
-        bulan: filterBulan,
-        search: riwayatSearch,
-        page: riwayatPage,
-        per_page: itemsPerPage,
+        metode: targetMetode,
+        tahun: targetTahun,
+        bulan: targetBulan,
+        search: targetSearch,
+        page: targetPage,
+        per_page: targetPerPage,
       });
+
+      if (activeTrxRequestIdRef.current !== requestId) return;
 
       if (res) {
         if (res.summary) {
@@ -142,18 +201,29 @@ export default function TabPembayaran({
             bukti: t.proof_file_path || "-",
             jumlah: parseFloat(t.amount || 0),
           }));
-          setTransactions(mapped);
-          setTrxMeta({
+
+          const meta = {
             current_page: res.transactions.current_page || 1,
             last_page: res.transactions.last_page || 1,
             total: res.transactions.total || 0,
-          });
+          };
+
+          setTransactions(mapped);
+          setTrxMeta(meta);
+
+          trxCacheRef.current[cacheKey] = {
+            transactions: mapped,
+            summary: res.summary,
+            meta,
+          };
         }
       }
     } catch (err) {
       console.warn("Gagal memuat riwayat transaksi:", err);
     } finally {
-      setIsLoadingTransactions(false);
+      if (activeTrxRequestIdRef.current === requestId) {
+        setIsLoadingTransactions(false);
+      }
     }
   };
 
@@ -161,9 +231,20 @@ export default function TabPembayaran({
     fetchCreditsData();
   }, []);
 
+  // Reset page to 1 when filters change
+  const isFirstTrxRender = useRef(true);
   useEffect(() => {
-    fetchTransactionsData();
-  }, [filterMetode, filterTahun, filterBulan, riwayatSearch, riwayatPage, itemsPerPage]);
+    if (isFirstTrxRender.current) {
+      isFirstTrxRender.current = false;
+      return;
+    }
+    setRiwayatPage(1);
+  }, [filterMetode, filterTahun, filterBulan, debouncedRiwayatSearch]);
+
+  // Fetch when filters or page change
+  useEffect(() => {
+    fetchTransactionsData(riwayatPage, debouncedRiwayatSearch, filterMetode, filterTahun, filterBulan, itemsPerPage);
+  }, [filterMetode, filterTahun, filterBulan, debouncedRiwayatSearch, riwayatPage, itemsPerPage]);
 
   const filteredCredits = credits.filter(
     (p) =>
@@ -361,14 +442,17 @@ export default function TabPembayaran({
             </thead>
             <tbody>
               {isLoadingTransactions ? (
-                <tr>
-                  <td colSpan={7} className="py-20 text-center text-gray-400">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Loader2 className="w-8 h-8 animate-spin text-[#2B7A75]" />
-                      <p className="text-sm font-medium">Memuat data riwayat transaksi...</p>
-                    </div>
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, idx) => (
+                  <tr key={`skel-trx-${idx}`} className="border-b border-gray-100">
+                    <td className="py-2.5 pr-2.5"><div className="h-3.5 bg-gray-200 rounded animate-pulse w-20" /></td>
+                    <td className="px-2.5 py-2.5"><div className="h-3.5 bg-gray-200 rounded animate-pulse w-24" /></td>
+                    <td className="px-2.5 py-2.5"><div className="h-3.5 bg-gray-200 rounded animate-pulse w-28" /></td>
+                    <td className="px-2.5 py-2.5"><div className="h-4 bg-gray-100 rounded animate-pulse w-16" /></td>
+                    <td className="px-2.5 py-2.5"><div className="h-3.5 bg-gray-200 rounded animate-pulse w-16" /></td>
+                    <td className="px-2.5 py-2.5"><div className="h-4 bg-gray-100 rounded animate-pulse w-14" /></td>
+                    <td className="py-2.5 pl-2.5 text-right"><div className="h-3.5 bg-gray-200 rounded animate-pulse w-20 ml-auto" /></td>
+                  </tr>
+                ))
               ) : paginatedTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-sm font-semibold text-gray-400">
@@ -464,18 +548,9 @@ export default function TabPembayaran({
 
             <div className="flex items-center gap-3">
               {(() => {
-                const filteredData = activeList.filter(item => {
-                  const matchSearch = item.anak.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                                      item.wali.toLowerCase().includes(riwayatSearch.toLowerCase()) || 
-                                      item.noInvoice.toLowerCase().includes(riwayatSearch.toLowerCase());
-                  const matchMetode = filterMetode === "Semua metode" || item.metode === filterMetode;
-                  const matchBulan = filterBulan === "Semua bulan" || item.tanggal.toLowerCase().includes(filterBulan.substring(0,3).toLowerCase());
-                  const matchTahun = filterTahun === "Semua tahun" || item.tanggal.includes(filterTahun.replace("Tahun ", ""));
-                  return matchSearch && matchMetode && matchBulan && matchTahun;
-                });
-                const totalData = filteredData.length;
-                const totalPages = Math.ceil(totalData / itemsPerPage) || 1;
-                const startIndex = (riwayatPage - 1) * itemsPerPage;
+                const totalData = trxMeta.total;
+                const totalPages = trxMeta.last_page || 1;
+                const startIndex = (trxMeta.current_page - 1) * itemsPerPage;
                 const endIndex = Math.min(startIndex + itemsPerPage, totalData);
                 
                 return (
@@ -502,7 +577,7 @@ export default function TabPembayaran({
                       </div>
                       <button
                         onClick={() => setRiwayatPage(p => Math.min(totalPages, p + 1))}
-                        disabled={isLoadingTransactions || riwayatPage === totalPages}
+                        disabled={isLoadingTransactions || riwayatPage >= totalPages}
                         className="px-2 py-1 text-xs font-bold border border-gray-200 rounded-lg text-gray-500 disabled:opacity-50 hover:bg-gray-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
                       >
                         Next
@@ -519,25 +594,25 @@ export default function TabPembayaran({
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-0.5">Jumlah Transaksi</p>
               <p className="text-base sm:text-lg font-extrabold text-[#1E5C58]">
-                {activeList.length}
+                {summaryData.jumlah_transaksi || trxMeta.total}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-0.5">Total Pemasukan</p>
               <p className="text-base sm:text-lg font-extrabold text-[#1E5C58]">
-                {formatRupiah(activeList.filter(x => x.status === "Pemasukan" || (x.status as any) === "Lunas").reduce((acc, curr) => acc + curr.jumlah, 0))}
+                {formatRupiah(totalPemasukan)}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-0.5">Pengembalian Dana</p>
               <p className="text-base sm:text-lg font-extrabold text-[#1E5C58]">
-                {formatRupiah(activeList.filter(x => x.status === "Pengembalian dana" || x.status === "Dikembalikan").reduce((acc, curr) => acc + curr.jumlah, 0))}
+                {formatRupiah(totalPengembalian)}
               </p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-0.5">Periode Selanjutnya</p>
               <p className="text-base sm:text-lg font-extrabold text-[#1E5C58]">
-                {formatRupiah(activeList.filter(x => x.status === "Ke periode berikutnya" || x.status === "Periode selanjutnya").reduce((acc, curr) => acc + curr.jumlah, 0))}
+                {formatRupiah(totalPeriodeSelanjutnya)}
               </p>
             </div>
           </div>

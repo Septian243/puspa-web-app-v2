@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown } from "lucide-react";
-import { refundInvoice } from "@/lib/api/keuangan";
+import { ChevronDown, Loader2 } from "lucide-react";
+import { getAttendanceForRefund, refundInvoice } from "@/lib/api/keuangan";
 import { showSuccessToast, handleApiError } from "@/lib/toast";
 
 export type InvoiceStatus =
@@ -39,6 +39,7 @@ export interface Invoice {
   subtotal?: number;
   tanggal_terbit: string;
   status: InvoiceStatus;
+  items?: any[];
   terapiRows?: TerapiRow[];
   potongan?: number;
   pengembalian?: { tanggal: string; jumlah: number };
@@ -145,67 +146,110 @@ export default function PengembalianDanaModal({
   const [periodeTujuan, setPeriodeTujuan] = useState("November 2026");
   const [catatan, setCatatan] = useState("");
 
-  // Attendance breakdown per therapy
+  // 1. Fetch Presensi Riil Backend Saat Modal Dibuka
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+  const [apiAttendanceRows, setApiAttendanceRows] = useState<
+    TerapiAttendanceRefundRow[] | null
+  >(null);
+  const [apiSummary, setApiSummary] = useState<{
+    total_dibayar: number;
+    nilai_sesi_terpakai: number;
+    nilai_hangus: number;
+    nilai_dapat_dikembalikan: number;
+    total_sesi_dapat_dikembalikan: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingAttendance(true);
+    getAttendanceForRefund(selectedInvId)
+      .then((data) => {
+        if (!isMounted || !data) return;
+        if (Array.isArray(data.items) && data.items.length > 0) {
+          const mapped: TerapiAttendanceRefundRow[] = data.items.map(
+            (it: any, idx: number) => {
+              const defaultColor =
+                REFUND_TERAPI_CONFIG[it.terapi || it.therapy_type]?.color ||
+                (idx === 0
+                  ? "#22C55E"
+                  : idx === 1
+                    ? "#EC4899"
+                    : idx === 2
+                      ? "#14B8A6"
+                      : "#EAB308");
+              return {
+                terapi: it.terapi || it.therapy_type || "Terapi",
+                color: it.color || defaultColor,
+                hadir: Number(it.hadir) || 0,
+                izin: Number(it.izin ?? it.izin_sakit) || 0,
+                tidakHadir: Number(it.tidak_hadir ?? it.tidakHadir) || 0,
+                hargaPerSesi: Number(it.harga_per_sesi ?? it.hargaPerSesi) || 0,
+                nilaiSisa: Number(it.nilai_sisa ?? it.nilaiSisa) || 0,
+                nilaiHangus: Number(it.nilai_hangus ?? it.nilaiHangus) || 0,
+                nilaiTerpakai: Number(it.nilai_terpakai ?? it.nilaiTerpakai) || 0,
+              };
+            }
+          );
+          setApiAttendanceRows(mapped);
+        }
+        if (data.summary) {
+          setApiSummary({
+            total_dibayar:
+              Number(data.summary.total_dibayar) || selectedInv.total,
+            nilai_sesi_terpakai: Number(data.summary.nilai_sesi_terpakai) || 0,
+            nilai_hangus: Number(data.summary.nilai_hangus) || 0,
+            nilai_dapat_dikembalikan:
+              Number(data.summary.nilai_dapat_dikembalikan) || 0,
+            total_sesi_dapat_dikembalikan:
+              Number(data.summary.total_sesi_dapat_dikembalikan) || 0,
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn("Gagal mengambil presensi refund dari backend:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingAttendance(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedInvId, selectedInv.total]);
+
+  // 2. Dependency Memo yang Sinkron & Bersih dari Mock
   const attendanceRows: TerapiAttendanceRefundRow[] = useMemo(() => {
-    // If Kezia Aurelia or total is 265000, use exact values from user reference screenshot
-    if (
-      selectedInv.anak.includes("Kezia") ||
-      selectedInv.no_invoice.includes("3832") ||
-      selectedInv.total === 265000
-    ) {
-      return [
-        {
-          terapi: "Terapi Wicara",
-          color: "#22C55E",
-          hadir: 3,
-          izin: 0,
-          tidakHadir: 1,
-          hargaPerSesi: 15000,
-          nilaiSisa: 0,
-          nilaiHangus: 15000,
-          nilaiTerpakai: 45000,
-        },
-        {
-          terapi: "Terapi Okupasi",
-          color: "#EC4899",
-          hadir: 3,
+    if (apiAttendanceRows && apiAttendanceRows.length > 0) {
+      return apiAttendanceRows;
+    }
+    // Fallback awal sebelum API selesai (semua 0)
+    if (selectedInv.items && selectedInv.items.length > 0) {
+      return selectedInv.items.map((item: any, idx: number) => {
+        const defaultColor =
+          REFUND_TERAPI_CONFIG[item.nama_terapi || item.deskripsi || item.therapy_type]?.color ||
+          (idx === 0
+            ? "#22C55E"
+            : idx === 1
+              ? "#EC4899"
+              : idx === 2
+                ? "#14B8A6"
+                : "#EAB308");
+        return {
+          terapi: item.nama_terapi || item.deskripsi || item.therapy_type || "Terapi",
+          color: defaultColor,
+          hadir: 0,
           izin: 0,
           tidakHadir: 0,
-          hargaPerSesi: 20000,
+          hargaPerSesi: item.harga_per_sesi || item.price_per_session || 0,
           nilaiSisa: 0,
           nilaiHangus: 0,
-          nilaiTerpakai: 60000,
-        },
-        {
-          terapi: "Fisioterapi",
-          color: "#14B8A6",
-          hadir: 5,
-          izin: 1,
-          tidakHadir: 1,
-          hargaPerSesi: 10000,
-          nilaiSisa: 10000,
-          nilaiHangus: 10000,
-          nilaiTerpakai: 50000,
-        },
-        {
-          terapi: "PLB (Paedagog)",
-          color: "#EAB308",
-          hadir: 4,
-          izin: 1,
-          tidakHadir: 0,
-          hargaPerSesi: 15000,
-          nilaiSisa: 15000,
-          nilaiHangus: 0,
-          nilaiTerpakai: 60000,
-        },
-      ];
+          nilaiTerpakai: 0,
+        };
+      });
     }
 
-    // If invoice has terapiRows from backend or custom
     if (selectedInv.terapiRows && selectedInv.terapiRows.length > 0) {
       return selectedInv.terapiRows.map((r, idx) => {
-        const total = Number(r.jumlah_sesi) || 4;
-        const harga = Number(r.harga_sesi) || 25000;
         const color =
           REFUND_TERAPI_CONFIG[r.jenis]?.color ||
           (idx === 0
@@ -215,90 +259,52 @@ export default function PengembalianDanaModal({
               : idx === 2
                 ? "#14B8A6"
                 : "#EAB308");
-        const izin = idx % 2 === 1 ? 1 : 0;
-        const tidakHadir = idx === 0 ? 1 : 0;
-        const hadir = Math.max(0, total - izin - tidakHadir);
         return {
           terapi: r.jenis,
           color,
-          hadir,
-          izin,
-          tidakHadir,
-          hargaPerSesi: harga,
-          nilaiSisa: izin * harga,
-          nilaiHangus: tidakHadir * harga,
-          nilaiTerpakai: hadir * harga,
+          hadir: 0,
+          izin: 0,
+          tidakHadir: 0,
+          hargaPerSesi: Number(r.harga_sesi) || 0,
+          nilaiSisa: 0,
+          nilaiHangus: 0,
+          nilaiTerpakai: 0,
         };
       });
     }
 
-    // Default breakdown for other invoices
-    const basePerSesi = Math.max(10000, Math.round(selectedInv.total / 16 / 5000) * 5000);
-    return [
-      {
-        terapi: "Terapi Wicara",
-        color: "#22C55E",
-        hadir: 3,
-        izin: 0,
-        tidakHadir: 1,
-        hargaPerSesi: basePerSesi,
-        nilaiSisa: 0,
-        nilaiHangus: basePerSesi,
-        nilaiTerpakai: 3 * basePerSesi,
-      },
-      {
-        terapi: "Terapi Okupasi",
-        color: "#EC4899",
-        hadir: 3,
-        izin: 0,
-        tidakHadir: 0,
-        hargaPerSesi: basePerSesi,
-        nilaiSisa: 0,
-        nilaiHangus: 0,
-        nilaiTerpakai: 3 * basePerSesi,
-      },
-      {
-        terapi: "Fisioterapi",
-        color: "#14B8A6",
-        hadir: 5,
-        izin: 1,
-        tidakHadir: 1,
-        hargaPerSesi: basePerSesi,
-        nilaiSisa: 1 * basePerSesi,
-        nilaiHangus: 1 * basePerSesi,
-        nilaiTerpakai: 5 * basePerSesi,
-      },
-      {
-        terapi: "PLB (Paedagog)",
-        color: "#EAB308",
-        hadir: 4,
-        izin: 1,
-        tidakHadir: 0,
-        hargaPerSesi: basePerSesi,
-        nilaiSisa: 1 * basePerSesi,
-        nilaiHangus: 0,
-        nilaiTerpakai: 4 * basePerSesi,
-      },
-    ];
-  }, [selectedInv]);
+    return [];
+  }, [apiAttendanceRows, selectedInv]);
 
-  // Aggregate totals
-  const totalDibayar = selectedInv.total;
+  // 3. Ringkasan Finansial Dinamis (Sinkron dengan API backend)
+  const totalDibayar = apiSummary ? apiSummary.total_dibayar : selectedInv.total;
   const nilaiDapatDikembalikan = useMemo(
-    () => attendanceRows.reduce((acc, row) => acc + row.nilaiSisa, 0),
-    [attendanceRows]
+    () =>
+      apiSummary
+        ? apiSummary.nilai_dapat_dikembalikan
+        : attendanceRows.reduce((acc, row) => acc + row.nilaiSisa, 0),
+    [apiSummary, attendanceRows]
   );
   const totalSesiDapatDikembalikan = useMemo(
-    () => attendanceRows.reduce((acc, row) => acc + row.izin, 0),
-    [attendanceRows]
+    () =>
+      apiSummary
+        ? apiSummary.total_sesi_dapat_dikembalikan
+        : attendanceRows.reduce((acc, row) => acc + row.izin, 0),
+    [apiSummary, attendanceRows]
   );
   const nilaiHangus = useMemo(
-    () => attendanceRows.reduce((acc, row) => acc + row.nilaiHangus, 0),
-    [attendanceRows]
+    () =>
+      apiSummary
+        ? apiSummary.nilai_hangus
+        : attendanceRows.reduce((acc, row) => acc + row.nilaiHangus, 0),
+    [apiSummary, attendanceRows]
   );
-  const nilaiSesiTerpakai = Math.max(
-    0,
-    totalDibayar - nilaiDapatDikembalikan - nilaiHangus
+  const nilaiSesiTerpakai = useMemo(
+    () =>
+      apiSummary
+        ? apiSummary.nilai_sesi_terpakai
+        : Math.max(0, totalDibayar - nilaiDapatDikembalikan - nilaiHangus),
+    [apiSummary, totalDibayar, nilaiDapatDikembalikan, nilaiHangus]
   );
 
   // Editable nominal for mode dikembalikan
@@ -342,6 +348,15 @@ export default function PengembalianDanaModal({
       const formData = new FormData();
       formData.append("mode", modeSisi);
       formData.append("tanggal", tanggal);
+
+      const totalHadir = attendanceRows.reduce((acc, row) => acc + row.hadir, 0);
+      const totalSesi = attendanceRows.reduce(
+        (acc, row) => acc + row.hadir + row.izin + row.tidakHadir,
+        0
+      );
+      formData.append("kehadiran", totalHadir.toString());
+      formData.append("total_sesi", totalSesi.toString());
+      formData.append("sisa_sesi", totalSesiDapatDikembalikan.toString());
 
       const numVal =
         parseInt(nominalCustom.replace(/\D/g, ""), 10) || nilaiDapatDikembalikan;
@@ -453,6 +468,12 @@ export default function PengembalianDanaModal({
                     Kehadiran dari Presensi
                   </h3>
                 </div>
+                {isLoadingAttendance && (
+                  <div className="flex items-center gap-1 text-[10px] text-[#2B7A75] font-medium animate-pulse">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Sinkron presensi...</span>
+                  </div>
+                )}
               </div>
 
               {/* Table */}
@@ -471,7 +492,7 @@ export default function PengembalianDanaModal({
                     {attendanceRows.map((row) => (
                       <tr
                         key={row.terapi}
-                        className="hover:bg-gray-50/50 transition-colors"
+                        className="transition-colors hover:bg-gray-50/50"
                       >
                         <td className="py-1.5 px-2.5 text-left font-bold text-gray-700 flex items-center gap-1.5">
                           <span
