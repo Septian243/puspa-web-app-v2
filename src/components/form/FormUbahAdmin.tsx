@@ -11,6 +11,7 @@ import {
   X,
   CheckCircle2,
 } from "lucide-react";
+import { createHandleChange } from "@/lib/formUtils";
 
 interface FormUbahAdminProps {
   open: boolean;
@@ -47,6 +48,10 @@ export default function FormUbahAdmin({
       setForm(initialData);
     }
   }, [initialData]);
+
+  const handleChange = createHandleChange(setForm, {
+    numericFields: ["admin_phone"],
+  });
 
   if (!open) return null;
 
@@ -100,10 +105,9 @@ export default function FormUbahAdmin({
                 </div>
                 <input
                   type="text"
+                  name="admin_name"
                   value={form.admin_name}
-                  onChange={(e) =>
-                    setForm({ ...form, admin_name: e.target.value })
-                  }
+                  onChange={handleChange}
                   className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
@@ -121,8 +125,9 @@ export default function FormUbahAdmin({
                 </div>
                 <input
                   type="email"
+                  name="email"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={handleChange}
                   className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
@@ -139,11 +144,13 @@ export default function FormUbahAdmin({
                   <Phone className="h-5 w-5 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
                 </div>
                 <input
-                  type="text"
+                  type="tel"
+                  name="admin_phone"
                   value={form.admin_phone}
-                  onChange={(e) =>
-                    setForm({ ...form, admin_phone: e.target.value })
-                  }
+                  onChange={handleChange}
+                  inputMode="numeric"
+                  minLength={6}
+                  maxLength={14}
                   className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
@@ -161,10 +168,9 @@ export default function FormUbahAdmin({
                 </div>
                 <input
                   type="text"
+                  name="username"
                   value={form.username}
-                  onChange={(e) =>
-                    setForm({ ...form, username: e.target.value })
-                  }
+                  onChange={handleChange}
                   className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none transition-all text-sm text-gray-700 font-medium focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />

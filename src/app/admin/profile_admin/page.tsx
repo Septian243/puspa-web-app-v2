@@ -18,6 +18,7 @@ import {
 import { updateProfileWithPhoto } from "@/lib/api/ProfileAdmin";
 import { useAdminProfile } from "@/context/ProfileAdminContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { createHandleChange } from "@/lib/formUtils";
 
 export default function ProfilePage() {
   const { profile, refreshProfile } = useAdminProfile();
@@ -65,14 +66,13 @@ export default function ProfilePage() {
   // =====================================
   // FORM INPUT
   // =====================================
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
-    setUpdateSuccess(false);
-    setUpdateError(null);
-  };
+  const handleChange = createHandleChange(setForm, {
+    numericFields: ["admin_phone"],
+    afterChange: () => {
+      setUpdateSuccess(false);
+      setUpdateError(null);
+    },
+  });
 
   // =====================================
   // FOTO
@@ -403,9 +403,13 @@ export default function ProfilePage() {
                         Telepon
                       </label>
                       <input
+                        type="tel"
                         name="admin_phone"
                         value={form.admin_phone}
                         onChange={handleChange}
+                        inputMode="numeric"
+                        minLength={6}
+                        maxLength={14}
                         className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#81B7A9]/40 focus:border-[#2B7A75] outline-none transition-all font-medium text-gray-700 shadow-sm"
                         placeholder="0812xxxxxx"
                       />

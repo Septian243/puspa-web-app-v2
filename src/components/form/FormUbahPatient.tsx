@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PatientDetail, toISODateString } from "@/lib/api/data_patient";
 import { handleApiError } from "@/lib/api-error";
 import SelectSekolahPasien from "./SelectSekolahPasien";
+import { createHandleChange } from "@/lib/formUtils";
 import {
   User,
   Phone,
@@ -110,14 +111,9 @@ export default function FormUbahPatient({
     });
   }, [initialData]);
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >,
-  ) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+  const handleChange = createHandleChange(setForm, {
+    numericFields: ["father_phone", "mother_phone", "guardian_phone"],
+  });
 
   const emptyToNull = (v?: string) => {
     if (!v) return null;
@@ -362,9 +358,13 @@ export default function FormUbahPatient({
                       <div>
                         <label className="text-xs text-gray-500">Telp</label>
                         <input
+                          type="tel"
                           name="father_phone"
                           value={form.father_phone}
                           onChange={handleChange}
+                          inputMode="numeric"
+                          minLength={6}
+                          maxLength={14}
                           className="w-full p-2 border-b border-gray-200 focus:border-amber-500 outline-none text-sm"
                         />
                       </div>
@@ -421,9 +421,13 @@ export default function FormUbahPatient({
                       <div>
                         <label className="text-xs text-gray-500">Telp</label>
                         <input
+                          type="tel"
                           name="mother_phone"
                           value={form.mother_phone}
                           onChange={handleChange}
+                          inputMode="numeric"
+                          minLength={6}
+                          maxLength={14}
                           className="w-full p-2 border-b border-gray-200 focus:border-amber-500 outline-none text-sm"
                         />
                       </div>
@@ -483,9 +487,13 @@ export default function FormUbahPatient({
                           Telp. Wali
                         </label>
                         <input
+                          type="tel"
                           name="guardian_phone"
                           value={form.guardian_phone}
                           onChange={handleChange}
+                          inputMode="numeric"
+                          minLength={6}
+                          maxLength={14}
                           className="w-full p-2 border-b border-gray-200 focus:border-amber-500 outline-none text-sm"
                         />
                       </div>

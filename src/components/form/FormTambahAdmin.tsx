@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
+import { createHandleChange } from "@/lib/formUtils";
 
 interface FormTambahAdminProps {
   open: boolean;
@@ -56,6 +57,15 @@ export default function FormTambahAdmin({
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const handleChange = createHandleChange(setForm, {
+    numericFields: ["admin_phone"],
+    afterChange: (name) => {
+      if (errors[name as keyof FormState]) {
+        setErrors((prev) => ({ ...prev, [name]: undefined }));
+      }
+    },
+  });
 
   if (!open) return null;
 
@@ -228,12 +238,10 @@ export default function FormTambahAdmin({
                 </div>
                 <input
                   type="text"
+                  name="admin_name"
                   placeholder="Budi Santoso"
                   value={form.admin_name}
-                  onChange={(e) => {
-                    setForm({ ...form, admin_name: e.target.value });
-                    if (errors.admin_name) setErrors({ ...errors, admin_name: undefined });
-                  }}
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.admin_name ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
@@ -257,12 +265,10 @@ export default function FormTambahAdmin({
                 </div>
                 <input
                   type="email"
+                  name="email"
                   placeholder="budi@email.com"
                   value={form.email}
-                  onChange={(e) => {
-                    setForm({ ...form, email: e.target.value });
-                    if (errors.email) setErrors({ ...errors, email: undefined });
-                  }}
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.email ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
@@ -285,13 +291,14 @@ export default function FormTambahAdmin({
                   />
                 </div>
                 <input
-                  type="text"
+                  type="tel"
+                  name="admin_phone"
                   placeholder="08123456789"
                   value={form.admin_phone}
-                  onChange={(e) => {
-                    setForm({ ...form, admin_phone: e.target.value });
-                    if (errors.admin_phone) setErrors({ ...errors, admin_phone: undefined });
-                  }}
+                  onChange={handleChange}
+                  inputMode="numeric"
+                  minLength={6}
+                  maxLength={14}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.admin_phone ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
@@ -315,12 +322,10 @@ export default function FormTambahAdmin({
                 </div>
                 <input
                   type="text"
+                  name="username"
                   placeholder="adminBudi"
                   value={form.username}
-                  onChange={(e) => {
-                    setForm({ ...form, username: e.target.value });
-                    if (errors.username) setErrors({ ...errors, username: undefined });
-                  }}
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.username ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
               </div>
@@ -348,12 +353,10 @@ export default function FormTambahAdmin({
                 </div>
                 <input
                   type={showPassword ? "text" : "password"}
+                  name="password"
                   placeholder="••••••••••••"
                   value={form.password}
-                  onChange={(e) => {
-                    setForm({ ...form, password: e.target.value });
-                    if (errors.password) setErrors({ ...errors, password: undefined });
-                  }}
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-12 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.password ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10" : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"}`}
                 />
                 <button

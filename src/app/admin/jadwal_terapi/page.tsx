@@ -19,6 +19,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { getSchedules, deleteSchedule, getTherapists, createSchedule, getChildren, updateSchedule } from "@/lib/api/jadwal_terapi";
 import { showSuccessToast, handleApiError } from "@/lib/toast";
+import { createHandleChange } from "@/lib/formUtils";
 
 // =======================
 // Types
@@ -1093,9 +1094,7 @@ function EditModal({
     .flat()
     .reduce((s, r) => s + (r.pertemuan || 0), 0);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm((prev) => prev ? { ...prev, [e.target.name]: e.target.value } : prev);
-  };
+  const handleChange = createHandleChange(setForm);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

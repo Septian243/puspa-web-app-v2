@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { updateProfileWithPhoto } from "@/lib/api/ProfileTerapis";
 import { useTherapistProfile } from "@/context/ProfileTerapisContext";
+import { createHandleChange } from "@/lib/formUtils";
 
 export default function ProfilePage() {
   const { profile, refreshProfile } = useTherapistProfile();
@@ -66,14 +67,13 @@ export default function ProfilePage() {
   // =====================================
   // FORM INPUT
   // =====================================
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
-    setUpdateSuccess(false);
-    setUpdateError(null);
-  };
+  const handleChange = createHandleChange(setForm, {
+    numericFields: ["therapist_phone"],
+    afterChange: () => {
+      setUpdateSuccess(false);
+      setUpdateError(null);
+    },
+  });
 
   // =====================================
   // FOTO
@@ -332,9 +332,13 @@ export default function ProfilePage() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-gray-500">Nomor Telepon</label>
                       <input
+                        type="tel"
                         name="therapist_phone"
                         value={form.therapist_phone}
                         onChange={handleChange}
+                        inputMode="numeric"
+                        minLength={6}
+                        maxLength={14}
                         className="w-full p-3 text-sm font-bold border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2B7A75]/10 focus:border-[#2B7A75] bg-gray-50/50 transition-all duration-300"
                         placeholder="Telepon"
                       />

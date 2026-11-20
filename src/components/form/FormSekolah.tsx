@@ -21,6 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Sekolah } from "@/lib/api/data_sekolah";
+import { createHandleChange } from "@/lib/formUtils";
 
 export type FormSekolahState = {
   nama: string;
@@ -75,6 +76,15 @@ export default function FormSekolah({
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [showPassword, setShowPassword] = useState(false);
+
+  const handleChange = createHandleChange(setForm, {
+    numericFields: ["telepon"],
+    afterChange: (name) => {
+      if (errors[name as keyof FormErrors]) {
+        setErrors((prev) => ({ ...prev, [name]: undefined }));
+      }
+    },
+  });
 
   // Sinkronkan data saat modal dibuka
   useEffect(() => {
@@ -264,11 +274,10 @@ export default function FormSekolah({
                 </div>
                 <input
                   type="text"
+                  name="nama"
                   placeholder="SD 1 Jamsaren"
                   value={form.nama}
-                  onChange={(e) =>
-                    setForm({ ...form, nama: e.target.value })
-                  }
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.nama
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
@@ -297,9 +306,7 @@ export default function FormSekolah({
                 <select
                   name="jenjang"
                   value={form.jenjang}
-                  onChange={(e) =>
-                    setForm({ ...form, jenjang: e.target.value })
-                  }
+                  onChange={handleChange}
                   className={`appearance-none cursor-pointer w-full pl-11 pr-10 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm font-medium ${form.jenjang ? "text-gray-700" : "text-gray-400"
                     } ${errors.jenjang
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
@@ -340,11 +347,10 @@ export default function FormSekolah({
                 </div>
                 <input
                   type="text"
+                  name="alamat"
                   placeholder="Isikan alamat"
                   value={form.alamat}
-                  onChange={(e) =>
-                    setForm({ ...form, alamat: e.target.value })
-                  }
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.alamat
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
@@ -372,11 +378,10 @@ export default function FormSekolah({
                 </div>
                 <input
                   type="text"
+                  name="username"
                   placeholder="jamsaren01"
                   value={form.username}
-                  onChange={(e) =>
-                    setForm({ ...form, username: e.target.value })
-                  }
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.username
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
@@ -404,11 +409,10 @@ export default function FormSekolah({
                 </div>
                 <input
                   type="email"
+                  name="email"
                   placeholder="jamsaren@gmail.com"
                   value={form.email}
-                  onChange={(e) =>
-                    setForm({ ...form, email: e.target.value })
-                  }
+                  onChange={handleChange}
                   className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.email
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
@@ -436,12 +440,15 @@ export default function FormSekolah({
                 </div>
                 <input
                   type="tel"
+                  name="telepon"
                   placeholder="628956567878980"
                   value={form.telepon}
-                  onChange={(e) =>
-                    setForm({ ...form, telepon: e.target.value })
-                  }
-                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.telepon
+                  inputMode="numeric"
+                  minLength={6}
+                  maxLength={14}
+                  onChange={handleChange}
+                  className={`w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${
+                    errors.telepon
                       ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                       : `border-gray-200 focus:bg-white focus:ring-4 ${focusBorderColor}`
                     }`}
@@ -471,11 +478,10 @@ export default function FormSekolah({
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
+                    name="password"
                     placeholder="••••••••••••"
                     value={form.password}
-                    onChange={(e) =>
-                      setForm({ ...form, password: e.target.value })
-                    }
+                    onChange={handleChange}
                     className={`w-full pl-11 pr-11 py-3 bg-gray-50 border rounded-xl outline-none transition-all text-sm text-gray-700 font-medium ${errors.password
                         ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                         : "border-gray-200 focus:border-[#2B7A75] focus:bg-white focus:ring-4 focus:ring-[#2B7A75]/10"

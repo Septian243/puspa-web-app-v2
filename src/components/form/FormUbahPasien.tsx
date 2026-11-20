@@ -5,6 +5,7 @@ import React, { useState, useEffect } from "react";
 import { X, Baby, Users, Heart, ClipboardList, Info, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import SelectSekolahPasien from "./SelectSekolahPasien";
+import { createHandleChange } from "@/lib/formUtils";
 
 // Sinkronkan interface ini agar cocok dengan ChildDetail dari API
 interface BackendDetailAnak {
@@ -167,12 +168,9 @@ export default function FormUbahPasien({
 
   if (!open) return null;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
-  };
+  const handleChange = createHandleChange(setFormData, {
+    numericFields: ["father_phone", "mother_phone", "guardian_phone"],
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,7 +316,7 @@ export default function FormUbahPasien({
                   <div><label className={labelClass}>Hubungan</label><input name="father_relationship" value={formData.father_relationship} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Tanggal Lahir</label><input type="date" name="father_birth_date" value={formData.father_birth_date} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Pekerjaan</label><input name="father_occupation" value={formData.father_occupation} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className={labelClass}>Nomor Telpon</label><input name="father_phone" value={formData.father_phone} onChange={handleChange} className={inputClass} /></div>
+                  <div><label className={labelClass}>Nomor Telpon</label><input type="tel" name="father_phone" value={formData.father_phone} onChange={handleChange} inputMode="numeric" minLength={6} maxLength={14} className={inputClass} /></div>
                   <div><label className={labelClass}>NIK</label><input name="father_identity_number" value={formData.father_identity_number} onChange={handleChange} className={inputClass} /></div>
                 </div>
               </div>
@@ -331,7 +329,7 @@ export default function FormUbahPasien({
                   <div><label className={labelClass}>Hubungan</label><input name="mother_relationship" value={formData.mother_relationship} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Tanggal Lahir</label><input type="date" name="mother_birth_date" value={formData.mother_birth_date} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Pekerjaan</label><input name="mother_occupation" value={formData.mother_occupation} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className={labelClass}>Nomor Telpon</label><input name="mother_phone" value={formData.mother_phone} onChange={handleChange} className={inputClass} /></div>
+                  <div><label className={labelClass}>Nomor Telpon</label><input type="tel" name="mother_phone" value={formData.mother_phone} onChange={handleChange} inputMode="numeric" minLength={6} maxLength={14} className={inputClass} /></div>
                   <div><label className={labelClass}>NIK</label><input name="mother_identity_number" value={formData.mother_identity_number} onChange={handleChange} className={inputClass} /></div>
                 </div>
               </div>
@@ -346,7 +344,7 @@ export default function FormUbahPasien({
                   <div><label className={labelClass}>Hubungan</label><input name="guardian_relationship" value={formData.guardian_relationship} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Tanggal Lahir</label><input type="date" name="guardian_birth_date" value={formData.guardian_birth_date} onChange={handleChange} className={inputClass} /></div>
                   <div><label className={labelClass}>Pekerjaan</label><input name="guardian_occupation" value={formData.guardian_occupation} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className={labelClass}>Nomor Telpon</label><input name="guardian_phone" value={formData.guardian_phone} onChange={handleChange} className={inputClass} /></div>
+                  <div><label className={labelClass}>Nomor Telpon</label><input type="tel" name="guardian_phone" value={formData.guardian_phone} onChange={handleChange} inputMode="numeric" minLength={6} maxLength={14} className={inputClass} /></div>
                   <div><label className={labelClass}>NIK</label><input name="guardian_identity_number" value={formData.guardian_identity_number} onChange={handleChange} className={inputClass} /></div>
                 </div>
               </div>

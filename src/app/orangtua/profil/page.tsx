@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProfile } from "@/context/ProfileContext";
 import { User, Edit3, Camera, Heart, Calendar, Phone, Mail, Briefcase, Shield } from "lucide-react";
 import toast from "react-hot-toast";
+import { createHandleChange } from "@/lib/formUtils";
 
 export default function ProfileOrangtuaPage() {
   const [isEditing, setIsEditing] = useState(false);
@@ -98,9 +99,9 @@ export default function ProfileOrangtuaPage() {
     },
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const handleChange = createHandleChange(setFormData, {
+    numericFields: ["guardian_phone"],
+  });
 
   const handleUpdate = () => {
     if (!guardianId) return;
@@ -334,9 +335,13 @@ export default function ProfileOrangtuaPage() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-gray-500 uppercase ml-1">Nomor Telepon</label>
                   <input
+                    type="tel"
                     name="guardian_phone"
                     value={formData.guardian_phone}
                     onChange={handleChange}
+                    inputMode="numeric"
+                    minLength={6}
+                    maxLength={14}
                     className="border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#2B7A75]/10 focus:border-[#2B7A75] transition-all text-sm font-semibold text-gray-700 bg-white"
                     placeholder="Contoh: 0812..."
                   />

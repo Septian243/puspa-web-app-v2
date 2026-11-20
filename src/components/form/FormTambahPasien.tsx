@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { addPatient, searchGuardians, GuardianOptionItem } from "@/lib/api/data_patient";
 import SelectSekolahPasien from "./SelectSekolahPasien";
+import { createHandleChange } from "@/lib/formUtils";
 
 interface FormTambahPasienProps {
   open: boolean;
@@ -125,14 +126,9 @@ export default function FormTambahPasien({
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >,
-  ) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+  const handleChange = createHandleChange(setForm, {
+    numericFields: ["guardian_phone"],
+  });
 
   const toggleService = (service: string) => {
     setForm((prev) => {
@@ -601,12 +597,15 @@ export default function FormTambahPasien({
                       Nomor WhatsApp
                     </label>
                     <input
-                      type="text"
+                      type="tel"
                       name="guardian_phone"
                       placeholder="0812xxxxxx"
                       value={form.guardian_phone}
                       readOnly={parentMode === "existing" && !!selectedGuardian}
                       onChange={handleChange}
+                      inputMode="numeric"
+                      minLength={6}
+                      maxLength={14}
                       className={`w-full p-2.5 rounded-xl outline-none text-sm transition-all ${
                         parentMode === "existing" && !!selectedGuardian
                           ? "bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200"

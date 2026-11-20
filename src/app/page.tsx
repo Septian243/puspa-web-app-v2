@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { registrationChild, RegistrationPayload } from "@/lib/api/registration";
 import { handleApiError, showSuccessToast } from "@/lib/api-error";
 import { useMutation } from "@tanstack/react-query";
+import { createHandleChange } from "@/lib/formUtils";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -126,22 +127,18 @@ export default function Page() {
     },
   });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value, type } = e.target as HTMLInputElement;
-    if (type === "checkbox") {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormData((prev) => {
-        const updated = checked
-          ? [...prev.pilihanLayanan, value]
-          : prev.pilihanLayanan.filter((v) => v !== value);
-        return { ...prev, pilihanLayanan: updated };
-      });
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-  };
+  const handleChange = createHandleChange(setFormData, {
+    numericFields: ["nomorTelepon"],
+    customSanitizers: {
+      pilihanLayanan: (_val, e, prev) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const targetValue = (e.target as HTMLInputElement).value;
+        return checked
+          ? [...prev.pilihanLayanan, targetValue]
+          : prev.pilihanLayanan.filter((v: string) => v !== targetValue);
+      },
+    },
+  });
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
     if (e.key === "Enter") {
@@ -694,6 +691,9 @@ export default function Page() {
                         name="nomorTelepon"
                         value={formData.nomorTelepon}
                         onChange={handleChange}
+                        inputMode="numeric"
+                        minLength={6}
+                        maxLength={14}
                         required
                         placeholder="Contoh: 08123456789"
                         className="w-full pl-11 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#2B7A75] focus:bg-white focus:border-transparent outline-none transition-all text-gray-700"

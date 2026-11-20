@@ -10,6 +10,7 @@ import {
   TherapySessionDetail,
   CreateTherapySoapPayload,
 } from "@/lib/api/terapiTerapis";
+import { createHandleChange } from "@/lib/formUtils";
 
 interface StoredJadwal {
   id: string;
@@ -182,11 +183,7 @@ function IsiSoapContent() {
     planLanjutan: "",
   });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
+  const handleChange = createHandleChange(setFormData);
 
   const handleSimpan = async () => {
     if (!jadwalId) {

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { handleApiError } from "@/lib/api-error";
+import { createHandleChange } from "@/lib/formUtils";
 
 interface FormUbahTerapisProps {
   open: boolean;
@@ -69,12 +70,9 @@ export default function FormUbahTerapis({
 
   if (!open) return null;
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  const handleChange = createHandleChange(setFormData, {
+    numericFields: ["telepon"],
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,10 +222,13 @@ export default function FormUbahTerapis({
                   <Phone className="w-5 h-5 text-gray-400 transition-colors group-focus-within:text-amber-500" />
                 </div>
                 <input
-                  type="text"
+                  type="tel"
                   name="telepon"
                   value={formData.telepon}
                   onChange={handleChange}
+                  inputMode="numeric"
+                  minLength={6}
+                  maxLength={14}
                   className="w-full py-3 pr-4 text-sm font-medium text-gray-700 transition-all border border-gray-200 outline-none pl-11 bg-gray-50 rounded-xl focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
                   required
                 />
