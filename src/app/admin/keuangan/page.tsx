@@ -340,11 +340,28 @@ function BuktiTransferModal({
   buktiUrl: string;
   onClose: () => void;
 }) {
-  const fullUrl = buktiUrl.startsWith("http")
-    ? buktiUrl
-    : `${process.env.NEXT_PUBLIC_STORAGE_URL || "http://localhost:8000/storage"}/${buktiUrl.replace(/^\//, "")}`;
+  // Derive storage base URL dari API base URL agar konsisten
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+  const storageBase =
+    process.env.NEXT_PUBLIC_STORAGE_URL ||
+    apiBase.replace(/\/api\/v\d+\/?$/, "").replace(/\/api\/?$/, "") + "/storage";
+
+  // Hitung fullUrl dengan toleran terhadap berbagai format path dari backend:
+  // - Sudah full URL: "http://..." → pakai langsung
+  // - Sudah ada "/storage/": "/storage/payments/xxx.jpg" → tambah host saja
+  // - Path relatif: "payments/xxx.jpg" → tambah storageBase
+  let fullUrl: string;
+  if (buktiUrl.startsWith("http://") || buktiUrl.startsWith("https://")) {
+    fullUrl = buktiUrl;
+  } else if (buktiUrl.startsWith("/storage/") || buktiUrl.startsWith("storage/")) {
+    const host = storageBase.replace(/\/storage\/?$/, "");
+    fullUrl = `${host}/${buktiUrl.replace(/^\//, "")}`;
+  } else {
+    fullUrl = `${storageBase}/${buktiUrl.replace(/^\//, "")}`;
+  }
 
   const isPdf = fullUrl.toLowerCase().endsWith(".pdf");
+  const [imgError, setImgError] = useState(false);
 
   return createPortal(
     <AnimatePresence>
@@ -377,8 +394,18 @@ function BuktiTransferModal({
           <div className="flex-1 p-6 overflow-y-auto flex items-center justify-center bg-gray-50 min-h-[300px]">
             {isPdf ? (
               <iframe src={fullUrl} className="w-full h-[450px] rounded-xl border border-gray-200" title="Bukti Transfer PDF" />
+            ) : imgError ? (
+              <div className="flex flex-col items-center gap-3 text-center p-6">
+                <AlertCircle size={36} className="text-gray-300" />
+                <p className="text-sm font-semibold text-gray-500">Gagal memuat gambar bukti transfer.</p>
+                <p className="text-xs text-gray-400 break-all max-w-xs">{fullUrl}</p>
+                <a href={fullUrl} target="_blank" rel="noreferrer"
+                  className="mt-1 text-xs font-bold text-blue-600 underline hover:text-blue-800">
+                  Coba buka langsung di tab baru →
+                </a>
+              </div>
             ) : (
-              <img src={fullUrl} alt="Bukti Transfer" className="max-w-full max-h-[450px] object-contain rounded-xl shadow-sm border border-gray-200" />
+              <img src={fullUrl} alt="Bukti Transfer" onError={() => setImgError(true)} className="max-w-full max-h-[450px] object-contain rounded-xl shadow-sm border border-gray-200" />
             )}
           </div>
 
@@ -1716,6 +1743,8 @@ function BuatTagihanForm({
 
   const [tipeTagihan, setTipeTagihan] = useState<"Bulanan" | "Paket Durasi">(initialData?.tipe ?? "Bulanan");
   const [isSaving, setIsSaving] = useState(false);
+  const isEditMode = Boolean(initialData);
+  const isLockedChild = isEditMode || Boolean(prefillData?.anak || prefillData?.childId);
 
   const [selectedChildId, setSelectedChildId] = useState(initialData?.child_id ?? prefillData?.childId ?? "");
   const [selectedGuardianId, setSelectedGuardianId] = useState(initialData?.guardian_id ?? prefillData?.guardianId ?? "");
@@ -2275,31 +2304,38 @@ function BuatTagihanForm({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div ref={childDropdownRef} className="relative z-30">
                 <label className="block mb-1.5 text-xs font-bold text-gray-500">
-                  Pilih Anak
-                  {childrenList.length > 0 && (
+                  {isLockedChild ? "Nama Anak" : "Pilih Anak"}
+                  {!isLockedChild && childrenList.length > 0 && (
                     <span className="ml-1.5 font-normal text-gray-400">
                       ({childrenList.length} anak terdaftar)
                     </span>
                   )}
                 </label>
                 <div
-                  className={`relative flex items-center rounded-xl border bg-white px-3.5 py-2.5 text-sm font-medium transition-all ${errors.anak
-                    ? "!border-red-500 !ring-red-500/20 !bg-red-50"
-                    : "border-gray-200 focus-within:border-[#2B7A75] focus-within:ring-2 focus-within:ring-[#2B7A75]/20"
-                    }`}
+                  className={`relative flex items-center rounded-xl border px-3.5 py-2.5 text-sm font-medium transition-all ${
+                    isLockedChild
+                      ? "border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed select-none"
+                      : errors.anak
+                      ? "!border-red-500 !ring-red-500/20 !bg-red-50"
+                      : "border-gray-200 bg-white focus-within:border-[#2B7A75] focus-within:ring-2 focus-within:ring-[#2B7A75]/20"
+                  }`}
                 >
                   <input
                     ref={childInputRef}
                     id="input-cari-anak"
                     type="text"
-                    value={isChildDropdownOpen ? childSearchTerm : selectedAnakName}
-                    onFocus={() => setIsChildDropdownOpen(true)}
+                    value={!isLockedChild && isChildDropdownOpen ? childSearchTerm : selectedAnakName}
+                    onFocus={() => {
+                      if (!isLockedChild) setIsChildDropdownOpen(true);
+                    }}
                     onChange={(e) => {
-                      setChildSearchTerm(e.target.value);
-                      setIsChildDropdownOpen(true);
+                      if (!isLockedChild) {
+                        setChildSearchTerm(e.target.value);
+                        setIsChildDropdownOpen(true);
+                      }
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Escape") {
+                      if (!isLockedChild && e.key === "Escape") {
                         setIsChildDropdownOpen(false);
                         setChildSearchTerm("");
                       }
@@ -2311,12 +2347,15 @@ function BuatTagihanForm({
                           ? "Cari nama anak / nama orang tua..."
                           : "Pilih Nama Anak"
                     }
-                    className="w-full text-sm font-medium text-gray-800 bg-transparent outline-none pr-14 placeholder:text-gray-400"
-                    readOnly={isLoadingChildren}
+                    className={`w-full text-sm font-medium text-gray-800 bg-transparent outline-none ${
+                      isLockedChild ? "cursor-not-allowed pr-3 font-semibold" : "pr-14"
+                    } placeholder:text-gray-400`}
+                    readOnly={isLoadingChildren || isLockedChild}
+                    disabled={isLockedChild}
                   />
 
-                  {/* Clear button if child is selected */}
-                  {selectedChildId && (
+                  {/* Clear button if child is selected (Hanya saat anak tidak terkunci) */}
+                  {!isLockedChild && selectedChildId && (
                     <button
                       type="button"
                       onMouseDown={(e) => {
@@ -2335,30 +2374,33 @@ function BuatTagihanForm({
                     </button>
                   )}
 
-                  {/* Chevron / Loading indicator */}
-                  <div
-                    onClick={() => {
-                      if (isLoadingChildren) return;
-                      setIsChildDropdownOpen((prev) => !prev);
-                      if (!isChildDropdownOpen) {
-                        requestAnimationFrame(() => childInputRef.current?.focus());
-                      }
-                    }}
-                    className="absolute flex items-center text-gray-400 cursor-pointer right-3"
-                  >
-                    {isLoadingChildren ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-[#2B7A75]" />
-                    ) : (
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform duration-200 ${isChildDropdownOpen ? "rotate-180 text-[#2B7A75]" : ""
+                  {/* Chevron / Loading indicator (Hanya saat anak tidak terkunci) */}
+                  {!isLockedChild && (
+                    <div
+                      onClick={() => {
+                        if (isLoadingChildren) return;
+                        setIsChildDropdownOpen((prev) => !prev);
+                        if (!isChildDropdownOpen) {
+                          requestAnimationFrame(() => childInputRef.current?.focus());
+                        }
+                      }}
+                      className="absolute flex items-center text-gray-400 cursor-pointer right-3"
+                    >
+                      {isLoadingChildren ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-[#2B7A75]" />
+                      ) : (
+                        <ChevronDown
+                          className={`w-4 h-4 transition-transform duration-200 ${
+                            isChildDropdownOpen ? "rotate-180 text-[#2B7A75]" : ""
                           }`}
-                      />
-                    )}
-                  </div>
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Dropdown Menu */}
-                {isChildDropdownOpen && (
+                {/* Dropdown Menu (Hanya saat anak tidak terkunci) */}
+                {!isLockedChild && isChildDropdownOpen && (
                   <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-teal-100 bg-white shadow-2xl">
                     {isLoadingChildren ? (
                       <div className="flex items-center justify-center gap-2 p-4 text-xs font-medium text-gray-500">
@@ -2413,9 +2455,15 @@ function BuatTagihanForm({
                 <input
                   type="text"
                   value={selectedWaliName}
-                  onChange={(e) => setSelectedWaliName(e.target.value)}
+                  onChange={(e) => {
+                    if (!isLockedChild) setSelectedWaliName(e.target.value);
+                  }}
+                  readOnly={isLockedChild}
+                  disabled={isLockedChild}
                   placeholder="Nama Orangtua/Wali"
-                  className={`${inputClass} bg-gray-50 placeholder:text-gray-400`}
+                  className={`${inputClass} bg-gray-50 placeholder:text-gray-400 ${
+                    isLockedChild ? "cursor-not-allowed font-semibold text-gray-700" : ""
+                  }`}
                 />
               </div>
             </div>
@@ -2587,20 +2635,31 @@ function BuatTagihanForm({
                   key={row.id}
                   className="grid grid-cols-1 sm:grid-cols-[1.2fr_90px_1fr_1.1fr_auto] gap-3 items-center"
                 >
-                  <div className="relative">
-                    <select
+                  {isEditMode ? (
+                    <input
                       id={`jenis-terapi-${idx}`}
+                      type="text"
+                      readOnly
+                      disabled
                       value={row.jenis}
-                      onChange={(e) => updateTerapiRow(row.id, "jenis", e.target.value)}
-                      className={`${selectClass} pr-8 ${!row.jenis ? "text-gray-400" : "text-gray-700"}`}
-                    >
-                      <option value="" disabled className="text-gray-400">Pilih Jenis Terapi</option>
-                      {JENIS_TERAPI_OPTIONS.map((j) => (
-                        <option key={j} value={j} className="text-gray-700">{j}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
-                  </div>
+                      className={`${inputClass} bg-gray-50 text-gray-700 cursor-not-allowed`}
+                    />
+                  ) : (
+                    <div className="relative">
+                      <select
+                        id={`jenis-terapi-${idx}`}
+                        value={row.jenis}
+                        onChange={(e) => updateTerapiRow(row.id, "jenis", e.target.value)}
+                        className={`${selectClass} pr-8 ${!row.jenis ? "text-gray-400" : "text-gray-700"}`}
+                      >
+                        <option value="" disabled className="text-gray-400">Pilih Jenis Terapi</option>
+                        {JENIS_TERAPI_OPTIONS.map((j) => (
+                          <option key={j} value={j} className="text-gray-700">{j}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-3 top-1/2" />
+                    </div>
+                  )}
 
                   <input
                     id={`jumlah-sesi-${idx}`}
@@ -2998,7 +3057,7 @@ export default function KeuanganPage() {
                 : "—",
               metode: inv.payments[0].payment_method,
               noResi: inv.payments[0].receipt_number || "",
-              buktiUrl: inv.payments[0].proof_file_path || undefined,
+              buktiUrl: inv.payments[0].proof_file_path || inv.payments[0].bukti_url || inv.payments[0].proof_url || inv.payments[0].bukti || undefined,
             } : undefined,
           }));
 
@@ -3507,6 +3566,7 @@ export default function KeuanganPage() {
             <TabPembayaran
               data={potonganList}
               riwayatList={riwayatList}
+              onLihatBukti={(url) => setSelectedBuktiUrl(url)}
               onBuatTagihan={(anak, wali, childId, guardianId) => {
                 setPreviousTab("Pembayaran");
                 const potItem = potonganList.find((p) => p.anak === anak);

@@ -41,10 +41,12 @@ export default function TabPembayaran({
   data: propData,
   riwayatList,
   onBuatTagihan,
+  onLihatBukti,
 }: {
   data?: PotonganData[];
   riwayatList?: RiwayatPembayaran[];
   onBuatTagihan: (anak: string, wali: string, childId?: string, guardianId?: string) => void;
+  onLihatBukti?: (url: string) => void;
 }) {
   const [credits, setCredits] = useState<PotonganData[]>(propData || []);
   const [search, setSearch] = useState("");
@@ -330,7 +332,7 @@ export default function TabPembayaran({
                         {formatRupiah(item.jumlah)}
                       </span>
                       <button
-                        onClick={() => onBuatTagihan(item.anak, item.wali)}
+                        onClick={() => onBuatTagihan(item.anak, item.wali, item.child_id, item.guardian_id)}
                         className="cursor-pointer px-3 py-1.5 bg-[#1E5C58] text-white rounded-xl text-[11px] font-bold hover:bg-[#174d49] shadow-sm shadow-teal-700/20 transition-colors whitespace-nowrap"
                       >
                         Buat tagihan
@@ -499,7 +501,9 @@ export default function TabPembayaran({
                     </td>
                     <td className="px-2.5 py-2.5 text-xs font-semibold text-gray-500 whitespace-nowrap">
                       {row.bukti !== "-" ? (
-                        <button className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-md text-[11px] font-bold hover:bg-blue-100 transition-colors">
+                        <button
+                          onClick={() => onLihatBukti && onLihatBukti(row.bukti)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-md text-[11px] font-bold hover:bg-blue-100 transition-colors cursor-pointer">
                           <FileText size={12} />
                           Lihat Bukti
                         </button>

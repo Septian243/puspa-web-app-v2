@@ -141,8 +141,18 @@ export default function SidebarAdmin({ isOpen, onClose }: SidebarAdminProps) {
           localStorage.setItem("role", roles[0]);
         }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("[Sidebar] fetchPermissions failed:", err);
+      // Jika 401 (token expired/invalid), hapus stale menus agar tidak menampilkan menu yang seharusnya tidak diizinkan
+      if (
+        err &&
+        typeof err === "object" &&
+        "response" in err &&
+        (err as { response?: { status?: number } }).response?.status === 401
+      ) {
+        localStorage.removeItem("user_menus");
+        setAllowedMenus(null);
+      }
     }
   }, []);
 
@@ -322,8 +332,8 @@ export default function SidebarAdmin({ isOpen, onClose }: SidebarAdminProps) {
                 : "";
 
             if (menuId === "logout") return item;
-            if (!menuId || isAllowed(menuId)) return item;
-            return null;
+            if (!menuId) return null; // menu tidak dikenali → sembunyikan
+            return isAllowed(menuId) ? item : null;
           })
           .filter(Boolean) as MenuItem[];
 
