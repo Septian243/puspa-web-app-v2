@@ -274,19 +274,43 @@ export default function DashboardOwnerPage() {
           });
         }
 
-        // Parse patient categories
+        // Parse patient categories (exclude "umum" so only clinical therapy categories appear)
         const defaultPalette = ["#F43F5E", "#6366F1", "#10B981", "#F59E0B"];
         const defaultSlicePcts = [25, 30, 20, 25];
 
-        if (Array.isArray(d.patient_categories) && d.patient_categories.length > 0) {
+        const filteredCategories = Array.isArray(d.patient_categories)
+          ? d.patient_categories.filter((c: any) => {
+              const type = String(c.type ?? "").toLowerCase().trim();
+              const typeKey = String(c.type_key ?? "").toLowerCase().trim();
+              return !type.includes("umum") && !typeKey.includes("umum");
+            })
+          : [];
+
+        if (filteredCategories.length > 0) {
+          const totalCount = filteredCategories.reduce(
+            (sum: number, c: any) => sum + (Number(c.count) || 0),
+            0
+          );
+
           setCategories(
-            d.patient_categories.map((c: any, idx: number) => ({
-              name: c.type ?? "-",
-              percentage: Number(c.percentage ?? 0),
-              count: Number(c.count ?? 0),
-              color: defaultPalette[idx % defaultPalette.length],
-              slicePercentage: defaultSlicePcts[idx % defaultSlicePcts.length],
-            }))
+            filteredCategories.map((c: any, idx: number) => {
+              const count = Number(c.count ?? 0);
+              const percentage =
+                totalCount > 0
+                  ? Math.round((count / totalCount) * 1000) / 10
+                  : Number(c.percentage ?? 0);
+
+              return {
+                name: c.type ?? "-",
+                percentage,
+                count,
+                color: defaultPalette[idx % defaultPalette.length],
+                slicePercentage:
+                  totalCount > 0
+                    ? percentage
+                    : defaultSlicePcts[idx % defaultSlicePcts.length],
+              };
+            })
           );
         } else {
           // Standard defaults matching design screenshot
